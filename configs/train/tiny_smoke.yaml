@@ -1,0 +1,63 @@
+# Tiny smoke-test configuration
+# This file defines the intended config schema for the first end-to-end path.
+# It may be used as a real config later or as a contract for early implementation.
+
+experiment:
+  name: smoke_random_isotropic_seed0
+  seed: 0
+  output_root: experiments
+
+data:
+  dataset_name: geom_drugs_smoke
+  raw_root: data/raw/geom_drugs
+  processed_root: data/processed/geom_drugs_smoke
+  split_root: data/splits
+  split_type: random
+  subset:
+    max_molecules: 128
+    max_conformers_per_mol: 10
+    tag: smoke
+
+model:
+  backbone: egnn_fallback
+  hidden_dim: 128
+  num_layers: 4
+  time_embedding_dim: 64
+
+flow_matching:
+  objective: cartesian_linear
+  interpolation: linear
+
+corruption:
+  mode: isotropic
+  stiffness_table: heuristic_v1
+  protect_rings: true
+  protect_amides: true
+  isotropic_sigma: 0.25
+  bond_sigma: 0.02
+  angle_sigma: 0.08
+  torsion_sigma: 0.30
+
+train:
+  enabled: true
+  batch_size: 8
+  max_steps: 100
+  learning_rate: 1.0e-4
+  num_workers: 0
+
+sample:
+  enabled: true
+  num_samples_per_mol: 2
+  num_steps: 20
+
+eval:
+  enabled: true
+  compute_cov_mat: true
+  compute_validity: true
+  compute_energy_checks: false
+  eval_subset_size: 64
+
+logging:
+  save_manifest: true
+  save_results_json: true
+  save_log: true
