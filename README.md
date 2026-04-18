@@ -1,1 +1,2 @@
-# ML4MS_Final_Project
+# Stifflow: stiffness-awared equivariant flow matching for molecular conformation generation
+
