@@ -128,6 +128,18 @@ If the raw GEOM-Drugs files are not yet present in the repo or on the filesystem
 - do **not** invent a fake “processed GEOM” file and label it as real benchmark data;
 - do create clean interfaces that can later be connected to the real dataset.
 
+Current GEOM-Drugs readiness check:
+
+```bash
+python scripts/prepare_geom.py --dry-run
+```
+
+This is a read-only preflight. It inspects `data/raw/geom_drugs`, looks for common GEOM-like layout hints, and writes:
+- `experiments/manifests/geom_drugs_preflight.json`
+- `reports/tables/geom_drugs_preflight.md`
+
+It does **not** parse molecules, modify raw data, write processed records, create split files, train models, or run benchmark evaluation.
+
 ---
 
 ## Later expansion
