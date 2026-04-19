@@ -41,6 +41,24 @@ def main() -> None:
         default=200,
         help="Maximum filesystem entries to inspect under raw root.",
     )
+    parser.add_argument(
+        "--max-dry-run-molecules",
+        type=int,
+        default=2,
+        help="Maximum GEOM-Drugs pickle records to read for metadata-only dry-run.",
+    )
+    parser.add_argument(
+        "--max-dry-run-conformers-per-mol",
+        type=int,
+        default=3,
+        help="Maximum conformer metadata records to summarize per sampled molecule.",
+    )
+    parser.add_argument(
+        "--max-pickle-bytes",
+        type=int,
+        default=1_000_000,
+        help="Skip metadata dry-run pickle files larger than this many bytes.",
+    )
     args = parser.parse_args()
 
     if not args.dry_run:
@@ -55,6 +73,9 @@ def main() -> None:
         manifest_path=args.manifest,
         report_path=args.report,
         max_scan_entries=args.max_scan_entries,
+        max_dry_run_molecules=args.max_dry_run_molecules,
+        max_dry_run_conformers_per_mol=args.max_dry_run_conformers_per_mol,
+        max_pickle_bytes=args.max_pickle_bytes,
     )
     print(f"manifest: {paths['manifest']}")
     print(f"report: {paths['report']}")
