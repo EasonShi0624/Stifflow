@@ -138,7 +138,9 @@ This is a read-only preflight. It inspects `data/raw/geom_drugs`, looks for comm
 - `experiments/manifests/geom_drugs_preflight.json`
 - `reports/tables/geom_drugs_preflight.md`
 
-It does **not** parse molecules, modify raw data, write processed records, create split files, train models, or run benchmark evaluation.
+When the extracted `rdkit_folder/drugs/*.pickle` layout is present, the same command also performs a tiny metadata-only preprocessing dry-run. By default it reads at most two pickle files, records molecule/conformer schema keys and scalar metadata, and excludes RDKit molecule and coordinate payloads from the manifest/report.
+
+It does **not** modify raw data, write processed records, create split files, train models, or run benchmark evaluation.
 
 ---
 

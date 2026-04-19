@@ -103,7 +103,7 @@ This read-only command inspects `data/raw/geom_drugs` and writes:
 - `experiments/manifests/geom_drugs_preflight.json`
 - `reports/tables/geom_drugs_preflight.md`
 
-The output is labeled `preflight_not_benchmark`, `benchmark_result: false`, `raw_data_modified: false`, `processed_data_written: false`, and `preprocessing_executed: false`.
+The output is labeled `preflight_not_benchmark`, `benchmark_result: false`, `raw_data_modified: false`, `processed_data_written: false`, and `preprocessing_executed: false`. When `rdkit_folder/drugs/*.pickle` is present, it additionally reads a tiny bounded subset of raw pickle metadata and records `preprocessing_dry_run_executed: true`; this remains metadata-only and does not write processed records.
 
 ---
 

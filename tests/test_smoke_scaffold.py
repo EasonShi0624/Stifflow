@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import pickle
 import tempfile
 import unittest
 from pathlib import Path
@@ -285,6 +286,54 @@ logging:
             self.assertEqual(manifest["raw_summary"]["status"], "present_candidate_layout")
             self.assertIn("summary_drugs.json", manifest["raw_summary"]["present_layout_hints"])
             self.assertIn("rdkit_folder", manifest["raw_summary"]["present_layout_hints"])
+            self.assertFalse((root / "processed").exists())
+
+    def test_geom_preflight_reads_bounded_pickle_metadata_only(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            raw = root / "geom_drugs"
+            drugs = raw / "rdkit_folder" / "drugs"
+            drugs.mkdir(parents=True)
+            for index in range(2):
+                record = {
+                    "smiles": f"C{index}",
+                    "totalconfs": 2,
+                    "uniqueconfs": 2,
+                    "charge": 0,
+                    "datasets": ["unit"],
+                    "conformers": [
+                        {
+                            "geom_id": index * 10 + conformer_index,
+                            "set": 1,
+                            "relativeenergy": float(conformer_index),
+                            "rd_mol": {"not": "serialized to manifest"},
+                        }
+                        for conformer_index in range(2)
+                    ],
+                }
+                with (drugs / f"mol_{index}.pickle").open("wb") as handle:
+                    pickle.dump(record, handle)
+
+            paths = run_geom_preflight(
+                raw_root=raw,
+                processed_root=root / "processed",
+                manifest_path=root / "manifest.json",
+                report_path=root / "report.md",
+                max_dry_run_molecules=1,
+                max_dry_run_conformers_per_mol=1,
+            )
+            manifest = json.loads(paths["manifest"].read_text(encoding="utf-8"))
+            dry_run = manifest["preprocessing_dry_run"]
+            self.assertEqual(dry_run["status"], "completed_metadata_only")
+            self.assertEqual(dry_run["molecule_metadata_records_read"], 1)
+            self.assertEqual(dry_run["conformer_metadata_records_read"], 1)
+            self.assertFalse(dry_run["processed_data_written"])
+            sample = dry_run["sample_records"][0]
+            self.assertEqual(sample["conformer_count_in_file"], 2)
+            self.assertEqual(sample["sampled_conformer_count"], 1)
+            self.assertIn("smiles", sample["molecule_metadata"])
+            self.assertNotIn("conformers", sample["molecule_metadata"])
+            self.assertNotIn("rd_mol", sample["sampled_conformer_metadata"][0])
             self.assertFalse((root / "processed").exists())
 
 
