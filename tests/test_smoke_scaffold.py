@@ -14,6 +14,7 @@ from src.baselines.rdkit_etkdg import RdkitSmokeError, run_rdkit_smoke
 from src.data.records import load_records
 from src.data.splits import make_random_split
 from src.data.geom_preflight import run_geom_preflight
+from src.data.geom_split_dry_run import run_geom_tiny_split_dry_run
 from src.eval.smoke_compare import write_smoke_comparison
 from src.train.pipeline import run_smoke_pipeline
 from src.train.smoke import run_smoke
@@ -466,6 +467,51 @@ logging:
             self.assertNotIn("rd_mol", json.dumps(artifact))
             self.assertEqual(processed_manifest["processed_data_written"], True)
             self.assertEqual(processed_manifest["full_processed_data_written"], False)
+
+    def test_geom_tiny_split_dry_run_writes_degenerate_nonbenchmark_split(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            processed_artifact = root / "processed" / "tiny_real_dry_run" / "molecules.json"
+            processed_artifact.parent.mkdir(parents=True)
+            processed_artifact.write_text(
+                json.dumps(
+                    {
+                        "dataset_kind": "geom_drugs_tiny_processed_dry_run",
+                        "result_kind": "processed_output_dry_run_not_benchmark",
+                        "benchmark_result": False,
+                        "molecules": [
+                            {
+                                "molecule_id": "geom_tiny_0",
+                                "smiles": "CO",
+                                "conformers": [{"conformer_id": "100", "coords": [[0, 0, 0], [1, 0, 0]]}],
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            paths = run_geom_tiny_split_dry_run(
+                processed_artifact_path=processed_artifact,
+                split_root=root / "splits",
+                split_type="random",
+                seed=0,
+                max_molecules=3,
+            )
+            split = json.loads(paths["split"].read_text(encoding="utf-8"))
+            manifest = json.loads(paths["manifest"].read_text(encoding="utf-8"))
+            self.assertEqual(split["result_kind"], "split_dry_run_not_benchmark")
+            self.assertFalse(split["benchmark_result"])
+            self.assertTrue(split["degenerate_tiny_split"])
+            self.assertEqual(split["train"], ["geom_tiny_0"])
+            self.assertEqual(split["val"], [])
+            self.assertEqual(split["test"], [])
+            self.assertEqual(manifest["result_kind"], "split_dry_run_not_benchmark")
+            self.assertFalse(manifest["benchmark_result"])
+            self.assertFalse(manifest["training_executed"])
+            self.assertFalse(manifest["raw_data_modified"])
+            self.assertFalse(manifest["processed_data_modified"])
+            self.assertEqual(manifest["counts"], {"train": 1, "val": 0, "test": 0})
 
 
 if __name__ == "__main__":

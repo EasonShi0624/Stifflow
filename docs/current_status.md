@@ -17,6 +17,7 @@ Current status:
 - `scripts/compare_smoke_results.py` writes a smoke-only JSON summary and markdown table across isotropic, stiffness, and RDKit smoke outputs.
 - `scripts/prepare_geom.py --dry-run` runs a read-only GEOM-Drugs raw-data preflight plus a tiny metadata-only preprocessing dry-run over bounded `rdkit_folder/drugs/*.pickle` samples.
 - `scripts/prepare_geom.py --dry-run --write-tiny-processed-output` writes a deliberately tiny real-data processed-output dry-run artifact for extraction-schema validation only.
+- `scripts/make_geom_tiny_split.py` writes a deliberately tiny real-data split dry-run artifact for split-interface validation only.
 - `scripts/evaluate.py` currently re-runs the same smoke evaluation path.
 
 This file is the canonical place to record **what is actually present today**, as opposed to the intended target design.
@@ -35,11 +36,13 @@ The repo contains:
 - a CPU-only smoke comparison summary/report over current synthetic fixture outputs;
 - a read-only GEOM-Drugs preflight that reports raw-data availability and samples bounded raw pickle metadata;
 - an opt-in tiny real-data processed-output dry-run that writes a non-benchmark `molecules.json` plus manifest;
+- a tiny real-data split dry-run that writes a non-benchmark `split.json` plus manifest from the tiny processed artifact;
 - honest placeholders for GEOM preprocessing, model sampling, and ablation orchestration.
 
 Still missing or intentionally incomplete:
 - real GEOM-Drugs preprocessing;
 - a real GEOM-Drugs processed training subset;
+- real GEOM-Drugs random/scaffold split artifacts;
 - full real GEOM-Drugs raw-data schema/parser beyond bounded metadata inspection;
 - real GEOM-scale RDKit ETKDG/MMFF baseline runner;
 - neural backbone implementation and model training;

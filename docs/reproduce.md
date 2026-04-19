@@ -117,6 +117,18 @@ This is still not real preprocessing. It writes only:
 
 The artifact is capped by explicit molecule, conformer, pickle-size, and atom-count bounds. It is labeled `processed_output_dry_run_not_benchmark`, `benchmark_result: false`, `hardware: cpu_only`, `training_executed: false`, `raw_data_modified: false`, and `full_processed_data_written: false`.
 
+Current tiny GEOM-Drugs split dry-run:
+
+```bash
+python scripts/make_geom_tiny_split.py
+```
+
+This reads the tiny processed-output dry-run artifact and writes only:
+- `data/splits/geom_drugs_tiny_real_dry_run/random_seed0/split.json`
+- `data/splits/geom_drugs_tiny_real_dry_run/random_seed0/manifest.json`
+
+The artifact is labeled `split_dry_run_not_benchmark`, `benchmark_result: false`, `hardware: cpu_only`, `training_executed: false`, `raw_data_modified: false`, `processed_data_modified: false`, and `full_split_written: false`. If the tiny input contains fewer than three molecules, the split is explicitly marked `degenerate_tiny_split: true`.
+
 ---
 
 ## Run naming
