@@ -150,7 +150,23 @@ data/processed/geom_drugs_subset/tiny_real_dry_run/
 
 That artifact is labeled `geom_drugs_tiny_processed_dry_run` and `processed_output_dry_run_not_benchmark`. It is only for validating extraction wiring and must not be treated as a real training subset or benchmark result.
 
-It does **not** modify raw data, create split files, train models, or run benchmark evaluation.
+Current tiny split-interface dry-run:
+
+```bash
+python scripts/make_geom_tiny_split.py
+```
+
+This reads only the tiny processed-output dry-run artifact and writes:
+
+```text
+data/splits/geom_drugs_tiny_real_dry_run/random_seed0/
+├── manifest.json
+└── split.json
+```
+
+The split artifact is labeled `split_dry_run_not_benchmark`. If the tiny processed artifact contains fewer than three molecules, validation/test partitions may be empty and the split is marked `degenerate_tiny_split: true`.
+
+These commands do **not** modify raw data, create a real train/validation/test benchmark split, train models, or run benchmark evaluation.
 
 ---
 
