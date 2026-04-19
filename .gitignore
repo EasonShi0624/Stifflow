@@ -81,6 +81,7 @@ pip-wheel-metadata/
 # Keep directory structure, ignore contents
 # =========================
 experiments/logs/*
+experiments/manifests/*
 experiments/checkpoints/*
 experiments/results/*
 reports/figures/*
@@ -88,10 +89,17 @@ reports/tables/*
 
 # Preserve directory placeholders if you want them tracked
 !experiments/logs/.gitkeep
+!experiments/logs/
+!experiments/manifests/.gitkeep
+!experiments/manifests/
 !experiments/checkpoints/.gitkeep
+!experiments/checkpoints/
 !experiments/results/.gitkeep
+!experiments/results/
 !reports/figures/.gitkeep
+!reports/figures/
 !reports/tables/.gitkeep
+!reports/tables/
 
 # =========================
 # Data
@@ -105,6 +113,8 @@ data/splits/*
 !data/raw/.gitkeep
 !data/processed/.gitkeep
 !data/splits/.gitkeep
+!data/processed/*/
+!data/splits/*/
 
 # Optional: keep tiny metadata or manifest files if you store them there
 !data/**/*.md

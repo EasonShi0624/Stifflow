@@ -100,6 +100,25 @@ Before the full benchmark exists, it is acceptable to define a tiny smoke-test f
 
 The smoke-test dataset should be small, honest, and easy to inspect.
 
+The current smoke fixture is:
+
+```text
+data/processed/smoke_fixture/molecules.json
+```
+
+It is labeled `dataset_kind: synthetic_smoke` and is hand-authored only to exercise wiring. It is **not** GEOM-Drugs, not QM9, and not benchmark data.
+
+Current record fields include:
+- `molecule_id`
+- `smiles`
+- `scaffold`
+- `atom_symbols`
+- `bonds`
+- `rotatable_bond_count`
+- `ring_atom_indices`
+- `amide_atom_indices`
+- `conformers`
+
 ---
 
 ## Important warning for coding agents
