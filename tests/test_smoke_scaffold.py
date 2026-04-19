@@ -4,9 +4,12 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from src.corruption.isotropic import IsotropicCorruptor
 from src.corruption.stiffness_structured import StiffnessStructuredCorruptor
+from src.baselines import rdkit_etkdg
+from src.baselines.rdkit_etkdg import RdkitSmokeError, run_rdkit_smoke
 from src.data.records import load_records
 from src.data.splits import make_random_split
 from src.train.pipeline import run_smoke_pipeline
@@ -130,6 +133,59 @@ logging:
                 {run["corruption_mode"] for run in results["runs"]},
                 {"isotropic", "stiffness_structured"},
             )
+
+    def test_rdkit_smoke_baseline_writes_smoke_only_outputs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            paths = run_rdkit_smoke(output_root_override=tmp, run_name="test_rdkit_smoke")
+            manifest = json.loads(paths["manifest"].read_text(encoding="utf-8"))
+            results = json.loads(paths["results"].read_text(encoding="utf-8"))
+            self.assertEqual(manifest["baseline_name"], "rdkit_etkdg_v3_mmff")
+            self.assertEqual(manifest["result_kind"], "smoke_only_not_benchmark")
+            self.assertFalse(results["benchmark_result"])
+            self.assertEqual(results["hardware"], "cpu_only")
+            self.assertIn("python_executable", manifest)
+            self.assertIn("python_version", manifest)
+            self.assertIn("rdkit_version", manifest)
+            self.assertIn("python_executable", results)
+            self.assertIn("python_version", results)
+            self.assertIn("rdkit_version", results)
+            self.assertEqual(manifest["python_executable"], results["python_executable"])
+            if results["rdkit_available"]:
+                self.assertEqual(results["execution_status"], "completed")
+                self.assertIsInstance(results["rdkit_version"], str)
+                self.assertEqual(results["metrics"]["attempted_molecule_count"], 6)
+                self.assertGreater(results["metrics"]["successful_molecule_count"], 0)
+            else:
+                self.assertEqual(results["execution_status"], "import_failure")
+                self.assertFalse(results["baseline_executed"])
+                self.assertEqual(results["metrics"]["attempted_molecule_count"], 0)
+                self.assertEqual(results["metrics"]["failure_type_counts"].get("import"), 1)
+
+    def test_rdkit_import_failure_preserves_existing_success(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            output_root = Path(tmp)
+            results_dir = output_root / "results"
+            results_dir.mkdir(parents=True)
+            result_path = results_dir / "test_rdkit_smoke.json"
+            original = {
+                "baseline_name": "rdkit_etkdg_v3_mmff",
+                "result_kind": "smoke_only_not_benchmark",
+                "rdkit_available": True,
+                "baseline_executed": True,
+                "execution_status": "completed",
+            }
+            result_path.write_text(json.dumps(original), encoding="utf-8")
+
+            with patch.object(
+                rdkit_etkdg,
+                "_load_rdkit",
+                side_effect=RdkitSmokeError("forced import failure", failure_type="import"),
+            ):
+                with self.assertRaises(RdkitSmokeError):
+                    run_rdkit_smoke(output_root_override=output_root, run_name="test_rdkit_smoke")
+
+            self.assertEqual(json.loads(result_path.read_text(encoding="utf-8")), original)
+            self.assertTrue((output_root / "logs" / "test_rdkit_smoke.preflight_failure.log").exists())
 
 
 if __name__ == "__main__":
