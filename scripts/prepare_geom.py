@@ -72,7 +72,7 @@ def main() -> None:
     parser.add_argument(
         "--max-processed-molecules",
         type=int,
-        default=1,
+        default=3,
         help="Maximum real GEOM molecule records to write in the tiny processed-output dry-run.",
     )
     parser.add_argument(

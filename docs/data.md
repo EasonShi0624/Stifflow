@@ -148,7 +148,7 @@ data/processed/geom_drugs_subset/tiny_real_dry_run/
 └── molecules.json
 ```
 
-That artifact is labeled `geom_drugs_tiny_processed_dry_run` and `processed_output_dry_run_not_benchmark`. It is only for validating extraction wiring and must not be treated as a real training subset or benchmark result.
+That artifact is labeled `geom_drugs_tiny_processed_dry_run` and `processed_output_dry_run_not_benchmark`. By default it is capped at three molecules and one conformer per molecule so the split-interface dry-run can exercise train/validation/test partitions. It is only for validating extraction wiring and must not be treated as a real training subset or benchmark result.
 
 Current tiny split-interface dry-run:
 
@@ -164,7 +164,7 @@ data/splits/geom_drugs_tiny_real_dry_run/random_seed0/
 └── split.json
 ```
 
-The split artifact is labeled `split_dry_run_not_benchmark`. If the tiny processed artifact contains fewer than three molecules, validation/test partitions may be empty and the split is marked `degenerate_tiny_split: true`.
+The split artifact is labeled `split_dry_run_not_benchmark`. With the default three-molecule processed dry-run, it writes one molecule ID per partition. If the tiny processed artifact contains fewer than three molecules, validation/test partitions may be empty and the split is marked `degenerate_tiny_split: true`.
 
 These commands do **not** modify raw data, create a real train/validation/test benchmark split, train models, or run benchmark evaluation.
 
