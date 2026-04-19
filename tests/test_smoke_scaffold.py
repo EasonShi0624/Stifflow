@@ -12,6 +12,7 @@ from src.baselines import rdkit_etkdg
 from src.baselines.rdkit_etkdg import RdkitSmokeError, run_rdkit_smoke
 from src.data.records import load_records
 from src.data.splits import make_random_split
+from src.data.geom_preflight import run_geom_preflight
 from src.eval.smoke_compare import write_smoke_comparison
 from src.train.pipeline import run_smoke_pipeline
 from src.train.smoke import run_smoke
@@ -249,6 +250,42 @@ logging:
             self.assertEqual(summary["row_count"], 3)
             self.assertIn("Smoke Comparison Summary", report)
             self.assertIn("not a benchmark result", report)
+
+    def test_geom_preflight_reports_missing_raw_root(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            paths = run_geom_preflight(
+                raw_root=root / "missing_geom",
+                processed_root=root / "processed",
+                manifest_path=root / "manifest.json",
+                report_path=root / "report.md",
+            )
+            manifest = json.loads(paths["manifest"].read_text(encoding="utf-8"))
+            report = paths["report"].read_text(encoding="utf-8")
+            self.assertEqual(manifest["result_kind"], "preflight_not_benchmark")
+            self.assertFalse(manifest["benchmark_result"])
+            self.assertFalse(manifest["raw_data_modified"])
+            self.assertFalse(manifest["processed_data_written"])
+            self.assertEqual(manifest["raw_summary"]["status"], "missing_root")
+            self.assertIn("GEOM-Drugs Preflight", report)
+
+    def test_geom_preflight_detects_candidate_layout(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            raw = root / "geom_drugs"
+            (raw / "rdkit_folder" / "drugs").mkdir(parents=True)
+            (raw / "summary_drugs.json").write_text("{}", encoding="utf-8")
+            paths = run_geom_preflight(
+                raw_root=raw,
+                processed_root=root / "processed",
+                manifest_path=root / "manifest.json",
+                report_path=root / "report.md",
+            )
+            manifest = json.loads(paths["manifest"].read_text(encoding="utf-8"))
+            self.assertEqual(manifest["raw_summary"]["status"], "present_candidate_layout")
+            self.assertIn("summary_drugs.json", manifest["raw_summary"]["present_layout_hints"])
+            self.assertIn("rdkit_folder", manifest["raw_summary"]["present_layout_hints"])
+            self.assertFalse((root / "processed").exists())
 
 
 if __name__ == "__main__":

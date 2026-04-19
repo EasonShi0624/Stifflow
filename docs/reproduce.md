@@ -93,6 +93,18 @@ This reads the isotropic smoke result, stiffness-structured smoke result, and RD
 
 The summary and markdown report are labeled as smoke-only synthetic-fixture diagnostics, not benchmark results.
 
+Current GEOM-Drugs raw-data preflight:
+
+```bash
+python scripts/prepare_geom.py --dry-run
+```
+
+This read-only command inspects `data/raw/geom_drugs` and writes:
+- `experiments/manifests/geom_drugs_preflight.json`
+- `reports/tables/geom_drugs_preflight.md`
+
+The output is labeled `preflight_not_benchmark`, `benchmark_result: false`, `raw_data_modified: false`, `processed_data_written: false`, and `preprocessing_executed: false`.
+
 ---
 
 ## Run naming
