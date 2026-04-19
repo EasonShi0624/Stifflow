@@ -10,8 +10,10 @@ Current status:
 - `README.md`, `AGENTS.md`, and project docs exist.
 - A tiny synthetic smoke fixture exists at `data/processed/smoke_fixture/molecules.json`.
 - Minimal config loading, molecule-level splitting, source corruption, smoke metrics, and manifest/result writing exist.
+- Smoke CLI entry points re-exec through `/scratch/ys6132/programs/miniforge3/envs/stifflow/bin/python` instead of relying on ambient shell activation.
 - `scripts/train.py --dry-run` validates the smoke path without running neural training.
 - `scripts/run_smoke_pipeline.py` runs both tiny smoke configs locally and writes aggregate smoke-only outputs.
+- `scripts/run_rdkit_smoke.py` runs a tiny local RDKit ETKDGv3 + MMFF smoke baseline if RDKit is importable, recording Python/RDKit versions and categorized failure modes.
 - `scripts/evaluate.py` currently re-runs the same smoke evaluation path.
 
 This file is the canonical place to record **what is actually present today**, as opposed to the intended target design.
@@ -26,11 +28,12 @@ The repo contains:
 - target structure and experimental plan;
 - a minimal `src/` package for config, data, splitting, corruption, smoke evaluation, and smoke-run output writing;
 - a CPU-only smoke pipeline that runs the isotropic and stiffness-structured synthetic fixture configs together;
+- a CPU-only RDKit ETKDGv3 + MMFF smoke wrapper for the synthetic fixture;
 - honest placeholders for GEOM preprocessing, model sampling, and ablation orchestration.
 
 Still missing or intentionally incomplete:
 - real GEOM-Drugs preprocessing;
-- real RDKit ETKDG/MMFF baseline wrapper;
+- real GEOM-scale RDKit ETKDG/MMFF baseline runner;
 - neural backbone implementation and model training;
 - model sampling;
 - real COV/MAT over generated conformer ensembles;
@@ -46,9 +49,9 @@ If any of the above now exist, update this file.
 The next implementation pass should aim to turn the smoke scaffold into the first real runnable milestone:
 
 1. add a tiny real training loop or explicitly separate `scripts/smoke.py` from future `scripts/train.py`;
-2. add a first RDKit import check and guarded ETKDG/MMFF baseline stub;
-3. add scaffold-split tests using fixture scaffold labels;
-4. keep isotropic-vs-stiffness smoke outputs labeled as wiring checks, not scientific results;
+2. add scaffold-split tests using fixture scaffold labels;
+3. add a real training-loop smoke test or separate smoke scripts from future training scripts;
+4. keep all smoke outputs labeled as wiring checks, not scientific results;
 5. keep manifest/result outputs stable while expanding internals.
 
 ---

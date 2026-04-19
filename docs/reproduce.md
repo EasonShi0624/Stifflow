@@ -53,7 +53,7 @@ Current smoke command:
 python scripts/train.py --config configs/train/tiny_smoke.yaml --dry-run
 ```
 
-This validates config/data/split/corruption/evaluation wiring and writes manifest/results/log files. It does **not** run neural model training.
+This validates config/data/split/corruption/evaluation wiring and writes manifest/results/log files. It does **not** run neural model training. Smoke entry points re-exec through `/scratch/ys6132/programs/miniforge3/envs/stifflow/bin/python` when launched from another interpreter.
 
 Current paired smoke pipeline:
 
@@ -67,6 +67,19 @@ This runs `configs/train/tiny_smoke.yaml` and `configs/train/tiny_smoke_stiffnes
 - `experiments/logs/smoke_pair_synthetic_seed0.log`
 
 All outputs are labeled `smoke_only_not_benchmark`, `benchmark_result: false`, `hardware: cpu_only`, `training_executed: false`, and `slurm_account: null`.
+
+Current RDKit smoke baseline:
+
+```bash
+python scripts/run_rdkit_smoke.py
+```
+
+This runs RDKit ETKDGv3 embedding plus MMFF optimization on the same synthetic fixture, if RDKit is available in the active environment. It writes:
+- `experiments/manifests/smoke_random_rdkit_etkdg_mmff_seed0.json`
+- `experiments/results/smoke_random_rdkit_etkdg_mmff_seed0.json`
+- `experiments/logs/smoke_random_rdkit_etkdg_mmff_seed0.log`
+
+These outputs are also labeled `smoke_only_not_benchmark`, `benchmark_result: false`, `hardware: cpu_only`, `training_executed: false`, and `slurm_account: null`. The manifest and result JSON record `python_executable`, `python_version`, and `rdkit_version`. If RDKit is not importable, the script writes a clear `execution_status: import_failure` smoke report and does not fabricate RDKit metrics. If a successful RDKit smoke result already exists, an import failure will not overwrite it; a `*.preflight_failure.log` diagnostic is written instead. Per-molecule failures are categorized as `fixture`, `etkdg`, `mmff`, `alignment`, or `runtime`.
 
 ---
 

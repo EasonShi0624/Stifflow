@@ -7,6 +7,10 @@ import argparse
 import sys
 from pathlib import Path
 
+from _stifflow_runtime import ensure_stifflow_python
+
+ensure_stifflow_python()
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from src.train.pipeline import DEFAULT_SMOKE_CONFIGS, run_smoke_pipeline

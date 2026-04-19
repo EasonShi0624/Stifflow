@@ -22,10 +22,12 @@ This file tracks the current prioritized work queue.
 
 5. **Implement baseline utilities** — partially done
    - Random split and scaffold split helpers exist.
-   - Tiny RDKit baseline wrapper is still missing.
+   - Tiny local RDKit ETKDGv3 + MMFF smoke wrapper exists for the synthetic fixture.
+   - Real GEOM-scale RDKit baseline runner is still missing.
 
 6. **Implement machine-readable outputs** — done for dry-run smoke outputs
    - Every smoke-test run should emit a manifest JSON and a results JSON.
+   - Smoke CLI entry points pin execution to the `stifflow` Python interpreter.
 
 ## Next priority
 
@@ -37,6 +39,8 @@ This file tracks the current prioritized work queue.
 8. **Add evaluation scaffolding**
    - Start with placeholders for COV/MAT and validity outputs.
    - Ensure the interface is stable even if internals are incomplete.
+   - RDKit smoke baseline emits local fixture RMSD, bond-delta, MMFF-energy, and success-rate diagnostics.
+   - RDKit smoke outputs record Python/RDKit versions and distinguish import, fixture, ETKDG, MMFF, alignment, and runtime failures.
 
 9. **Draft one smoke-test config**
    - Baseline backbone

@@ -16,3 +16,7 @@ network_access = true
 [features]
 shell_snapshot = true
 multi_agent = true
+
+[shell_environment_policy]
+inherit = "core"
+include_only = ["PATH", "HOME", "CONDA_PREFIX", "CONDA_DEFAULT_ENV"]
