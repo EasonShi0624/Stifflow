@@ -9,6 +9,7 @@ from src.corruption.isotropic import IsotropicCorruptor
 from src.corruption.stiffness_structured import StiffnessStructuredCorruptor
 from src.data.records import load_records
 from src.data.splits import make_random_split
+from src.train.pipeline import run_smoke_pipeline
 from src.train.smoke import run_smoke
 from src.utils.config import load_config
 
@@ -109,8 +110,26 @@ logging:
             manifest = json.loads(paths["manifest"].read_text(encoding="utf-8"))
             results = json.loads(paths["results"].read_text(encoding="utf-8"))
             self.assertFalse(manifest["training_executed"])
+            self.assertEqual(manifest["result_kind"], "smoke_only_not_benchmark")
             self.assertEqual(results["dataset"]["kind"], "synthetic_smoke")
+            self.assertFalse(results["benchmark_result"])
+            self.assertEqual(results["hardware"], "cpu_only")
             self.assertEqual(results["sample_count"], 6)
+
+    def test_pipeline_runs_both_smoke_configs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            paths = run_smoke_pipeline(output_root=tmp, pipeline_name="test_smoke_pair")
+            manifest = json.loads(paths["manifest"].read_text(encoding="utf-8"))
+            results = json.loads(paths["results"].read_text(encoding="utf-8"))
+            self.assertEqual(manifest["result_kind"], "smoke_only_not_benchmark")
+            self.assertFalse(manifest["benchmark_result"])
+            self.assertEqual(results["run_count"], 2)
+            self.assertFalse(results["training_executed"])
+            self.assertEqual(results["hardware"], "cpu_only")
+            self.assertEqual(
+                {run["corruption_mode"] for run in results["runs"]},
+                {"isotropic", "stiffness_structured"},
+            )
 
 
 if __name__ == "__main__":
