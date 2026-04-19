@@ -41,6 +41,7 @@ This file tracks the current prioritized work queue.
    - Ensure the interface is stable even if internals are incomplete.
    - RDKit smoke baseline emits local fixture RMSD, bond-delta, MMFF-energy, and success-rate diagnostics.
    - RDKit smoke outputs record Python/RDKit versions and distinguish import, fixture, ETKDG, MMFF, alignment, and runtime failures.
+   - Smoke comparison report aggregates isotropic, stiffness, and RDKit smoke outputs into JSON and markdown.
 
 9. **Draft one smoke-test config**
    - Baseline backbone

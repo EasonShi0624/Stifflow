@@ -81,6 +81,18 @@ This runs RDKit ETKDGv3 embedding plus MMFF optimization on the same synthetic f
 
 These outputs are also labeled `smoke_only_not_benchmark`, `benchmark_result: false`, `hardware: cpu_only`, `training_executed: false`, and `slurm_account: null`. The manifest and result JSON record `python_executable`, `python_version`, and `rdkit_version`. If RDKit is not importable, the script writes a clear `execution_status: import_failure` smoke report and does not fabricate RDKit metrics. If a successful RDKit smoke result already exists, an import failure will not overwrite it; a `*.preflight_failure.log` diagnostic is written instead. Per-molecule failures are categorized as `fixture`, `etkdg`, `mmff`, `alignment`, or `runtime`.
 
+Current smoke comparison report:
+
+```bash
+python scripts/compare_smoke_results.py
+```
+
+This reads the isotropic smoke result, stiffness-structured smoke result, and RDKit smoke baseline result, validates that all inputs are labeled smoke-only, and writes:
+- `experiments/results/smoke_comparison_summary.json`
+- `reports/tables/smoke_comparison_summary.md`
+
+The summary and markdown report are labeled as smoke-only synthetic-fixture diagnostics, not benchmark results.
+
 ---
 
 ## Run naming

@@ -14,6 +14,7 @@ Current status:
 - `scripts/train.py --dry-run` validates the smoke path without running neural training.
 - `scripts/run_smoke_pipeline.py` runs both tiny smoke configs locally and writes aggregate smoke-only outputs.
 - `scripts/run_rdkit_smoke.py` runs a tiny local RDKit ETKDGv3 + MMFF smoke baseline if RDKit is importable, recording Python/RDKit versions and categorized failure modes.
+- `scripts/compare_smoke_results.py` writes a smoke-only JSON summary and markdown table across isotropic, stiffness, and RDKit smoke outputs.
 - `scripts/evaluate.py` currently re-runs the same smoke evaluation path.
 
 This file is the canonical place to record **what is actually present today**, as opposed to the intended target design.
@@ -29,6 +30,7 @@ The repo contains:
 - a minimal `src/` package for config, data, splitting, corruption, smoke evaluation, and smoke-run output writing;
 - a CPU-only smoke pipeline that runs the isotropic and stiffness-structured synthetic fixture configs together;
 - a CPU-only RDKit ETKDGv3 + MMFF smoke wrapper for the synthetic fixture;
+- a CPU-only smoke comparison summary/report over current synthetic fixture outputs;
 - honest placeholders for GEOM preprocessing, model sampling, and ablation orchestration.
 
 Still missing or intentionally incomplete:
