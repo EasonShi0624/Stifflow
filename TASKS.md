@@ -23,6 +23,7 @@ This file tracks the current prioritized work queue.
 5. **Implement baseline utilities** — partially done
    - Random split and scaffold split helpers exist.
    - Tiny local RDKit ETKDGv3 + MMFF smoke wrapper exists for the synthetic fixture.
+   - Tiny local RDKit ETKDGv3 + MMFF dry-run wrapper exists for the bounded three-molecule real GEOM artifact.
    - Real GEOM-scale RDKit baseline runner is still missing.
 
 6. **Implement machine-readable outputs** — done for dry-run smoke outputs
@@ -47,6 +48,7 @@ This file tracks the current prioritized work queue.
    - Start with placeholders for COV/MAT and validity outputs.
    - Ensure the interface is stable even if internals are incomplete.
    - RDKit smoke baseline emits local fixture RMSD, bond-delta, MMFF-energy, and success-rate diagnostics.
+   - Tiny real-data RDKit dry-run emits bounded ETKDG/MMFF diagnostics labeled as non-benchmark.
    - RDKit smoke outputs record Python/RDKit versions and distinguish import, fixture, ETKDG, MMFF, alignment, and runtime failures.
    - Smoke comparison report aggregates isotropic, stiffness, and RDKit smoke outputs into JSON and markdown.
 

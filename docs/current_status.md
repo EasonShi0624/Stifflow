@@ -14,6 +14,7 @@ Current status:
 - `scripts/train.py --dry-run` validates the smoke path without running neural training.
 - `scripts/run_smoke_pipeline.py` runs both tiny smoke configs locally and writes aggregate smoke-only outputs.
 - `scripts/run_rdkit_smoke.py` runs a tiny local RDKit ETKDGv3 + MMFF smoke baseline if RDKit is importable, recording Python/RDKit versions and categorized failure modes.
+- `scripts/run_rdkit_tiny_real.py` runs RDKit ETKDGv3 + MMFF on the tiny three-molecule real-data dry-run artifact if RDKit is importable.
 - `scripts/compare_smoke_results.py` writes a smoke-only JSON summary and markdown table across isotropic, stiffness, and RDKit smoke outputs.
 - `scripts/prepare_geom.py --dry-run` runs a read-only GEOM-Drugs raw-data preflight plus a tiny metadata-only preprocessing dry-run over bounded `rdkit_folder/drugs/*.pickle` samples.
 - `scripts/prepare_geom.py --dry-run --write-tiny-processed-output` writes a deliberately tiny real-data processed-output dry-run artifact, currently capped at three molecules, for extraction-schema validation only.
@@ -33,6 +34,7 @@ The repo contains:
 - a minimal `src/` package for config, data, splitting, corruption, smoke evaluation, and smoke-run output writing;
 - a CPU-only smoke pipeline that runs the isotropic and stiffness-structured synthetic fixture configs together;
 - a CPU-only RDKit ETKDGv3 + MMFF smoke wrapper for the synthetic fixture;
+- a CPU-only RDKit ETKDGv3 + MMFF tiny real-data dry-run wrapper over the bounded GEOM artifact;
 - a CPU-only smoke comparison summary/report over current synthetic fixture outputs;
 - a read-only GEOM-Drugs preflight that reports raw-data availability and samples bounded raw pickle metadata;
 - an opt-in tiny real-data processed-output dry-run that writes a non-benchmark `molecules.json` plus manifest with enough bounded molecules for a non-degenerate split dry-run;
@@ -44,7 +46,7 @@ Still missing or intentionally incomplete:
 - a real GEOM-Drugs processed training subset;
 - real GEOM-Drugs random/scaffold split artifacts;
 - full real GEOM-Drugs raw-data schema/parser beyond bounded metadata inspection;
-- real GEOM-scale RDKit ETKDG/MMFF baseline runner;
+- real GEOM-scale RDKit ETKDG/MMFF baseline runner beyond the three-molecule dry-run;
 - neural backbone implementation and model training;
 - model sampling;
 - real COV/MAT over generated conformer ensembles;
