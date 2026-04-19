@@ -129,6 +129,19 @@ This reads the tiny processed-output dry-run artifact and writes only:
 
 The artifact is labeled `split_dry_run_not_benchmark`, `benchmark_result: false`, `hardware: cpu_only`, `training_executed: false`, `raw_data_modified: false`, `processed_data_modified: false`, and `full_split_written: false`. With the default three-molecule processed dry-run it is non-degenerate; if the tiny input contains fewer than three molecules, the split is explicitly marked `degenerate_tiny_split: true`.
 
+Current tiny real-data RDKit baseline dry-run:
+
+```bash
+python scripts/run_rdkit_tiny_real.py
+```
+
+This reads only the three-molecule tiny processed artifact and tiny split dry-run, then runs RDKit ETKDGv3 + MMFF locally on CPU if RDKit is importable. It writes:
+- `experiments/manifests/geom_tiny_real_rdkit_etkdg_mmff_seed0.json`
+- `experiments/results/geom_tiny_real_rdkit_etkdg_mmff_seed0.json`
+- `experiments/logs/geom_tiny_real_rdkit_etkdg_mmff_seed0.log`
+
+The outputs are labeled `tiny_real_data_dry_run_not_benchmark`, `benchmark_result: false`, `hardware: cpu_only`, `training_executed: false`, and `slurm_account: null`. This is not the real GEOM-scale RDKit baseline.
+
 ---
 
 ## Run naming

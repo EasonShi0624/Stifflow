@@ -10,7 +10,7 @@ from unittest.mock import patch
 from src.corruption.isotropic import IsotropicCorruptor
 from src.corruption.stiffness_structured import StiffnessStructuredCorruptor
 from src.baselines import rdkit_etkdg
-from src.baselines.rdkit_etkdg import RdkitSmokeError, run_rdkit_smoke
+from src.baselines.rdkit_etkdg import RdkitSmokeError, run_rdkit_smoke, run_rdkit_tiny_real_dry_run
 from src.data.records import load_records
 from src.data.splits import make_random_split
 from src.data.geom_preflight import run_geom_preflight
@@ -267,6 +267,74 @@ logging:
 
             self.assertEqual(json.loads(result_path.read_text(encoding="utf-8")), original)
             self.assertTrue((output_root / "logs" / "test_rdkit_smoke.preflight_failure.log").exists())
+
+    def test_rdkit_tiny_real_import_failure_writes_nonbenchmark_outputs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            processed = root / "processed" / "molecules.json"
+            split_path = root / "splits" / "split.json"
+            processed.parent.mkdir(parents=True)
+            split_path.parent.mkdir(parents=True)
+            molecules = [
+                {
+                    "molecule_id": f"geom_tiny_{index}",
+                    "smiles": "CO",
+                    "atom_symbols": ["C", "O", "H", "H", "H", "H"],
+                    "bonds": [[0, 1, 1], [0, 2, 1], [0, 3, 1], [0, 4, 1], [1, 5, 1]],
+                    "conformers": [{"conformer_id": str(index), "coords": [[0, 0, 0]] * 6}],
+                }
+                for index in range(3)
+            ]
+            processed.write_text(
+                json.dumps(
+                    {
+                        "dataset_kind": "geom_drugs_tiny_processed_dry_run",
+                        "result_kind": "processed_output_dry_run_not_benchmark",
+                        "benchmark_result": False,
+                        "molecules": molecules,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            split_path.write_text(
+                json.dumps(
+                    {
+                        "dataset_kind": "geom_drugs_tiny_processed_dry_run",
+                        "result_kind": "split_dry_run_not_benchmark",
+                        "benchmark_result": False,
+                        "split_type": "random",
+                        "degenerate_tiny_split": False,
+                        "train": ["geom_tiny_0"],
+                        "val": ["geom_tiny_1"],
+                        "test": ["geom_tiny_2"],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            with patch.object(
+                rdkit_etkdg,
+                "_load_rdkit",
+                side_effect=RdkitSmokeError("forced import failure", failure_type="import"),
+            ):
+                paths = run_rdkit_tiny_real_dry_run(
+                    processed_artifact_path=processed,
+                    split_path=split_path,
+                    output_root=root / "experiments",
+                    run_name="test_geom_tiny_rdkit",
+                )
+
+            manifest = json.loads(paths["manifest"].read_text(encoding="utf-8"))
+            results = json.loads(paths["results"].read_text(encoding="utf-8"))
+            self.assertEqual(manifest["result_kind"], "tiny_real_data_dry_run_not_benchmark")
+            self.assertEqual(results["result_kind"], "tiny_real_data_dry_run_not_benchmark")
+            self.assertFalse(results["benchmark_result"])
+            self.assertEqual(results["hardware"], "cpu_only")
+            self.assertFalse(results["training_executed"])
+            self.assertFalse(results["baseline_executed"])
+            self.assertEqual(results["execution_status"], "import_failure")
+            self.assertEqual(results["metrics"]["attempted_molecule_count"], 0)
+            self.assertEqual(results["metrics"]["failure_type_counts"].get("import"), 1)
+            self.assertEqual(results["dataset"]["split_counts"], {"train": 1, "val": 1, "test": 1})
 
     def test_smoke_comparison_writes_summary_and_report(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

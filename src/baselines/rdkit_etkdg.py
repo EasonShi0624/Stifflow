@@ -198,6 +198,136 @@ def run_rdkit_smoke(
     return {"manifest": manifest_path, "results": results_path, "log": log_path}
 
 
+def run_rdkit_tiny_real_dry_run(
+    processed_artifact_path: str | Path = "data/processed/geom_drugs_subset/tiny_real_dry_run/molecules.json",
+    split_path: str | Path = "data/splits/geom_drugs_tiny_real_dry_run/random_seed0/split.json",
+    output_root: str | Path = "experiments",
+    run_name: str = "geom_tiny_real_rdkit_etkdg_mmff_seed0",
+    seed: int = 0,
+    max_molecules: int = 3,
+) -> dict[str, Path]:
+    start = time.time()
+    processed_artifact_path = Path(processed_artifact_path)
+    split_path = Path(split_path)
+    output_root = Path(output_root)
+    manifest_path = output_root / "manifests" / f"{run_name}.json"
+    results_path = output_root / "results" / f"{run_name}.json"
+    log_path = output_root / "logs" / f"{run_name}.log"
+
+    artifact = _load_tiny_real_artifact(processed_artifact_path)
+    records = artifact["molecules"][:max_molecules]
+    split = _load_tiny_real_split(split_path)
+
+    molecule_results = []
+    failures = []
+    rdkit_available = True
+    execution_status = "completed"
+    environment = _environment_metadata()
+    try:
+        rdkit = _load_rdkit()
+    except RdkitSmokeError as exc:
+        rdkit_available = False
+        execution_status = "import_failure"
+        failures.append(_failure_payload(scope="dependency", exc=exc))
+    else:
+        environment["rdkit_version"] = rdkit["rdkit_version"]
+        for index, record in enumerate(records):
+            try:
+                molecule_results.append(_run_one_tiny_real_record(rdkit, record, seed + index))
+            except RdkitSmokeError as exc:
+                failures.append(
+                    _failure_payload(
+                        scope="molecule",
+                        exc=exc,
+                        molecule_id=record.get("molecule_id"),
+                    )
+                )
+            except Exception as exc:  # RDKit can raise C++-backed exceptions.
+                failures.append(
+                    {
+                        "scope": "molecule",
+                        "molecule_id": record.get("molecule_id"),
+                        "failure_type": "runtime",
+                        "error": str(exc),
+                    }
+                )
+        execution_status = _execution_status(molecule_results, failures)
+
+    elapsed = time.time() - start
+    metrics = _summarize_tiny_real_metrics(
+        molecule_results,
+        failures,
+        attempted_molecule_count=len(records) if rdkit_available else 0,
+        rdkit_available=rdkit_available,
+    )
+    common = {
+        "run_name": run_name,
+        "baseline_name": "rdkit_etkdg_v3_mmff",
+        "dataset_name": "geom_drugs",
+        "dataset_kind": "geom_drugs_tiny_processed_dry_run",
+        "processed_artifact_path": str(processed_artifact_path),
+        "split_path": str(split_path),
+        "random_seed": seed,
+        "execution_mode": "local_cpu_tiny_real_data_dry_run",
+        "result_kind": "tiny_real_data_dry_run_not_benchmark",
+        "benchmark_result": False,
+        "hardware": "cpu_only",
+        "scheduler": None,
+        "slurm_account": None,
+        "rdkit_available": rdkit_available,
+        "execution_status": execution_status,
+        "baseline_executed": rdkit_available,
+        "training_executed": False,
+        "sampling_executed": False,
+        "environment": environment,
+        "python_executable": environment["python_executable"],
+        "python_version": environment["python_version"],
+        "rdkit_version": environment["rdkit_version"],
+    }
+    manifest = {
+        **common,
+        "git_commit": _git_commit(),
+        "metrics_output_path": str(results_path),
+        "bounds": {
+            "max_molecules": max_molecules,
+            "input_molecule_count": len(artifact["molecules"]),
+            "attempted_molecule_count": len(records) if rdkit_available else 0,
+        },
+        "split": {
+            "split_type": split["split_type"],
+            "degenerate_tiny_split": split.get("degenerate_tiny_split"),
+            "counts": {key: len(split[key]) for key in ["train", "val", "test"]},
+        },
+    }
+    results = {
+        **common,
+        "dataset": {
+            "name": "geom_drugs",
+            "kind": "geom_drugs_tiny_processed_dry_run",
+            "molecule_count": len(records),
+            "split_type": split["split_type"],
+            "split_counts": {key: len(split[key]) for key in ["train", "val", "test"]},
+        },
+        "metrics": metrics,
+        "molecules": molecule_results,
+        "failures": failures,
+        "runtime_seconds": elapsed,
+        "notes": [
+            "This is a tiny real-data RDKit ETKDGv3 + MMFF dry-run on a bounded GEOM artifact.",
+            "These values validate baseline wiring only and are not benchmark results.",
+            "No raw data modification, neural model training, GPU execution, SLURM job, or environment mutation was used.",
+            "If rdkit_available is false, no RDKit embedding or MMFF optimization was executed.",
+        ],
+    }
+
+    for directory in [manifest_path.parent, results_path.parent, log_path.parent]:
+        directory.mkdir(parents=True, exist_ok=True)
+    manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    results_path.write_text(json.dumps(results, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    log_path.write_text(_tiny_real_log_text(results, manifest_path, results_path), encoding="utf-8")
+    return {"manifest": manifest_path, "results": results_path, "log": log_path}
+
+
 def _run_one_record(rdkit: dict[str, Any], record: dict[str, Any], seed: int) -> dict[str, Any]:
     Chem = rdkit["Chem"]
     AllChem = rdkit["AllChem"]
@@ -271,6 +401,110 @@ def _run_one_record(rdkit: dict[str, Any], record: dict[str, Any], seed: int) ->
         "heavy_atom_count": len(record["atom_symbols"]),
         "rotatable_bond_count": record.get("rotatable_bond_count"),
     }
+
+
+def _run_one_tiny_real_record(rdkit: dict[str, Any], record: dict[str, Any], seed: int) -> dict[str, Any]:
+    Chem = rdkit["Chem"]
+    AllChem = rdkit["AllChem"]
+    Point3D = rdkit["Point3D"]
+    rdMolAlign = rdkit["rdMolAlign"]
+
+    smiles = record["smiles"]
+    mol_h = _mol_from_tiny_real_graph(Chem, record)
+    atom_count = len(record["atom_symbols"])
+    if mol_h.GetNumAtoms() != atom_count:
+        raise RdkitSmokeError(
+            f"Atom-count mismatch for {record['molecule_id']}: RDKit={mol_h.GetNumAtoms()} artifact={atom_count}",
+            failure_type="fixture",
+        )
+
+    params = AllChem.ETKDGv3()
+    params.randomSeed = int(seed)
+    params.numThreads = 1
+    embed_status = AllChem.EmbedMolecule(mol_h, params)
+    if embed_status != 0:
+        raise RdkitSmokeError(
+            f"ETKDGv3 embedding failed with status {embed_status}",
+            failure_type="etkdg",
+        )
+
+    mmff_status = AllChem.MMFFOptimizeMolecule(mol_h, mmffVariant="MMFF94s", maxIters=200)
+    props = AllChem.MMFFGetMoleculeProperties(mol_h, mmffVariant="MMFF94s")
+    if props is None:
+        raise RdkitSmokeError("MMFF properties are unavailable for this molecule", failure_type="mmff")
+    force_field = AllChem.MMFFGetMoleculeForceField(mol_h, props)
+    if force_field is None:
+        raise RdkitSmokeError("MMFF force field could not be constructed", failure_type="mmff")
+    energy = float(force_field.CalcEnergy())
+
+    target_coords = [[float(value) for value in xyz] for xyz in record["conformers"][0]["coords"]]
+    ref_mol = Chem.Mol(mol_h)
+    ref_mol.RemoveAllConformers()
+    ref_conf = Chem.Conformer(ref_mol.GetNumAtoms())
+    for atom_index, xyz in enumerate(target_coords):
+        ref_conf.SetAtomPosition(atom_index, Point3D(float(xyz[0]), float(xyz[1]), float(xyz[2])))
+    ref_mol.AddConformer(ref_conf, assignId=True)
+
+    predicted_coords = _coords_from_mol(mol_h)
+    try:
+        aligned_rmsd = float(rdMolAlign.AlignMol(mol_h, ref_mol))
+        aligned_coords = _coords_from_mol(mol_h)
+    except Exception:
+        aligned_rmsd = _raw_rmsd(predicted_coords, target_coords)
+        aligned_coords = predicted_coords
+
+    bond_deltas = _bond_length_deltas(record["bonds"], aligned_coords, target_coords)
+    return {
+        "molecule_id": record["molecule_id"],
+        "smiles": smiles,
+        "embed_status": int(embed_status),
+        "mmff_status": int(mmff_status),
+        "mmff_converged": mmff_status == 0,
+        "mmff_energy": energy,
+        "aligned_rmsd_to_tiny_real_conformer": aligned_rmsd,
+        "mean_abs_bond_length_delta": mean(abs(value) for value in bond_deltas),
+        "atom_count": atom_count,
+        "bond_count": len(record["bonds"]),
+        "rotatable_bond_count": record.get("rotatable_bond_count"),
+    }
+
+
+def _mol_from_tiny_real_graph(Chem: Any, record: dict[str, Any]) -> Any:
+    rw_mol = Chem.RWMol()
+    aromatic_atoms = {
+        int(atom_index)
+        for bond in record["bonds"]
+        if abs(float(bond[2]) - 1.5) < 1.0e-6
+        for atom_index in [bond[0], bond[1]]
+    }
+    formal_charges = record.get("formal_charges") or [0] * len(record["atomic_numbers"])
+    for atom_index, atomic_number in enumerate(record["atomic_numbers"]):
+        atom = Chem.Atom(int(atomic_number))
+        atom.SetFormalCharge(int(formal_charges[atom_index]))
+        if atom_index in aromatic_atoms:
+            atom.SetIsAromatic(True)
+        rw_mol.AddAtom(atom)
+    for begin, end, order in record["bonds"]:
+        rw_mol.AddBond(int(begin), int(end), _rdkit_bond_type(Chem, float(order)))
+    mol = rw_mol.GetMol()
+    try:
+        Chem.SanitizeMol(mol)
+    except Exception as exc:
+        raise RdkitSmokeError(
+            f"RDKit could not sanitize artifact graph for {record['molecule_id']}: {exc}",
+            failure_type="fixture",
+        ) from exc
+    return mol
+
+
+def _rdkit_bond_type(Chem: Any, order: float) -> Any:
+    if abs(order - 1.5) < 1.0e-6:
+        return Chem.BondType.AROMATIC
+    if abs(order - 2.0) < 1.0e-6:
+        return Chem.BondType.DOUBLE
+    if abs(order - 3.0) < 1.0e-6:
+        return Chem.BondType.TRIPLE
+    return Chem.BondType.SINGLE
 
 
 def _load_rdkit() -> dict[str, Any]:
@@ -350,11 +584,75 @@ def _summarize_metrics(
     }
 
 
+def _summarize_tiny_real_metrics(
+    molecule_results: list[dict[str, Any]],
+    failures: list[dict[str, str]],
+    attempted_molecule_count: int,
+    rdkit_available: bool,
+) -> dict[str, Any]:
+    attempted = attempted_molecule_count
+    return {
+        "metric_scope": "geom_drugs_tiny_real_rdkit_etkdg_mmff_dry_run",
+        "rdkit_available": rdkit_available,
+        "attempted_molecule_count": attempted,
+        "successful_molecule_count": len(molecule_results),
+        "failure_count": len(failures),
+        "failure_type_counts": _failure_type_counts(failures),
+        "success_rate": len(molecule_results) / attempted if attempted else 0.0,
+        "mean_aligned_rmsd_to_tiny_real_conformer": _optional_mean(
+            result["aligned_rmsd_to_tiny_real_conformer"] for result in molecule_results
+        ),
+        "mean_abs_bond_length_delta": _optional_mean(
+            result["mean_abs_bond_length_delta"] for result in molecule_results
+        ),
+        "mean_mmff_energy": _optional_mean(result["mmff_energy"] for result in molecule_results),
+        "mmff_converged_count": sum(1 for result in molecule_results if result["mmff_converged"]),
+        "note": "Tiny real-data dry-run metrics for baseline wiring only; not benchmark metrics.",
+    }
+
+
 def _optional_mean(values: Any) -> float | None:
     values_list = list(values)
     if not values_list:
         return None
     return mean(values_list)
+
+
+def _load_tiny_real_artifact(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        raise RdkitSmokeError(f"Tiny real processed artifact not found at {path}", failure_type="fixture")
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if payload.get("dataset_kind") != "geom_drugs_tiny_processed_dry_run":
+        raise RdkitSmokeError("Tiny real artifact has unexpected dataset_kind", failure_type="fixture")
+    if payload.get("benchmark_result") is not False:
+        raise RdkitSmokeError("Tiny real artifact must be labeled benchmark_result=false", failure_type="fixture")
+    records = payload.get("molecules")
+    if not isinstance(records, list) or not records:
+        raise RdkitSmokeError("Tiny real artifact must contain a non-empty molecules list", failure_type="fixture")
+    for record in records:
+        for key in ["molecule_id", "smiles", "atom_symbols", "bonds", "conformers"]:
+            if key not in record:
+                raise RdkitSmokeError(f"Tiny real record missing field: {key}", failure_type="fixture")
+        if not record["conformers"]:
+            raise RdkitSmokeError(f"{record['molecule_id']} has no conformers", failure_type="fixture")
+    return payload
+
+
+def _load_tiny_real_split(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        raise RdkitSmokeError(f"Tiny real split artifact not found at {path}", failure_type="fixture")
+    split = json.loads(path.read_text(encoding="utf-8"))
+    if split.get("result_kind") != "split_dry_run_not_benchmark":
+        raise RdkitSmokeError("Tiny real split has unexpected result_kind", failure_type="fixture")
+    if split.get("benchmark_result") is not False:
+        raise RdkitSmokeError("Tiny real split must be labeled benchmark_result=false", failure_type="fixture")
+    for key in ["train", "val", "test"]:
+        if key not in split or not isinstance(split[key], list):
+            raise RdkitSmokeError(f"Tiny real split is missing list field: {key}", failure_type="fixture")
+    molecule_ids = split["train"] + split["val"] + split["test"]
+    if len(molecule_ids) != len(set(molecule_ids)):
+        raise RdkitSmokeError("Tiny real split assigns a molecule more than once", failure_type="fixture")
+    return split
 
 
 def _environment_metadata() -> dict[str, str | None]:
@@ -482,4 +780,26 @@ def _log_text(results: dict[str, Any], manifest_path: Path, results_path: Path) 
         f"manifest={manifest_path}\n"
         f"results={results_path}\n"
         "note=Smoke-only RDKit run; no scheduler job, GPU use, or environment mutation.\n"
+    )
+
+
+def _tiny_real_log_text(results: dict[str, Any], manifest_path: Path, results_path: Path) -> str:
+    metrics = results["metrics"]
+    return (
+        f"run_name={results['run_name']}\n"
+        f"baseline_name={results['baseline_name']}\n"
+        f"execution_mode={results['execution_mode']}\n"
+        "training_executed=false\n"
+        "hardware=cpu_only\n"
+        "scheduler=none\n"
+        "result_kind=tiny_real_data_dry_run_not_benchmark\n"
+        f"execution_status={results['execution_status']}\n"
+        f"rdkit_available={results['rdkit_available']}\n"
+        f"python_executable={results['python_executable']}\n"
+        f"python_version={results['python_version']}\n"
+        f"rdkit_version={results['rdkit_version']}\n"
+        f"success_rate={metrics['success_rate']}\n"
+        f"manifest={manifest_path}\n"
+        f"results={results_path}\n"
+        "note=Tiny real-data RDKit dry-run; no scheduler job, GPU use, training, or environment mutation.\n"
     )
