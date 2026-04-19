@@ -20,6 +20,83 @@ from src.train.smoke import run_smoke
 from src.utils.config import load_config
 
 
+class _FakePoint:
+    def __init__(self, x: float, y: float, z: float) -> None:
+        self.x = x
+        self.y = y
+        self.z = z
+
+
+class _FakeAtom:
+    def __init__(self, index: int, symbol: str, atomic_num: int, formal_charge: int = 0) -> None:
+        self._index = index
+        self._symbol = symbol
+        self._atomic_num = atomic_num
+        self._formal_charge = formal_charge
+
+    def GetIdx(self) -> int:
+        return self._index
+
+    def GetSymbol(self) -> str:
+        return self._symbol
+
+    def GetAtomicNum(self) -> int:
+        return self._atomic_num
+
+    def GetFormalCharge(self) -> int:
+        return self._formal_charge
+
+    def IsInRing(self) -> bool:
+        return False
+
+
+class _FakeBond:
+    def __init__(self, begin: int, end: int, order: float) -> None:
+        self._begin = begin
+        self._end = end
+        self._order = order
+
+    def GetBeginAtomIdx(self) -> int:
+        return self._begin
+
+    def GetEndAtomIdx(self) -> int:
+        return self._end
+
+    def GetBondTypeAsDouble(self) -> float:
+        return self._order
+
+
+class _FakeConformer:
+    def __init__(self, coords: list[list[float]]) -> None:
+        self._coords = coords
+
+    def GetAtomPosition(self, atom_index: int) -> _FakePoint:
+        x, y, z = self._coords[atom_index]
+        return _FakePoint(x, y, z)
+
+
+class _FakeMol:
+    def __init__(self, coords: list[list[float]]) -> None:
+        self._atoms = [_FakeAtom(0, "C", 6), _FakeAtom(1, "O", 8)]
+        self._bonds = [_FakeBond(0, 1, 1.0)]
+        self._conformer = _FakeConformer(coords)
+
+    def GetNumAtoms(self) -> int:
+        return len(self._atoms)
+
+    def GetNumConformers(self) -> int:
+        return 1
+
+    def GetAtoms(self) -> list[_FakeAtom]:
+        return self._atoms
+
+    def GetBonds(self) -> list[_FakeBond]:
+        return self._bonds
+
+    def GetConformer(self) -> _FakeConformer:
+        return self._conformer
+
+
 class SmokeScaffoldTests(unittest.TestCase):
     def test_config_loads(self) -> None:
         config = load_config("configs/train/tiny_smoke.yaml")
@@ -335,6 +412,60 @@ logging:
             self.assertNotIn("conformers", sample["molecule_metadata"])
             self.assertNotIn("rd_mol", sample["sampled_conformer_metadata"][0])
             self.assertFalse((root / "processed").exists())
+
+    def test_geom_tiny_processed_output_writes_bounded_nonbenchmark_artifact(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            raw = root / "geom_drugs"
+            drugs = raw / "rdkit_folder" / "drugs"
+            processed = root / "processed"
+            drugs.mkdir(parents=True)
+            record = {
+                "smiles": "CO",
+                "totalconfs": 2,
+                "uniqueconfs": 2,
+                "charge": 0,
+                "conformers": [
+                    {
+                        "geom_id": 100,
+                        "relativeenergy": 0.0,
+                        "rd_mol": _FakeMol([[0.0, 0.0, 0.0], [1.2, 0.0, 0.0]]),
+                    },
+                    {
+                        "geom_id": 101,
+                        "relativeenergy": 0.1,
+                        "rd_mol": _FakeMol([[0.0, 0.1, 0.0], [1.1, 0.0, 0.0]]),
+                    },
+                ],
+            }
+            with (drugs / "tiny_mol.pickle").open("wb") as handle:
+                pickle.dump(record, handle)
+
+            paths = run_geom_preflight(
+                raw_root=raw,
+                processed_root=processed,
+                manifest_path=root / "manifest.json",
+                report_path=root / "report.md",
+                write_tiny_processed_output=True,
+                max_processed_molecules=1,
+                max_processed_conformers_per_mol=1,
+            )
+            manifest = json.loads(paths["manifest"].read_text(encoding="utf-8"))
+            artifact = json.loads(paths["processed_artifact"].read_text(encoding="utf-8"))
+            processed_manifest = json.loads(paths["processed_manifest"].read_text(encoding="utf-8"))
+            self.assertTrue(manifest["processed_output_dry_run_written"])
+            self.assertEqual(artifact["dataset_kind"], "geom_drugs_tiny_processed_dry_run")
+            self.assertEqual(artifact["result_kind"], "processed_output_dry_run_not_benchmark")
+            self.assertFalse(artifact["benchmark_result"])
+            self.assertEqual(artifact["molecule_count"], 1)
+            self.assertEqual(artifact["conformer_count"], 1)
+            molecule = artifact["molecules"][0]
+            self.assertEqual(molecule["atom_symbols"], ["C", "O"])
+            self.assertEqual(molecule["bonds"], [[0, 1, 1]])
+            self.assertEqual(len(molecule["conformers"]), 1)
+            self.assertNotIn("rd_mol", json.dumps(artifact))
+            self.assertEqual(processed_manifest["processed_data_written"], True)
+            self.assertEqual(processed_manifest["full_processed_data_written"], False)
 
 
 if __name__ == "__main__":
