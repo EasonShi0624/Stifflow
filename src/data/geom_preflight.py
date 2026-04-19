@@ -32,6 +32,11 @@ def run_geom_preflight(
     max_dry_run_molecules: int = 2,
     max_dry_run_conformers_per_mol: int = 3,
     max_pickle_bytes: int = 1_000_000,
+    write_tiny_processed_output: bool = False,
+    tiny_processed_tag: str = "tiny_real_dry_run",
+    max_processed_molecules: int = 1,
+    max_processed_conformers_per_mol: int = 1,
+    max_processed_atoms: int = 128,
 ) -> dict[str, Path]:
     start = time.time()
     raw_root = Path(raw_root)
@@ -46,6 +51,16 @@ def run_geom_preflight(
         max_conformers_per_mol=max_dry_run_conformers_per_mol,
         max_pickle_bytes=max_pickle_bytes,
     )
+    tiny_processed_output = write_tiny_processed_dry_run(
+        raw_root=raw_root,
+        processed_root=processed_root,
+        output_tag=tiny_processed_tag,
+        enabled=write_tiny_processed_output,
+        max_molecules=max_processed_molecules,
+        max_conformers_per_mol=max_processed_conformers_per_mol,
+        max_pickle_bytes=max_pickle_bytes,
+        max_atoms=max_processed_atoms,
+    )
     manifest = {
         "run_name": "geom_drugs_preflight",
         "dataset_name": "geom_drugs",
@@ -58,7 +73,8 @@ def run_geom_preflight(
         "slurm_account": None,
         "training_executed": False,
         "raw_data_modified": False,
-        "processed_data_written": False,
+        "processed_data_written": tiny_processed_output["written"],
+        "processed_output_dry_run_written": tiny_processed_output["written"],
         "preprocessing_executed": False,
         "preprocessing_dry_run_executed": preprocessing_dry_run["executed"],
         "dry_run": True,
@@ -66,19 +82,21 @@ def run_geom_preflight(
         "processed_root": str(processed_root),
         "raw_summary": raw_summary,
         "preprocessing_dry_run": preprocessing_dry_run,
+        "tiny_processed_output": tiny_processed_output,
         "dry_run_plan": {
             "would_read_from": str(raw_root),
             "would_write_processed_records_to": str(processed_root),
             "would_create_split_files": False,
             "would_modify_raw_data": False,
-            "would_write_processed_data": False,
+            "would_write_full_processed_data": False,
+            "would_write_tiny_processed_dry_run": write_tiny_processed_output,
             "next_real_step": "Define and review the processed GEOM record schema before writing full processed data.",
         },
         "runtime_seconds": time.time() - start,
         "notes": [
             "This is a read-only preflight and preprocessing dry-run.",
             "Only a tiny bounded subset of raw GEOM-Drugs pickle metadata was read.",
-            "No raw data, processed data, split files, checkpoints, or training outputs were modified.",
+            "No raw data, full processed data, split files, checkpoints, or training outputs were modified.",
         ],
     }
 
@@ -86,7 +104,11 @@ def run_geom_preflight(
     report_path.parent.mkdir(parents=True, exist_ok=True)
     manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     report_path.write_text(_markdown_report(manifest), encoding="utf-8")
-    return {"manifest": manifest_path, "report": report_path}
+    paths = {"manifest": manifest_path, "report": report_path}
+    if tiny_processed_output["written"]:
+        paths["processed_artifact"] = Path(tiny_processed_output["artifact_path"])
+        paths["processed_manifest"] = Path(tiny_processed_output["manifest_path"])
+    return paths
 
 
 def inspect_raw_root(raw_root: Path, max_scan_entries: int = 200) -> dict[str, Any]:
@@ -231,6 +253,258 @@ def inspect_preprocessing_dry_run(
     return summary
 
 
+def write_tiny_processed_dry_run(
+    raw_root: Path,
+    processed_root: Path,
+    output_tag: str = "tiny_real_dry_run",
+    enabled: bool = False,
+    max_molecules: int = 1,
+    max_conformers_per_mol: int = 1,
+    max_pickle_bytes: int = 1_000_000,
+    max_atoms: int = 128,
+) -> dict[str, Any]:
+    output_dir = processed_root / output_tag
+    artifact_path = output_dir / "molecules.json"
+    manifest_path = output_dir / "manifest.json"
+    bounds = {
+        "max_molecules": max_molecules,
+        "max_conformers_per_mol": max_conformers_per_mol,
+        "max_pickle_bytes": max_pickle_bytes,
+        "max_atoms": max_atoms,
+        "max_pickle_files_considered": max(1, max_molecules * 20),
+    }
+    summary: dict[str, Any] = {
+        "enabled": enabled,
+        "written": False,
+        "status": "disabled",
+        "output_dir": str(output_dir),
+        "artifact_path": str(artifact_path),
+        "manifest_path": str(manifest_path),
+        "dataset_kind": "geom_drugs_tiny_processed_dry_run",
+        "result_kind": "processed_output_dry_run_not_benchmark",
+        "benchmark_result": False,
+        "bounds": bounds,
+        "raw_data_modified": False,
+        "full_processed_data_written": False,
+        "split_files_written": False,
+        "molecule_count": 0,
+        "conformer_count": 0,
+        "source_files": [],
+        "pickle_files_considered": 0,
+        "pickle_files_skipped": 0,
+        "skip_reasons": {},
+    }
+    if not enabled:
+        return summary
+    if max_molecules <= 0:
+        summary["status"] = "disabled_by_zero_molecule_bound"
+        return summary
+
+    drugs_dir = raw_root / "rdkit_folder" / "drugs"
+    if not drugs_dir.is_dir():
+        summary["status"] = "missing_rdkit_drugs_dir"
+        summary["blocking_missing_items"] = [str(drugs_dir)]
+        return summary
+
+    molecules: list[dict[str, Any]] = []
+    for path in _iter_limited_pickle_files(drugs_dir, bounds["max_pickle_files_considered"]):
+        if len(molecules) >= max_molecules:
+            break
+        summary["pickle_files_considered"] += 1
+        size_bytes = path.stat().st_size
+        if size_bytes > max_pickle_bytes:
+            _record_skip(summary, "pickle_file_exceeds_max_bytes")
+            continue
+        try:
+            with path.open("rb") as handle:
+                raw_record = pickle.load(handle)
+        except Exception as exc:  # pragma: no cover - exact pickle failures depend on local RDKit.
+            _record_skip(summary, f"pickle_load_error:{type(exc).__name__}")
+            continue
+
+        processed = _build_tiny_processed_record(
+            raw_record=raw_record,
+            source_file=path.relative_to(raw_root),
+            max_conformers_per_mol=max_conformers_per_mol,
+            max_atoms=max_atoms,
+        )
+        if processed is None:
+            _record_skip(summary, "no_extractable_rdkit_conformer_within_bounds")
+            continue
+        molecules.append(processed)
+        summary["source_files"].append(
+            {
+                "source_file": str(path.relative_to(raw_root)),
+                "size_bytes": size_bytes,
+                "molecule_id": processed["molecule_id"],
+                "conformers_written": len(processed["conformers"]),
+                "atom_count": len(processed["atom_symbols"]),
+            }
+        )
+
+    if not molecules:
+        summary["status"] = "no_records_written_within_bounds"
+        return summary
+
+    conformer_count = sum(len(record["conformers"]) for record in molecules)
+    artifact = {
+        "dataset_kind": summary["dataset_kind"],
+        "result_kind": summary["result_kind"],
+        "benchmark_result": False,
+        "description": "Tiny bounded real GEOM-Drugs processed-output dry-run. Not benchmark data.",
+        "source_dataset": "geom_drugs",
+        "raw_root": str(raw_root),
+        "bounds": bounds,
+        "molecule_count": len(molecules),
+        "conformer_count": conformer_count,
+        "molecules": molecules,
+        "notes": [
+            "This file is intentionally tiny and exists only to validate real GEOM extraction wiring.",
+            "It must not be used as a benchmark dataset or training corpus.",
+        ],
+    }
+    manifest = {
+        "run_name": output_tag,
+        "dataset_name": "geom_drugs",
+        "dataset_kind": summary["dataset_kind"],
+        "result_kind": summary["result_kind"],
+        "benchmark_result": False,
+        "execution_mode": "local_cpu_tiny_processed_output_dry_run",
+        "hardware": "cpu_only",
+        "scheduler": None,
+        "slurm_account": None,
+        "training_executed": False,
+        "raw_data_modified": False,
+        "processed_data_written": True,
+        "full_processed_data_written": False,
+        "split_files_written": False,
+        "artifact_path": str(artifact_path),
+        "bounds": bounds,
+        "molecule_count": len(molecules),
+        "conformer_count": conformer_count,
+        "source_files": summary["source_files"],
+        "field_contract": {
+            "molecule_fields": sorted(molecules[0].keys()),
+            "conformer_fields": sorted(molecules[0]["conformers"][0].keys()),
+        },
+        "notes": artifact["notes"],
+    }
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    artifact_path.write_text(json.dumps(artifact, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    summary["written"] = True
+    summary["status"] = "completed_tiny_processed_output"
+    summary["molecule_count"] = len(molecules)
+    summary["conformer_count"] = conformer_count
+    return summary
+
+
+def _build_tiny_processed_record(
+    raw_record: Any,
+    source_file: Path,
+    max_conformers_per_mol: int,
+    max_atoms: int,
+) -> dict[str, Any] | None:
+    if not isinstance(raw_record, dict):
+        return None
+    conformers = raw_record.get("conformers")
+    if not isinstance(conformers, list):
+        return None
+
+    processed_conformers: list[dict[str, Any]] = []
+    atom_symbols: list[str] | None = None
+    atomic_numbers: list[int] | None = None
+    formal_charges: list[int] | None = None
+    ring_atom_indices: list[int] | None = None
+    bonds: list[list[int | float]] | None = None
+    for conformer in conformers:
+        if len(processed_conformers) >= max_conformers_per_mol:
+            break
+        if not isinstance(conformer, dict):
+            continue
+        rd_mol = conformer.get("rd_mol")
+        if not _looks_like_rdkit_mol(rd_mol):
+            continue
+        atom_count = rd_mol.GetNumAtoms()
+        if atom_count <= 0 or atom_count > max_atoms or rd_mol.GetNumConformers() <= 0:
+            continue
+
+        if atom_symbols is None:
+            atom_symbols = [atom.GetSymbol() for atom in rd_mol.GetAtoms()]
+            atomic_numbers = [int(atom.GetAtomicNum()) for atom in rd_mol.GetAtoms()]
+            formal_charges = [int(atom.GetFormalCharge()) for atom in rd_mol.GetAtoms()]
+            ring_atom_indices = [atom.GetIdx() for atom in rd_mol.GetAtoms() if atom.IsInRing()]
+            bonds = [
+                [
+                    int(bond.GetBeginAtomIdx()),
+                    int(bond.GetEndAtomIdx()),
+                    _json_bond_order(bond.GetBondTypeAsDouble()),
+                ]
+                for bond in rd_mol.GetBonds()
+            ]
+
+        coords = _coords_from_rdkit_mol(rd_mol)
+        if len(coords) != len(atom_symbols):
+            continue
+        processed_conformers.append(
+            {
+                "conformer_id": str(conformer.get("geom_id", len(processed_conformers))),
+                "coords": coords,
+                "source_metadata": _json_safe_metadata(
+                    conformer,
+                    exclude_keys={"rd_mol", "mol", "coords", "coordinates", "positions"},
+                ),
+            }
+        )
+
+    if not processed_conformers or atom_symbols is None:
+        return None
+    return {
+        "molecule_id": Path(str(source_file)).stem,
+        "smiles": raw_record.get("smiles"),
+        "source_file": str(source_file),
+        "dataset_kind": "geom_drugs_tiny_processed_dry_run",
+        "atom_symbols": atom_symbols,
+        "atomic_numbers": atomic_numbers,
+        "formal_charges": formal_charges,
+        "bonds": bonds,
+        "ring_atom_indices": ring_atom_indices,
+        "rotatable_bond_count": None,
+        "conformers": processed_conformers,
+        "source_metadata": _json_safe_metadata(raw_record, exclude_keys={"conformers"}),
+    }
+
+
+def _looks_like_rdkit_mol(value: Any) -> bool:
+    return all(
+        hasattr(value, method)
+        for method in [
+            "GetNumAtoms",
+            "GetNumConformers",
+            "GetAtoms",
+            "GetBonds",
+            "GetConformer",
+        ]
+    )
+
+
+def _coords_from_rdkit_mol(rd_mol: Any) -> list[list[float]]:
+    conformer = rd_mol.GetConformer()
+    coords: list[list[float]] = []
+    for atom_index in range(rd_mol.GetNumAtoms()):
+        point = conformer.GetAtomPosition(atom_index)
+        coords.append([round(float(point.x), 6), round(float(point.y), 6), round(float(point.z), 6)])
+    return coords
+
+
+def _json_bond_order(order: float) -> int | float:
+    rounded = round(float(order), 3)
+    if rounded.is_integer():
+        return int(rounded)
+    return rounded
+
+
 def _iter_limited_pickle_files(root: Path, max_files_considered: int) -> list[Path]:
     files: list[Path] = []
     try:
@@ -341,6 +615,7 @@ def _entry_payload(path: Path, root: Path) -> dict[str, Any]:
 def _markdown_report(manifest: dict[str, Any]) -> str:
     raw = manifest["raw_summary"]
     dry_run = manifest["preprocessing_dry_run"]
+    tiny_processed = manifest["tiny_processed_output"]
     lines = [
         "# GEOM-Drugs Preflight",
         "",
@@ -354,6 +629,7 @@ def _markdown_report(manifest: dict[str, Any]) -> str:
         f"- `preprocessing_dry_run_status`: `{dry_run['status']}`",
         f"- `raw_data_modified`: `{str(manifest['raw_data_modified']).lower()}`",
         f"- `processed_data_written`: `{str(manifest['processed_data_written']).lower()}`",
+        f"- `processed_output_dry_run_written`: `{str(manifest['processed_output_dry_run_written']).lower()}`",
         "",
         "## Layout Hints",
         "",
@@ -405,17 +681,39 @@ def _markdown_report(manifest: dict[str, Any]) -> str:
     lines.extend(
         [
             "",
+            "## Tiny Processed-Output Dry-Run",
+            "",
+            f"- Status: `{tiny_processed['status']}`",
+            f"- Written: `{str(tiny_processed['written']).lower()}`",
+            f"- Result kind: `{tiny_processed['result_kind']}`",
+            f"- Benchmark result: `{str(tiny_processed['benchmark_result']).lower()}`",
+            f"- Molecules written: `{tiny_processed['molecule_count']}`",
+            f"- Conformers written: `{tiny_processed['conformer_count']}`",
+            f"- Artifact path: `{tiny_processed['artifact_path']}`",
+            f"- Manifest path: `{tiny_processed['manifest_path']}`",
+            f"- Bounds: max molecules `{tiny_processed['bounds']['max_molecules']}`, "
+            f"max conformers per molecule `{tiny_processed['bounds']['max_conformers_per_mol']}`, "
+            f"max atoms `{tiny_processed['bounds']['max_atoms']}`",
+            "",
+        ]
+    )
+
+    lines.extend(
+        [
+            "",
             "## Dry-Run Plan",
             "",
             f"- Would read from: `{manifest['dry_run_plan']['would_read_from']}`",
             f"- Would write processed records to: `{manifest['dry_run_plan']['would_write_processed_records_to']}`",
             "- Would modify raw data: `false`",
-            "- Would write processed data: `false`",
+            "- Would write full processed data: `false`",
+            f"- Would write tiny processed dry-run: `{str(manifest['dry_run_plan']['would_write_tiny_processed_dry_run']).lower()}`",
             "",
             "## Notes",
             "",
             "- This command reads only bounded pickle metadata and excludes RDKit molecule/coordinate payloads from outputs.",
-            "- This command does not write processed molecules, split files, checkpoints, training outputs, or benchmark results.",
+            "- With the explicit processed-output flag, this command writes only a tiny non-benchmark processed artifact.",
+            "- This command does not write a full processed dataset, split files, checkpoints, training outputs, or benchmark results.",
             "",
         ]
     )

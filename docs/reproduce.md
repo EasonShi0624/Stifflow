@@ -105,6 +105,18 @@ This read-only command inspects `data/raw/geom_drugs` and writes:
 
 The output is labeled `preflight_not_benchmark`, `benchmark_result: false`, `raw_data_modified: false`, `processed_data_written: false`, and `preprocessing_executed: false`. When `rdkit_folder/drugs/*.pickle` is present, it additionally reads a tiny bounded subset of raw pickle metadata and records `preprocessing_dry_run_executed: true`; this remains metadata-only and does not write processed records.
 
+Current tiny GEOM-Drugs processed-output dry-run:
+
+```bash
+python scripts/prepare_geom.py --dry-run --write-tiny-processed-output
+```
+
+This is still not real preprocessing. It writes only:
+- `data/processed/geom_drugs_subset/tiny_real_dry_run/molecules.json`
+- `data/processed/geom_drugs_subset/tiny_real_dry_run/manifest.json`
+
+The artifact is capped by explicit molecule, conformer, pickle-size, and atom-count bounds. It is labeled `processed_output_dry_run_not_benchmark`, `benchmark_result: false`, `hardware: cpu_only`, `training_executed: false`, `raw_data_modified: false`, and `full_processed_data_written: false`.
+
 ---
 
 ## Run naming

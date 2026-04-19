@@ -140,7 +140,17 @@ This is a read-only preflight. It inspects `data/raw/geom_drugs`, looks for comm
 
 When the extracted `rdkit_folder/drugs/*.pickle` layout is present, the same command also performs a tiny metadata-only preprocessing dry-run. By default it reads at most two pickle files, records molecule/conformer schema keys and scalar metadata, and excludes RDKit molecule and coordinate payloads from the manifest/report.
 
-It does **not** modify raw data, write processed records, create split files, train models, or run benchmark evaluation.
+With the explicit `--write-tiny-processed-output` flag, it may additionally write a deliberately tiny real-data processed-output dry-run under:
+
+```text
+data/processed/geom_drugs_subset/tiny_real_dry_run/
+├── manifest.json
+└── molecules.json
+```
+
+That artifact is labeled `geom_drugs_tiny_processed_dry_run` and `processed_output_dry_run_not_benchmark`. It is only for validating extraction wiring and must not be treated as a real training subset or benchmark result.
+
+It does **not** modify raw data, create split files, train models, or run benchmark evaluation.
 
 ---
 
