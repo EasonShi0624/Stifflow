@@ -12,6 +12,7 @@ from src.baselines import rdkit_etkdg
 from src.baselines.rdkit_etkdg import RdkitSmokeError, run_rdkit_smoke
 from src.data.records import load_records
 from src.data.splits import make_random_split
+from src.eval.smoke_compare import write_smoke_comparison
 from src.train.pipeline import run_smoke_pipeline
 from src.train.smoke import run_smoke
 from src.utils.config import load_config
@@ -186,6 +187,68 @@ logging:
 
             self.assertEqual(json.loads(result_path.read_text(encoding="utf-8")), original)
             self.assertTrue((output_root / "logs" / "test_rdkit_smoke.preflight_failure.log").exists())
+
+    def test_smoke_comparison_writes_summary_and_report(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            output_root = Path(tmp)
+            iso = output_root / "iso.json"
+            stiff = output_root / "stiff.json"
+            rdkit = output_root / "rdkit.json"
+            common = {
+                "result_kind": "smoke_only_not_benchmark",
+                "benchmark_result": False,
+                "hardware": "cpu_only",
+                "slurm_account": None,
+                "training_executed": False,
+                "dataset": {"kind": "synthetic_smoke"},
+            }
+            iso.write_text(json.dumps({
+                **common,
+                "run_name": "iso",
+                "corruption_mode": "isotropic",
+                "sample_count": 2,
+                "metrics": {
+                    "cov_mat": {"cov_r_smoke": 0.5, "mat_r_smoke": 0.4},
+                    "validity": {"finite_coordinate_rate": 1.0, "mean_abs_bond_length_delta": 0.2},
+                },
+            }), encoding="utf-8")
+            stiff.write_text(json.dumps({
+                **common,
+                "run_name": "stiff",
+                "corruption_mode": "stiffness_structured",
+                "sample_count": 2,
+                "metrics": {
+                    "cov_mat": {"cov_r_smoke": 1.0, "mat_r_smoke": 0.3},
+                    "validity": {"finite_coordinate_rate": 1.0, "mean_abs_bond_length_delta": 0.1},
+                },
+            }), encoding="utf-8")
+            rdkit.write_text(json.dumps({
+                **common,
+                "run_name": "rdkit",
+                "baseline_name": "rdkit_etkdg_v3_mmff",
+                "execution_status": "completed",
+                "rdkit_version": "test",
+                "metrics": {
+                    "attempted_molecule_count": 2,
+                    "success_rate": 1.0,
+                    "mean_aligned_rmsd_to_fixture": 0.05,
+                    "mean_abs_bond_length_delta": 0.02,
+                    "mean_mmff_energy": -1.0,
+                },
+            }), encoding="utf-8")
+
+            paths = write_smoke_comparison(
+                result_paths=[iso, stiff, rdkit],
+                summary_path=output_root / "summary.json",
+                report_path=output_root / "summary.md",
+            )
+            summary = json.loads(paths["summary"].read_text(encoding="utf-8"))
+            report = paths["report"].read_text(encoding="utf-8")
+            self.assertEqual(summary["result_kind"], "smoke_only_not_benchmark")
+            self.assertFalse(summary["benchmark_result"])
+            self.assertEqual(summary["row_count"], 3)
+            self.assertIn("Smoke Comparison Summary", report)
+            self.assertIn("not a benchmark result", report)
 
 
 if __name__ == "__main__":
