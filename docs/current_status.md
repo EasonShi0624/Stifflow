@@ -11,6 +11,7 @@ Current status:
 - A tiny synthetic smoke fixture exists at `data/processed/smoke_fixture/molecules.json`.
 - Minimal config loading, molecule-level splitting, source corruption, smoke metrics, and manifest/result writing exist.
 - `scripts/train.py --dry-run` validates the smoke path without running neural training.
+- `scripts/run_smoke_pipeline.py` runs both tiny smoke configs locally and writes aggregate smoke-only outputs.
 - `scripts/evaluate.py` currently re-runs the same smoke evaluation path.
 
 This file is the canonical place to record **what is actually present today**, as opposed to the intended target design.
@@ -24,6 +25,7 @@ The repo contains:
 - agent instructions;
 - target structure and experimental plan;
 - a minimal `src/` package for config, data, splitting, corruption, smoke evaluation, and smoke-run output writing;
+- a CPU-only smoke pipeline that runs the isotropic and stiffness-structured synthetic fixture configs together;
 - honest placeholders for GEOM preprocessing, model sampling, and ablation orchestration.
 
 Still missing or intentionally incomplete:
@@ -46,7 +48,7 @@ The next implementation pass should aim to turn the smoke scaffold into the firs
 1. add a tiny real training loop or explicitly separate `scripts/smoke.py` from future `scripts/train.py`;
 2. add a first RDKit import check and guarded ETKDG/MMFF baseline stub;
 3. add scaffold-split tests using fixture scaffold labels;
-4. compare the isotropic and stiffness dry-run outputs only as wiring checks, not scientific results;
+4. keep isotropic-vs-stiffness smoke outputs labeled as wiring checks, not scientific results;
 5. keep manifest/result outputs stable while expanding internals.
 
 ---

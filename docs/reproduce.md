@@ -55,6 +55,19 @@ python scripts/train.py --config configs/train/tiny_smoke.yaml --dry-run
 
 This validates config/data/split/corruption/evaluation wiring and writes manifest/results/log files. It does **not** run neural model training.
 
+Current paired smoke pipeline:
+
+```bash
+python scripts/run_smoke_pipeline.py
+```
+
+This runs `configs/train/tiny_smoke.yaml` and `configs/train/tiny_smoke_stiffness.yaml` locally on the synthetic fixture, then writes aggregate files:
+- `experiments/manifests/smoke_pair_synthetic_seed0.json`
+- `experiments/results/smoke_pair_synthetic_seed0.json`
+- `experiments/logs/smoke_pair_synthetic_seed0.log`
+
+All outputs are labeled `smoke_only_not_benchmark`, `benchmark_result: false`, `hardware: cpu_only`, `training_executed: false`, and `slurm_account: null`.
+
 ---
 
 ## Run naming
