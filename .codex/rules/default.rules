@@ -1,0 +1,316 @@
+# =========================
+# HPC / scheduler controls
+# =========================
+
+prefix_rule(
+    pattern = ["sbatch"],
+    decision = "prompt",
+    justification = "Submitting a SLURM batch job consumes cluster resources and always requires approval. Choose the account explicitly: use torch_pr_872_general for short/light jobs or CPU/debug work; use torch_pr_226_chemistry for chemistry-heavy or high-end GPU jobs such as A100 runs.",
+    match = ["sbatch train.slurm"],
+)
+
+prefix_rule(
+    pattern = ["srun"],
+    decision = "prompt",
+    justification = "Launching an interactive or direct SLURM job consumes cluster resources and always requires approval. Choose the account explicitly: use torch_pr_872_general for short/light jobs or CPU/debug work; use torch_pr_226_chemistry for chemistry-heavy or high-end GPU jobs such as A100 runs.",
+    match = ["srun --account=torch_pr_872_general --gres=gpu:1 python scripts/train.py --config configs/train/tiny_smoke.yaml"],
+)
+
+prefix_rule(
+    pattern = ["scancel"],
+    decision = "prompt",
+    justification = "Cancelling scheduler jobs changes cluster state and requires approval.",
+    match = ["scancel 12345678"],
+)
+
+prefix_rule(
+    pattern = ["qsub"],
+    decision = "prompt",
+    justification = "Submitting scheduler jobs requires approval.",
+    match = ["qsub train.pbs"],
+)
+
+# =========================
+# Remote state / networking
+# =========================
+
+prefix_rule(
+    pattern = ["ssh"],
+    decision = "prompt",
+    justification = "Opening a remote connection requires approval.",
+    match = ["ssh user@cluster.example.edu"],
+)
+
+prefix_rule(
+    pattern = ["rsync"],
+    decision = "prompt",
+    justification = "Cross-host sync or large data transfer requires approval.",
+    match = ["rsync -av data/ remote:/scratch/project/"],
+)
+
+prefix_rule(
+    pattern = [{"token": "git"}, {"token": "push"}],
+    decision = "prompt",
+    justification = "Pushing to a remote repository changes external state and requires approval.",
+)
+
+prefix_rule(
+    pattern = [{"token": "git"}, {"token": "pull"}],
+    decision = "prompt",
+    justification = "Pulling remote changes may alter the working tree and should be approved first.",
+)
+
+prefix_rule(
+    pattern = [{"token": "git"}, {"token": "fetch"}],
+    decision = "prompt",
+    justification = "Fetching remote changes contacts external services and should be approved first.",
+)
+
+prefix_rule(
+    pattern = [{"token": "git"}, {"token": "clone"}],
+    decision = "prompt",
+    justification = "Cloning a repository uses network access and creates new local state; approval required.",
+)
+
+prefix_rule(
+    pattern = [{"token": "wget"}],
+    decision = "prompt",
+    justification = "Downloading files from the network requires approval.",
+)
+
+prefix_rule(
+    pattern = [{"token": "curl"}],
+    decision = "prompt",
+    justification = "Network downloads or external requests require approval.",
+)
+
+# =========================
+# Environment mutation
+# =========================
+
+prefix_rule(
+    pattern = [{"token": "pip"}, {"token": "install"}],
+    decision = "prompt",
+    justification = "Installing Python packages changes the environment and requires approval.",
+)
+
+prefix_rule(
+    pattern = [{"token": "python"}, {"token": "-m"}, {"token": "pip"}, {"token": "install"}],
+    decision = "prompt",
+    justification = "Installing Python packages changes the environment and requires approval.",
+)
+
+prefix_rule(
+    pattern = [{"token": "conda"}, {"token": "install"}],
+    decision = "prompt",
+    justification = "Installing conda packages changes the environment and requires approval.",
+)
+
+prefix_rule(
+    pattern = [{"token": "mamba"}, {"token": "install"}],
+    decision = "prompt",
+    justification = "Installing mamba packages changes the environment and requires approval.",
+)
+
+prefix_rule(
+    pattern = [{"token": "conda"}, {"token": "update"}],
+    decision = "prompt",
+    justification = "Updating conda packages changes the environment and requires approval.",
+)
+
+prefix_rule(
+    pattern = [{"token": "mamba"}, {"token": "update"}],
+    decision = "prompt",
+    justification = "Updating mamba packages changes the environment and requires approval.",
+)
+
+prefix_rule(
+    pattern = ["sudo"],
+    decision = "forbidden",
+    justification = "Do not use sudo on the shared HPC environment. Ask the user to install packages inside the approved conda environment instead.",
+    match = ["sudo apt-get install ripgrep"],
+)
+
+# =========================
+# Core expensive workflows
+# =========================
+
+prefix_rule(
+    pattern = [{"token": "python"}, {"token": "scripts/train.py"}],
+    decision = "prompt",
+    justification = "Training runs may consume substantial compute and must be approved first. Prefer torch_pr_872_general for short/light jobs and torch_pr_226_chemistry for chemistry-heavy or high-end GPU jobs.",
+)
+
+prefix_rule(
+    pattern = [{"token": "python"}, {"token": "scripts/run_ablation.py"}],
+    decision = "prompt",
+    justification = "Ablation runs may consume substantial compute and must be approved first.",
+)
+
+prefix_rule(
+    pattern = [{"token": "python"}, {"token": "scripts/sample.py"}],
+    decision = "prompt",
+    justification = "Sampling jobs can be expensive at scale and must be approved first unless explicitly described as a tiny smoke test.",
+)
+
+prefix_rule(
+    pattern = [{"token": "python"}, {"token": "scripts/evaluate.py"}],
+    decision = "prompt",
+    justification = "Evaluation may launch expensive computations or process large outputs; approval required unless explicitly limited to a tiny smoke test.",
+)
+
+# =========================
+# Dangerous generic file ops
+# =========================
+
+prefix_rule(
+    pattern = [{"token": "rm"}, {"token": "-rf"}],
+    decision = "prompt",
+    justification = "Recursive force deletion is high risk and requires approval.",
+)
+
+prefix_rule(
+    pattern = [{"token": "mv"}],
+    decision = "prompt",
+    justification = "Moving files or directories can disrupt data and experiment layout; approval required.",
+)
+
+prefix_rule(
+    pattern = [{"token": "cp"}, {"token": "-r"}],
+    decision = "prompt",
+    justification = "Recursive copying can create large duplicated datasets or outputs; approval required.",
+)
+
+# =========================
+# Protected paths: raw data
+# =========================
+
+prefix_rule(
+    pattern = ["rm", "-rf", ["data/raw", "./data/raw", "data/raw/", "./data/raw/"]],
+    decision = "forbidden",
+    justification = "Do not delete raw data. Keep raw data immutable; archive or move it manually after explicit review.",
+    match = ["rm -rf data/raw"],
+)
+
+prefix_rule(
+    pattern = ["rm", "-r", ["data/raw", "./data/raw", "data/raw/", "./data/raw/"]],
+    decision = "forbidden",
+    justification = "Do not delete raw data. Keep raw data immutable; archive or move it manually after explicit review.",
+)
+
+prefix_rule(
+    pattern = ["rm", ["data/raw", "./data/raw", "data/raw/", "./data/raw/"]],
+    decision = "forbidden",
+    justification = "Do not delete raw data. Keep raw data immutable; archive or move it manually after explicit review.",
+)
+
+prefix_rule(
+    pattern = ["mv", ["data/raw", "./data/raw", "data/raw/", "./data/raw/"]],
+    decision = "prompt",
+    justification = "Moving raw data changes the canonical data location and requires approval.",
+)
+
+prefix_rule(
+    pattern = ["cp", "-r", ["data/raw", "./data/raw", "data/raw/", "./data/raw/"]],
+    decision = "prompt",
+    justification = "Recursive copying of raw data may create large duplicates and requires approval.",
+)
+
+# ====================================
+# Protected paths: processed data/split
+# ====================================
+
+prefix_rule(
+    pattern = ["rm", "-rf", ["data/processed", "./data/processed", "data/processed/", "./data/processed/"]],
+    decision = "prompt",
+    justification = "Deleting processed data can invalidate experiments and should be approved first.",
+    match = ["rm -rf data/processed"],
+)
+
+prefix_rule(
+    pattern = ["rm", "-rf", ["data/splits", "./data/splits", "data/splits/", "./data/splits/"]],
+    decision = "prompt",
+    justification = "Deleting split definitions affects reproducibility and should be approved first.",
+    match = ["rm -rf data/splits"],
+)
+
+prefix_rule(
+    pattern = ["mv", ["data/processed", "./data/processed", "data/processed/", "./data/processed/"]],
+    decision = "prompt",
+    justification = "Moving processed data changes experiment inputs and requires approval.",
+)
+
+prefix_rule(
+    pattern = ["mv", ["data/splits", "./data/splits", "data/splits/", "./data/splits/"]],
+    decision = "prompt",
+    justification = "Moving split files changes reproducibility-critical inputs and requires approval.",
+)
+
+# ====================================
+# Protected paths: checkpoints/results
+# ====================================
+
+prefix_rule(
+    pattern = ["rm", "-rf", ["experiments/checkpoints", "./experiments/checkpoints", "experiments/checkpoints/", "./experiments/checkpoints/"]],
+    decision = "prompt",
+    justification = "Deleting checkpoints can destroy expensive training artifacts and requires approval.",
+    match = ["rm -rf experiments/checkpoints"],
+)
+
+prefix_rule(
+    pattern = ["rm", "-rf", ["experiments/results", "./experiments/results", "experiments/results/", "./experiments/results/"]],
+    decision = "prompt",
+    justification = "Deleting results can destroy reproducibility-critical outputs and requires approval.",
+    match = ["rm -rf experiments/results"],
+)
+
+prefix_rule(
+    pattern = ["mv", ["experiments/checkpoints", "./experiments/checkpoints", "experiments/checkpoints/", "./experiments/checkpoints/"]],
+    decision = "prompt",
+    justification = "Moving checkpoints changes artifact locations and requires approval.",
+)
+
+prefix_rule(
+    pattern = ["mv", ["experiments/results", "./experiments/results", "experiments/results/", "./experiments/results/"]],
+    decision = "prompt",
+    justification = "Moving results changes artifact locations and requires approval.",
+)
+
+# =========================
+# Protected paths: reports
+# =========================
+
+prefix_rule(
+    pattern = ["rm", "-rf", ["reports", "./reports", "reports/", "./reports/"]],
+    decision = "prompt",
+    justification = "Deleting reports removes generated figures/tables and should be approved first.",
+    match = ["rm -rf reports"],
+)
+
+prefix_rule(
+    pattern = ["mv", ["reports", "./reports", "reports/", "./reports/"]],
+    decision = "prompt",
+    justification = "Moving reports changes expected output locations and requires approval.",
+)
+
+# ==================================
+# Extra protection for nested targets
+# ==================================
+
+prefix_rule(
+    pattern = ["rm", "-rf", "data/raw/"],
+    decision = "forbidden",
+    justification = "Do not delete raw data. Keep raw data immutable; archive or move it manually after explicit review.",
+)
+
+prefix_rule(
+    pattern = ["rm", "-rf", "experiments/checkpoints/"],
+    decision = "prompt",
+    justification = "Deleting checkpoints can destroy expensive training artifacts and requires approval.",
+)
+
+prefix_rule(
+    pattern = ["rm", "-rf", "experiments/results/"],
+    decision = "prompt",
+    justification = "Deleting results can destroy reproducibility-critical outputs and requires approval.",
+)

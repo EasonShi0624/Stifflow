@@ -1,0 +1,175 @@
+# =========================
+# Python bytecode / caches
+# =========================
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Test / coverage / tooling caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+.tox/
+.nox/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+
+# =========================
+# Jupyter / notebooks
+# =========================
+.ipynb_checkpoints/
+
+# =========================
+# Environments / local machine state
+# =========================
+.venv/
+venv/
+env/
+ENV/
+conda-meta/
+.python-version
+
+# Local dotenv / secrets / credentials
+.env
+.env.*
+*.secret
+*.secrets
+*.key
+*.pem
+*.token
+
+# =========================
+# IDE / editor files
+# =========================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# =========================
+# Logs / runtime dumps
+# =========================
+*.log
+logs/
+nohup.out
+
+# SLURM / HPC outputs
+slurm-*.out
+slurm-*.err
+slurm_*.out
+slurm_*.err
+*.o
+*.e
+
+# =========================
+# Build / packaging
+# =========================
+build/
+dist/
+.eggs/
+*.egg-info/
+pip-wheel-metadata/
+
+# =========================
+# Project-generated experiment artifacts
+# Keep directory structure, ignore contents
+# =========================
+experiments/logs/*
+experiments/checkpoints/*
+experiments/results/*
+reports/figures/*
+reports/tables/*
+
+# Preserve directory placeholders if you want them tracked
+!experiments/logs/.gitkeep
+!experiments/checkpoints/.gitkeep
+!experiments/results/.gitkeep
+!reports/figures/.gitkeep
+!reports/tables/.gitkeep
+
+# =========================
+# Data
+# Default: do NOT track bulky/raw/processed datasets.
+# Keep directory structure and small placeholders only.
+# =========================
+data/raw/*
+data/processed/*
+data/splits/*
+
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+!data/splits/.gitkeep
+
+# Optional: keep tiny metadata or manifest files if you store them there
+!data/**/*.md
+!data/**/*.txt
+!data/**/*.json
+!data/**/*.yaml
+!data/**/*.yml
+
+# =========================
+# Model / numerical artifacts
+# =========================
+*.pt
+*.pth
+*.ckpt
+*.bin
+*.npz
+*.npy
+*.pkl
+*.pickle
+*.joblib
+*.onnx
+
+# Chemistry / simulation outputs that are often bulky
+*.sdf
+*.mol2
+*.xyz
+*.trr
+*.xtc
+*.dcd
+*.h5
+*.hdf5
+
+# =========================
+# Temporary / scratch
+# =========================
+tmp/
+temp/
+.cache/
+scratch/
+
+# =========================
+# Codex / local overrides
+# Keep shared project config if intended; ignore personal overrides.
+# =========================
+.codex/session*
+.codex/tmp/
+.codex/cache/
+
+# =========================
+# Keep these tracked
+# =========================
+!.gitignore
+!README.md
+!AGENTS.md
+!.codex/config.toml
+!configs/
+!configs/**/*.yaml
+!configs/**/*.yml
+!scripts/
+!scripts/**/*.py
+!scripts/**/*.sh
+!src/
+!src/**/*.py
+!tests/
+!tests/**/*.py
+!docs/
+!docs/**/*.md
+!TASKS.md
