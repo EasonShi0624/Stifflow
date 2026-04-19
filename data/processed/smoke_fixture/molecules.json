@@ -1,0 +1,90 @@
+{
+  "dataset_kind": "synthetic_smoke",
+  "description": "Tiny hand-authored fixture for smoke-test wiring only. This is not GEOM-Drugs benchmark data.",
+  "molecules": [
+    {
+      "molecule_id": "smoke_ethane",
+      "smiles": "CC",
+      "scaffold": "acyclic_small",
+      "atom_symbols": ["C", "C"],
+      "bonds": [[0, 1, 1]],
+      "rotatable_bond_count": 0,
+      "ring_atom_indices": [],
+      "amide_atom_indices": [],
+      "conformers": [
+        {"conformer_id": "ethane_0", "coords": [[0.0, 0.0, 0.0], [1.54, 0.0, 0.0]]},
+        {"conformer_id": "ethane_1", "coords": [[0.0, 0.0, 0.0], [1.50, 0.15, 0.0]]}
+      ]
+    },
+    {
+      "molecule_id": "smoke_propane",
+      "smiles": "CCC",
+      "scaffold": "acyclic_small",
+      "atom_symbols": ["C", "C", "C"],
+      "bonds": [[0, 1, 1], [1, 2, 1]],
+      "rotatable_bond_count": 1,
+      "ring_atom_indices": [],
+      "amide_atom_indices": [],
+      "conformers": [
+        {"conformer_id": "propane_0", "coords": [[0.0, 0.0, 0.0], [1.54, 0.0, 0.0], [2.75, 0.88, 0.0]]},
+        {"conformer_id": "propane_1", "coords": [[0.0, 0.0, 0.0], [1.50, 0.10, 0.0], [2.70, 0.75, 0.25]]}
+      ]
+    },
+    {
+      "molecule_id": "smoke_butane",
+      "smiles": "CCCC",
+      "scaffold": "acyclic_flexible",
+      "atom_symbols": ["C", "C", "C", "C"],
+      "bonds": [[0, 1, 1], [1, 2, 1], [2, 3, 1]],
+      "rotatable_bond_count": 2,
+      "ring_atom_indices": [],
+      "amide_atom_indices": [],
+      "conformers": [
+        {"conformer_id": "butane_0", "coords": [[0.0, 0.0, 0.0], [1.54, 0.0, 0.0], [2.75, 0.88, 0.0], [4.20, 0.45, 0.0]]},
+        {"conformer_id": "butane_1", "coords": [[0.0, 0.0, 0.0], [1.48, 0.15, 0.0], [2.62, 0.78, 0.35], [4.00, 0.18, 0.10]]}
+      ]
+    },
+    {
+      "molecule_id": "smoke_cyclopropane",
+      "smiles": "C1CC1",
+      "scaffold": "cyclopropane",
+      "atom_symbols": ["C", "C", "C"],
+      "bonds": [[0, 1, 1], [1, 2, 1], [2, 0, 1]],
+      "rotatable_bond_count": 0,
+      "ring_atom_indices": [0, 1, 2],
+      "amide_atom_indices": [],
+      "conformers": [
+        {"conformer_id": "cyclopropane_0", "coords": [[0.0, 0.9, 0.0], [-0.78, -0.45, 0.0], [0.78, -0.45, 0.0]]},
+        {"conformer_id": "cyclopropane_1", "coords": [[0.0, 0.88, 0.03], [-0.76, -0.43, -0.02], [0.77, -0.46, 0.02]]}
+      ]
+    },
+    {
+      "molecule_id": "smoke_amide_proxy",
+      "smiles": "NC(=O)C",
+      "scaffold": "amide_proxy",
+      "atom_symbols": ["N", "C", "O", "C"],
+      "bonds": [[0, 1, 1], [1, 2, 2], [1, 3, 1]],
+      "rotatable_bond_count": 1,
+      "ring_atom_indices": [],
+      "amide_atom_indices": [0, 1, 2],
+      "conformers": [
+        {"conformer_id": "amide_0", "coords": [[-1.20, 0.0, 0.0], [0.0, 0.0, 0.0], [0.65, 1.10, 0.0], [0.70, -1.20, 0.0]]},
+        {"conformer_id": "amide_1", "coords": [[-1.18, 0.05, 0.0], [0.02, 0.0, 0.0], [0.62, 1.08, 0.0], [0.72, -1.15, 0.12]]}
+      ]
+    },
+    {
+      "molecule_id": "smoke_branched",
+      "smiles": "CC(C)C",
+      "scaffold": "acyclic_branched",
+      "atom_symbols": ["C", "C", "C", "C"],
+      "bonds": [[0, 1, 1], [1, 2, 1], [1, 3, 1]],
+      "rotatable_bond_count": 1,
+      "ring_atom_indices": [],
+      "amide_atom_indices": [],
+      "conformers": [
+        {"conformer_id": "branched_0", "coords": [[-1.20, 0.0, 0.0], [0.0, 0.0, 0.0], [0.75, 1.25, 0.0], [0.80, -1.20, 0.0]]},
+        {"conformer_id": "branched_1", "coords": [[-1.18, 0.10, 0.0], [0.0, 0.02, 0.0], [0.70, 1.15, 0.20], [0.85, -1.15, -0.10]]}
+      ]
+    }
+  ]
+}

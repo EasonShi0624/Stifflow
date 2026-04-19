@@ -8,15 +8,15 @@ experiment:
   output_root: experiments
 
 data:
-  dataset_name: geom_drugs_smoke
+  dataset_name: synthetic_smoke
   raw_root: data/raw/geom_drugs
-  processed_root: data/processed/geom_drugs_smoke
+  processed_root: data/processed/smoke_fixture
   split_root: data/splits
   split_type: random
   subset:
-    max_molecules: 128
-    max_conformers_per_mol: 10
-    tag: smoke
+    max_molecules: 6
+    max_conformers_per_mol: 2
+    tag: synthetic_smoke
 
 model:
   backbone: egnn_fallback

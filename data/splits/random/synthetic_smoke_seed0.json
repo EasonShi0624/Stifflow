@@ -1,0 +1,17 @@
+{
+  "dataset_name": "synthetic_smoke",
+  "seed": 0,
+  "split_type": "random",
+  "test": [
+    "smoke_cyclopropane"
+  ],
+  "train": [
+    "smoke_amide_proxy",
+    "smoke_butane",
+    "smoke_ethane",
+    "smoke_propane"
+  ],
+  "val": [
+    "smoke_branched"
+  ]
+}
