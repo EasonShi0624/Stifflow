@@ -421,26 +421,27 @@ logging:
             drugs = raw / "rdkit_folder" / "drugs"
             processed = root / "processed"
             drugs.mkdir(parents=True)
-            record = {
-                "smiles": "CO",
-                "totalconfs": 2,
-                "uniqueconfs": 2,
-                "charge": 0,
-                "conformers": [
-                    {
-                        "geom_id": 100,
-                        "relativeenergy": 0.0,
-                        "rd_mol": _FakeMol([[0.0, 0.0, 0.0], [1.2, 0.0, 0.0]]),
-                    },
-                    {
-                        "geom_id": 101,
-                        "relativeenergy": 0.1,
-                        "rd_mol": _FakeMol([[0.0, 0.1, 0.0], [1.1, 0.0, 0.0]]),
-                    },
-                ],
-            }
-            with (drugs / "tiny_mol.pickle").open("wb") as handle:
-                pickle.dump(record, handle)
+            for index in range(3):
+                record = {
+                    "smiles": "CO",
+                    "totalconfs": 2,
+                    "uniqueconfs": 2,
+                    "charge": 0,
+                    "conformers": [
+                        {
+                            "geom_id": 100 + index,
+                            "relativeenergy": 0.0,
+                            "rd_mol": _FakeMol([[0.0, 0.0, 0.0], [1.2 + index, 0.0, 0.0]]),
+                        },
+                        {
+                            "geom_id": 200 + index,
+                            "relativeenergy": 0.1,
+                            "rd_mol": _FakeMol([[0.0, 0.1, 0.0], [1.1 + index, 0.0, 0.0]]),
+                        },
+                    ],
+                }
+                with (drugs / f"tiny_mol_{index}.pickle").open("wb") as handle:
+                    pickle.dump(record, handle)
 
             paths = run_geom_preflight(
                 raw_root=raw,
@@ -448,7 +449,6 @@ logging:
                 manifest_path=root / "manifest.json",
                 report_path=root / "report.md",
                 write_tiny_processed_output=True,
-                max_processed_molecules=1,
                 max_processed_conformers_per_mol=1,
             )
             manifest = json.loads(paths["manifest"].read_text(encoding="utf-8"))
@@ -458,8 +458,9 @@ logging:
             self.assertEqual(artifact["dataset_kind"], "geom_drugs_tiny_processed_dry_run")
             self.assertEqual(artifact["result_kind"], "processed_output_dry_run_not_benchmark")
             self.assertFalse(artifact["benchmark_result"])
-            self.assertEqual(artifact["molecule_count"], 1)
-            self.assertEqual(artifact["conformer_count"], 1)
+            self.assertEqual(artifact["bounds"]["max_molecules"], 3)
+            self.assertEqual(artifact["molecule_count"], 3)
+            self.assertEqual(artifact["conformer_count"], 3)
             molecule = artifact["molecules"][0]
             self.assertEqual(molecule["atom_symbols"], ["C", "O"])
             self.assertEqual(molecule["bonds"], [[0, 1, 1]])
@@ -468,7 +469,7 @@ logging:
             self.assertEqual(processed_manifest["processed_data_written"], True)
             self.assertEqual(processed_manifest["full_processed_data_written"], False)
 
-    def test_geom_tiny_split_dry_run_writes_degenerate_nonbenchmark_split(self) -> None:
+    def test_geom_tiny_split_dry_run_writes_nonbenchmark_split(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             processed_artifact = root / "processed" / "tiny_real_dry_run" / "molecules.json"
@@ -481,10 +482,11 @@ logging:
                         "benchmark_result": False,
                         "molecules": [
                             {
-                                "molecule_id": "geom_tiny_0",
+                                "molecule_id": f"geom_tiny_{index}",
                                 "smiles": "CO",
                                 "conformers": [{"conformer_id": "100", "coords": [[0, 0, 0], [1, 0, 0]]}],
                             }
+                            for index in range(3)
                         ],
                     }
                 ),
@@ -502,16 +504,20 @@ logging:
             manifest = json.loads(paths["manifest"].read_text(encoding="utf-8"))
             self.assertEqual(split["result_kind"], "split_dry_run_not_benchmark")
             self.assertFalse(split["benchmark_result"])
-            self.assertTrue(split["degenerate_tiny_split"])
-            self.assertEqual(split["train"], ["geom_tiny_0"])
-            self.assertEqual(split["val"], [])
-            self.assertEqual(split["test"], [])
+            self.assertFalse(split["degenerate_tiny_split"])
+            self.assertEqual(len(split["train"]), 1)
+            self.assertEqual(len(split["val"]), 1)
+            self.assertEqual(len(split["test"]), 1)
+            self.assertEqual(
+                sorted(split["train"] + split["val"] + split["test"]),
+                ["geom_tiny_0", "geom_tiny_1", "geom_tiny_2"],
+            )
             self.assertEqual(manifest["result_kind"], "split_dry_run_not_benchmark")
             self.assertFalse(manifest["benchmark_result"])
             self.assertFalse(manifest["training_executed"])
             self.assertFalse(manifest["raw_data_modified"])
             self.assertFalse(manifest["processed_data_modified"])
-            self.assertEqual(manifest["counts"], {"train": 1, "val": 0, "test": 0})
+            self.assertEqual(manifest["counts"], {"train": 1, "val": 1, "test": 1})
 
 
 if __name__ == "__main__":

@@ -34,7 +34,7 @@ def run_geom_preflight(
     max_pickle_bytes: int = 1_000_000,
     write_tiny_processed_output: bool = False,
     tiny_processed_tag: str = "tiny_real_dry_run",
-    max_processed_molecules: int = 1,
+    max_processed_molecules: int = 3,
     max_processed_conformers_per_mol: int = 1,
     max_processed_atoms: int = 128,
 ) -> dict[str, Path]:
@@ -258,7 +258,7 @@ def write_tiny_processed_dry_run(
     processed_root: Path,
     output_tag: str = "tiny_real_dry_run",
     enabled: bool = False,
-    max_molecules: int = 1,
+    max_molecules: int = 3,
     max_conformers_per_mol: int = 1,
     max_pickle_bytes: int = 1_000_000,
     max_atoms: int = 128,

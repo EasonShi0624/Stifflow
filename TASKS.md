@@ -34,7 +34,7 @@ This file tracks the current prioritized work queue.
 7. **Add GEOM-Drugs raw-data readiness checks** — partially done
    - `scripts/prepare_geom.py --dry-run` inspects `data/raw/geom_drugs` read-only.
    - Preflight writes a manifest/report and runs a tiny bounded metadata-only dry-run over `rdkit_folder/drugs/*.pickle` when present.
-   - `scripts/prepare_geom.py --dry-run --write-tiny-processed-output` writes an opt-in, tiny, non-benchmark processed-output dry-run artifact.
+   - `scripts/prepare_geom.py --dry-run --write-tiny-processed-output` writes an opt-in, tiny, non-benchmark processed-output dry-run artifact capped at three molecules by default.
    - `scripts/make_geom_tiny_split.py` writes an opt-in, tiny, non-benchmark split-interface dry-run artifact from that processed dry-run.
    - It still does not write a real processed training subset, real benchmark split files, checkpoints, or training outputs.
 

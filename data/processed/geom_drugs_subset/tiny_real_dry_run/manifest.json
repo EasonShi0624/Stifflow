@@ -4,11 +4,11 @@
   "bounds": {
     "max_atoms": 128,
     "max_conformers_per_mol": 1,
-    "max_molecules": 1,
+    "max_molecules": 3,
     "max_pickle_bytes": 1000000,
-    "max_pickle_files_considered": 20
+    "max_pickle_files_considered": 60
   },
-  "conformer_count": 1,
+  "conformer_count": 3,
   "dataset_kind": "geom_drugs_tiny_processed_dry_run",
   "dataset_name": "geom_drugs",
   "execution_mode": "local_cpu_tiny_processed_output_dry_run",
@@ -35,7 +35,7 @@
   },
   "full_processed_data_written": false,
   "hardware": "cpu_only",
-  "molecule_count": 1,
+  "molecule_count": 3,
   "notes": [
     "This file is intentionally tiny and exists only to validate real GEOM extraction wiring.",
     "It must not be used as a benchmark dataset or training corpus."
@@ -53,6 +53,20 @@
       "molecule_id": "BrC(=C\\c1ccccc1)_C=N_N1CCN(Cc2ccccc2)CC1",
       "size_bytes": 198726,
       "source_file": "rdkit_folder/drugs/BrC(=C\\c1ccccc1)_C=N_N1CCN(Cc2ccccc2)CC1.pickle"
+    },
+    {
+      "atom_count": 43,
+      "conformers_written": 1,
+      "molecule_id": "BrC(=C\\c1ccccc1)_C=N_N1CCN(c2ccccc2)CC1",
+      "size_bytes": 31826,
+      "source_file": "rdkit_folder/drugs/BrC(=C\\c1ccccc1)_C=N_N1CCN(c2ccccc2)CC1.pickle"
+    },
+    {
+      "atom_count": 42,
+      "conformers_written": 1,
+      "molecule_id": "BrC(=C\\c1ccccc1)_C=N_N1CCN(c2ccccn2)CC1",
+      "size_bytes": 87167,
+      "source_file": "rdkit_folder/drugs/BrC(=C\\c1ccccc1)_C=N_N1CCN(c2ccccn2)CC1.pickle"
     }
   ],
   "split_files_written": false,

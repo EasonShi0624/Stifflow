@@ -1,14 +1,14 @@
 {
   "benchmark_result": false,
   "bounds": {
-    "input_molecule_count": 1,
+    "input_molecule_count": 3,
     "max_molecules": 3,
-    "written_molecule_count": 1
+    "written_molecule_count": 3
   },
   "counts": {
-    "test": 0,
+    "test": 1,
     "train": 1,
-    "val": 0
+    "val": 1
   },
   "dataset_kind": "geom_drugs_tiny_processed_dry_run",
   "dataset_name": "geom_drugs",
@@ -16,7 +16,9 @@
   "full_split_written": false,
   "hardware": "cpu_only",
   "molecule_ids": [
-    "BrC(=C\\c1ccccc1)_C=N_N1CCN(Cc2ccccc2)CC1"
+    "BrC(=C\\c1ccccc1)_C=N_N1CCN(Cc2ccccc2)CC1",
+    "BrC(=C\\c1ccccc1)_C=N_N1CCN(c2ccccc2)CC1",
+    "BrC(=C\\c1ccccc1)_C=N_N1CCN(c2ccccn2)CC1"
   ],
   "notes": [
     "This split validates the split-file interface on a tiny real-data dry-run artifact.",
