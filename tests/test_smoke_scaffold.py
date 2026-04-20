@@ -18,6 +18,7 @@ from src.data.geom_split_dry_run import run_geom_tiny_split_dry_run
 from src.eval.smoke_compare import write_smoke_comparison
 from src.eval.tiny_real_compare import write_tiny_real_comparison
 from src.eval.tiny_real_lifecycle import write_tiny_real_lifecycle_summary
+from src.eval.tiny_real_pilot_compare import write_tiny_real_pilot_comparison
 from src.train.pipeline import run_smoke_pipeline
 from src.train.smoke import run_smoke
 from src.train.tiny_real import run_tiny_real_model_dry_runs
@@ -1288,6 +1289,104 @@ logging:
             self.assertIn("Tiny Real-Data End-to-End Smoke Lifecycle Summary", report)
             self.assertIn("not a benchmark result", report)
             self.assertIn("checkpoint_sampling_smoke", report)
+
+    def test_tiny_real_pilot_comparison_writes_summary_and_report(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            output_root = Path(tmp)
+            result_paths = []
+            for mode, final_train in [("isotropic", 0.35), ("stiffness_structured", 0.30)]:
+                path = output_root / f"{mode}.json"
+                payload = {
+                    "run_name": f"pilot_{mode}",
+                    "result_kind": "tiny_real_data_bounded_pilot_not_benchmark",
+                    "benchmark_result": False,
+                    "hardware": "cpu_only",
+                    "gpu_used": False,
+                    "scheduler": None,
+                    "slurm_account": None,
+                    "pilot_run": True,
+                    "bounded_pilot": True,
+                    "training_executed": True,
+                    "training_loop_executed": True,
+                    "bounded_real_training_loop_executed": True,
+                    "larger_real_training_run_started": False,
+                    "checkpoint_written": False,
+                    "sampling_executed": False,
+                    "max_steps": 2,
+                    "hard_max_steps": 8,
+                    "optimizer_step_count": 2,
+                    "backward_pass_count": 2,
+                    "sample_count": 3,
+                    "corruption_mode": mode,
+                    "dataset": {
+                        "kind": "geom_drugs_tiny_processed_dry_run",
+                        "molecule_count": 3,
+                        "split_type": "random",
+                        "split_counts": {"train": 1, "val": 1, "test": 1},
+                    },
+                    "metrics": {
+                        "metric_scope": "geom_drugs_tiny_real_bounded_pilot_training",
+                        "sample_count": 3,
+                        "split_sample_counts": {"train": 1, "val": 1, "test": 1},
+                        "trainable_parameter_count": 15,
+                        "optimizer_name": "SGD",
+                        "learning_rate": 0.01,
+                        "max_steps": 2,
+                        "optimizer_step_count": 2,
+                        "backward_pass_count": 2,
+                        "initial_split_losses": {"train": 0.5, "val": 0.6, "test": 0.7},
+                        "final_split_losses": {"train": final_train, "val": 0.45, "test": 0.55},
+                        "step_records": [
+                            {
+                                "optimizer_step": 1,
+                                "train_loss_before_step": 0.5,
+                                "gradient_l2_norm": 1.0,
+                                "split_losses_after_step": {"train": 0.4, "val": 0.5, "test": 0.6},
+                            },
+                            {
+                                "optimizer_step": 2,
+                                "train_loss_before_step": 0.4,
+                                "gradient_l2_norm": 0.8,
+                                "split_losses_after_step": {
+                                    "train": final_train,
+                                    "val": 0.45,
+                                    "test": 0.55,
+                                },
+                            },
+                        ],
+                    },
+                }
+                path.write_text(json.dumps(payload), encoding="utf-8")
+                result_paths.append(path)
+
+            paths = write_tiny_real_pilot_comparison(
+                result_paths=result_paths,
+                summary_path=output_root / "summary.json",
+                report_path=output_root / "summary.md",
+            )
+            summary = json.loads(paths["summary"].read_text(encoding="utf-8"))
+            report = paths["report"].read_text(encoding="utf-8")
+            self.assertEqual(summary["result_kind"], "tiny_real_data_bounded_pilot_comparison_not_benchmark")
+            self.assertFalse(summary["benchmark_result"])
+            self.assertFalse(summary["gpu_used"])
+            self.assertFalse(summary["training_executed_by_summary"])
+            self.assertFalse(summary["sampling_executed_by_summary"])
+            self.assertFalse(summary["larger_real_training_run_started"])
+            self.assertEqual(summary["row_count"], 2)
+            self.assertEqual(
+                {row["corruption_mode"] for row in summary["rows"]},
+                {"isotropic", "stiffness_structured"},
+            )
+            for row in summary["rows"]:
+                self.assertEqual(row["split_counts"], {"train": 1, "val": 1, "test": 1})
+                self.assertEqual(len(row["step_loss_trace"]), 2)
+                self.assertFalse(row["safety_labels"]["benchmark_result"])
+                self.assertTrue(row["safety_labels"]["bounded_pilot"])
+                self.assertFalse(row["safety_labels"]["checkpoint_written"])
+                self.assertFalse(row["safety_labels"]["sampling_executed"])
+            self.assertIn("Tiny Real-Data Bounded Pilot Summary", report)
+            self.assertIn("not a benchmark result", report)
+            self.assertIn("Per-step train loss trace", report)
 
     def test_geom_preflight_reports_missing_raw_root(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

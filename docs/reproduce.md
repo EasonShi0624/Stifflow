@@ -244,6 +244,18 @@ This reads the same three-molecule tiny processed artifact and tiny split dry-ru
 
 The outputs are labeled `tiny_real_data_bounded_pilot_not_benchmark`, `benchmark_result: false`, `hardware: cpu_only`, `gpu_used: false`, `pilot_run: true`, `bounded_pilot: true`, `training_executed: true`, `training_loop_executed: true`, `bounded_real_training_loop_executed: true`, `larger_real_training_run_started: false`, `max_steps: 6`, `hard_max_steps: 8`, `checkpoint_written: false`, `sampling_executed: false`, and `slurm_account: null`. This is the first bounded pilot training loop on the tiny real artifact, not a benchmark result or evidence of model quality.
 
+Current bounded tiny real-data pilot comparison report:
+
+```bash
+python scripts/compare_tiny_real_pilot.py
+```
+
+This reads the two current bounded pilot result JSON files and writes a reporting-only comparison of pilot metadata, train/validation/test counts, final losses, per-step loss traces, and safety labels. It writes:
+- `experiments/results/geom_tiny_real_pilot_summary.json`
+- `reports/tables/geom_tiny_real_pilot_summary.md`
+
+The summary is labeled `tiny_real_data_bounded_pilot_comparison_not_benchmark`, `benchmark_result: false`, `hardware: cpu_only`, `gpu_used: false`, `training_executed_by_summary: false`, `sampling_executed_by_summary: false`, `larger_real_training_run_started: false`, and `slurm_account: null`. It does not read raw data, start training, run sampling, write checkpoints, use GPUs, submit jobs, or modify the environment.
+
 Current tiny real-data end-to-end smoke lifecycle summary:
 
 ```bash
