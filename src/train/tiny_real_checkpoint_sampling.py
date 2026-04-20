@@ -31,7 +31,7 @@ MICRO_PILOT_EXECUTION_MODE = "local_cpu_tiny_real_micro_pilot_checkpoint_samplin
 MICRO_PILOT_MAX_MOLECULES = 6
 DEFAULT_MICRO_PILOT_MAX_STEPS = HARD_MAX_STEPS
 MICRO_PILOT_CHECKPOINT_SCOPE = "disposable_micro_pilot_checkpoint_sampling_only"
-MICRO_PILOT_RUNTIME_SCOPE = "checkpoint_train_save_reload_sample_after_torch_cpu_warmup"
+MICRO_PILOT_RUNTIME_SCOPE = "checkpoint_train_save_reload_sample_after_full_cpu_checkpoint_sampling_warmup"
 
 
 def run_tiny_real_checkpoint_sampling_smoke_tests(
@@ -434,6 +434,7 @@ def run_micro_pilot_checkpoint_sampling(
         "runtime_scope": MICRO_PILOT_RUNTIME_SCOPE,
         "runtime_seconds_reliable": True,
         "runtime_backend": runtime_backend,
+        "runtime_warmup_scope": "full_cpu_checkpoint_sampling_operation",
         "notes": [
             "This is a bounded six-molecule GEOM micro-pilot CPU checkpoint-and-sampling run.",
             "The checkpoint is disposable pilot-only output, not a reusable research checkpoint.",

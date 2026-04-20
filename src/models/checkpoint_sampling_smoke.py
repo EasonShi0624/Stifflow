@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -116,10 +117,38 @@ def run_checkpoint_sampling_smoke(
 
 
 def warm_up_checkpoint_sampling_runtime() -> dict[str, Any]:
-    """Load the CPU backend before timing comparable bounded pilot runs."""
+    """Exercise the CPU backend before timing comparable bounded pilot runs."""
 
     torch = _load_torch()
+    torch.manual_seed(0)
     torch.set_num_threads(1)
+    features = torch.zeros((2, 4), dtype=torch.float32, device="cpu")
+    targets = torch.zeros((2, 3), dtype=torch.float32, device="cpu")
+    model = torch.nn.Linear(4, 3)
+    model.to("cpu")
+    optimizer = torch.optim.SGD(model.parameters(), lr=1.0e-2)
+    loss_fn = torch.nn.MSELoss()
+    optimizer.zero_grad(set_to_none=True)
+    loss = loss_fn(model(features), targets)
+    loss.backward()
+    optimizer.step()
+    with tempfile.TemporaryDirectory() as tmp:
+        checkpoint_path = Path(tmp) / "checkpoint_sampling_warmup.pt"
+        torch.save(
+            {
+                "result_kind": "disposable_checkpoint_sampling_runtime_warmup",
+                "benchmark_result": False,
+                "model_state_dict": model.state_dict(),
+            },
+            checkpoint_path,
+        )
+        payload = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
+    reloaded = torch.nn.Linear(4, 3)
+    reloaded.load_state_dict(payload["model_state_dict"])
+    reloaded.to("cpu")
+    reloaded.eval()
+    with torch.no_grad():
+        _ = reloaded(features)
     return {
         "backend": "torch_cpu",
         "torch_version": getattr(torch, "__version__", "unknown"),

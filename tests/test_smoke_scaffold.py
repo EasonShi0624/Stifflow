@@ -1496,7 +1496,7 @@ logging:
                 self.assertFalse(results["metrics"]["checkpoint_benchmark_result"])
                 self.assertEqual(
                     results["runtime_scope"],
-                    "checkpoint_train_save_reload_sample_after_torch_cpu_warmup",
+                    "checkpoint_train_save_reload_sample_after_full_cpu_checkpoint_sampling_warmup",
                 )
                 self.assertTrue(results["runtime_seconds_reliable"])
 
