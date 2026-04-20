@@ -52,6 +52,8 @@ This file tracks the current prioritized work queue.
    - `scripts/run_tiny_real_pilot.py` runs a bounded CPU-only tiny real-data pilot training loop for isotropic and stiffness-structured configurations on the existing three-molecule artifact, without checkpoints, sampling, jobs, GPUs, or benchmark claims.
    - `scripts/run_tiny_real_pilot.py --micro-pilot` runs the same bounded CPU-only pilot loop on the six-molecule micro-pilot artifact and split.
    - `scripts/run_micro_pilot_multiseed.py` runs a fixed tiny seed set for both micro-pilot modes on CPU and writes a non-benchmark multi-seed summary.
+   - `scripts/run_micro_pilot_checkpoint_sampling.py` runs a single-seed, bounded CPU-only six-molecule micro-pilot checkpoint-and-sampling pilot for both modes, writing disposable pilot-only checkpoints plus manifest/result/log outputs.
+   - Micro-pilot checkpoint/sampling runtime accounting now excludes one-time PyTorch CPU backend warm-up from comparable per-mode `runtime_seconds`.
    - Larger real training and real sampling are still not implemented.
 
 9. **Add evaluation scaffolding**
@@ -65,6 +67,7 @@ This file tracks the current prioritized work queue.
    - Tiny real-data bounded multi-step smoke outputs emit per-step loss/gradient diagnostics labeled as non-benchmark and not larger training.
    - Tiny real-data checkpoint-and-sampling smoke outputs emit disposable checkpoint/reload and one-step sampling diagnostics labeled as non-benchmark.
    - Tiny real-data bounded pilot outputs emit train/val/test loss diagnostics for a strictly bounded CPU-only pilot loop labeled as non-benchmark.
+   - Bounded micro-pilot checkpoint-and-sampling outputs emit train-split loss traces, disposable checkpoint reload diagnostics, and one-step six-molecule sampling diagnostics labeled as non-benchmark.
    - RDKit smoke outputs record Python/RDKit versions and distinguish import, fixture, ETKDG, MMFF, alignment, and runtime failures.
    - Smoke comparison report aggregates isotropic, stiffness, and RDKit smoke outputs into JSON and markdown.
    - Tiny real-data dry-run comparison report aggregates the current RDKit, isotropic, and stiffness-structured tiny real outputs into JSON and markdown.
@@ -72,6 +75,7 @@ This file tracks the current prioritized work queue.
    - Tiny real-data bounded pilot comparison report aggregates the two current pilot outputs into JSON and markdown without running training.
    - Bounded micro-pilot comparison report aggregates the two current six-molecule pilot outputs into JSON and markdown without running training.
    - Bounded micro-pilot multi-seed summary aggregates the fixed tiny seed set for both modes into JSON and markdown.
+   - Bounded micro-pilot checkpoint-and-sampling comparison report aggregates the two current checkpoint/sampling outputs into JSON and markdown, including runtime-consistency warnings for legacy outputs.
 
 10. **Draft one smoke-test config**
    - Baseline backbone

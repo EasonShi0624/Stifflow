@@ -308,6 +308,36 @@ It also writes:
 
 The per-seed outputs remain labeled `tiny_real_data_bounded_pilot_not_benchmark`, `benchmark_result: false`, `hardware: cpu_only`, `gpu_used: false`, `micro_pilot_run: true`, `bounded_pilot: true`, `larger_real_training_run_started: false`, `checkpoint_written: false`, `sampling_executed: false`, and `slurm_account: null`. The summary is labeled `tiny_real_data_bounded_micro_pilot_multiseed_summary_not_benchmark`, with `seed_set: [0, 1]`. This is a bounded micro-pilot stability diagnostic only, not a benchmark result.
 
+Current bounded micro-pilot checkpoint-and-sampling pilot:
+
+```bash
+python scripts/run_micro_pilot_checkpoint_sampling.py
+```
+
+This reads the existing six-molecule micro-pilot processed artifact and split, runs a single fixed seed for both isotropic and stiffness-structured source configurations, trains only the four-molecule train split for five CPU optimizer steps, writes a disposable pilot-only checkpoint, reloads it, and runs one bounded sampling step across the six-molecule artifact. It writes:
+- `experiments/manifests/geom_micro_pilot_ckpt_sample_isotropic_mols6_steps5_seed0.json`
+- `experiments/results/geom_micro_pilot_ckpt_sample_isotropic_mols6_steps5_seed0.json`
+- `experiments/logs/geom_micro_pilot_ckpt_sample_isotropic_mols6_steps5_seed0.log`
+- `experiments/checkpoints/geom_micro_pilot_ckpt_sample_isotropic_mols6_steps5_seed0.pt`
+- `experiments/manifests/geom_micro_pilot_ckpt_sample_stiffness_mols6_steps5_seed0.json`
+- `experiments/results/geom_micro_pilot_ckpt_sample_stiffness_mols6_steps5_seed0.json`
+- `experiments/logs/geom_micro_pilot_ckpt_sample_stiffness_mols6_steps5_seed0.log`
+- `experiments/checkpoints/geom_micro_pilot_ckpt_sample_stiffness_mols6_steps5_seed0.pt`
+
+The outputs are labeled `tiny_real_data_bounded_micro_pilot_checkpoint_sampling_not_benchmark`, `benchmark_result: false`, `hardware: cpu_only`, `gpu_used: false`, `pilot_run: true`, `bounded_pilot: true`, `micro_pilot_run: true`, `larger_real_training_run_started: false`, `checkpoint_written: true`, `checkpoint_reloaded: true`, `checkpoint_scope: disposable_micro_pilot_checkpoint_sampling_only`, `sampling_executed: true`, `sample_step_count: 1`, and `slurm_account: null`. The checkpoints are disposable pilot artifacts, not reusable research checkpoints, and the sampled coordinates are plumbing diagnostics only, not benchmark samples.
+
+Current bounded micro-pilot checkpoint-and-sampling comparison:
+
+```bash
+python scripts/compare_micro_pilot_checkpoint_sampling.py
+```
+
+This reads the current isotropic and stiffness-structured bounded micro-pilot checkpoint/sampling result JSON files and writes:
+- `experiments/results/geom_micro_pilot_ckpt_sample_summary.json`
+- `reports/tables/geom_micro_pilot_ckpt_sample_summary.md`
+
+The summary is labeled `tiny_real_data_bounded_micro_pilot_checkpoint_sampling_comparison_not_benchmark`, `benchmark_result: false`, `hardware: cpu_only`, `gpu_used: false`, `training_executed_by_summary: false`, `sampling_executed_by_summary: false`, `larger_real_training_run_started: false`, and `slurm_account: null`. It compares `reloaded_loss`, overall and split-wise `sampled_rmsd_to_target`, per-molecule sampled RMSD, and runtime fields. Older checkpoint/sampling outputs that measured one-time PyTorch import/runtime warm-up in only the first mode are flagged as runtime-inconsistent until regenerated with the fixed `runtime_scope`.
+
 Current bounded tiny real-data pilot comparison report:
 
 ```bash
