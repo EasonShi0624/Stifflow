@@ -1,4 +1,4 @@
-"""Bounded CPU-only pilot training helpers for the tiny real artifact."""
+"""Bounded CPU-only pilot training helpers for tiny real artifacts."""
 
 from __future__ import annotations
 
@@ -10,6 +10,9 @@ class TinyPilotTorchUnavailableError(RuntimeError):
     """Raised when PyTorch is unavailable for the bounded pilot."""
 
 
+MICRO_PILOT_HARD_MAX_SAMPLES = 6
+
+
 def run_tiny_velocity_pilot_training(
     samples: list[dict[str, Any]],
     seed: int,
@@ -18,9 +21,9 @@ def run_tiny_velocity_pilot_training(
 ) -> dict[str, Any]:
     """Run a strictly bounded CPU training loop on tiny real flow samples.
 
-    This is intentionally small and non-benchmark: one train molecule from the
-    existing three-molecule split is optimized, while validation and test losses
-    are recorded only as interface diagnostics.
+    This is intentionally small and non-benchmark: only a bounded tiny real
+    subset is optimized, while validation and test losses are recorded as
+    interface diagnostics.
     """
 
     if not samples:
@@ -31,8 +34,10 @@ def run_tiny_velocity_pilot_training(
         raise ValueError("Tiny pilot training is capped at eight optimizer steps")
 
     split_counts = _split_counts(samples)
-    if split_counts != {"train": 1, "val": 1, "test": 1}:
-        raise ValueError(f"Tiny pilot requires exactly one train/val/test sample, got {split_counts}")
+    if len(samples) > MICRO_PILOT_HARD_MAX_SAMPLES:
+        raise ValueError(f"Tiny pilot training is capped at {MICRO_PILOT_HARD_MAX_SAMPLES} samples")
+    if any(split_counts[split_name] <= 0 for split_name in ["train", "val", "test"]):
+        raise ValueError(f"Tiny pilot requires nonempty train/val/test splits, got {split_counts}")
 
     torch = _load_torch()
     torch.manual_seed(int(seed))
@@ -125,8 +130,8 @@ def run_tiny_velocity_pilot_training(
         "step_records": step_records,
         "per_sample": per_sample,
         "note": (
-            "Bounded tiny real-data pilot training diagnostics only; one train molecule, "
-            "one validation molecule, one test molecule, CPU-only, not benchmark metrics."
+            "Bounded tiny real-data pilot training diagnostics only; nonempty train/validation/test "
+            "splits, CPU-only, not benchmark metrics."
         ),
     }
 

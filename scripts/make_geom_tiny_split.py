@@ -20,12 +20,12 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--processed-artifact",
-        default="data/processed/geom_drugs_subset/tiny_real_dry_run/molecules.json",
+        default=None,
         help="Tiny GEOM processed-output dry-run molecules.json path.",
     )
     parser.add_argument(
         "--split-root",
-        default="data/splits/geom_drugs_tiny_real_dry_run",
+        default=None,
         help="Output root for tiny split dry-run artifacts.",
     )
     parser.add_argument("--split-type", default="random", choices=["random"], help="Tiny split dry-run type.")
@@ -33,17 +33,33 @@ def main() -> None:
     parser.add_argument(
         "--max-molecules",
         type=int,
-        default=3,
+        default=None,
         help="Maximum molecules to read from the tiny processed artifact.",
     )
+    parser.add_argument(
+        "--micro-pilot",
+        action="store_true",
+        help="Use the bounded micro-pilot processed artifact and split root defaults.",
+    )
     args = parser.parse_args()
+    if args.micro_pilot:
+        processed_artifact = args.processed_artifact or "data/processed/geom_drugs_subset/micro_pilot/molecules.json"
+        split_root = args.split_root or "data/splits/geom_drugs_micro_pilot"
+        max_molecules = args.max_molecules if args.max_molecules is not None else 6
+        split_scope = "micro_pilot_processed_dry_run"
+    else:
+        processed_artifact = args.processed_artifact or "data/processed/geom_drugs_subset/tiny_real_dry_run/molecules.json"
+        split_root = args.split_root or "data/splits/geom_drugs_tiny_real_dry_run"
+        max_molecules = args.max_molecules if args.max_molecules is not None else 3
+        split_scope = None
 
     paths = run_geom_tiny_split_dry_run(
-        processed_artifact_path=args.processed_artifact,
-        split_root=args.split_root,
+        processed_artifact_path=processed_artifact,
+        split_root=split_root,
         split_type=args.split_type,
         seed=args.seed,
-        max_molecules=args.max_molecules,
+        max_molecules=max_molecules,
+        split_scope=split_scope,
     )
     print(f"split: {paths['split']}")
     print(f"manifest: {paths['manifest']}")

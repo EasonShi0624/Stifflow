@@ -999,6 +999,151 @@ logging:
                 self.assertEqual(results["dataset"]["split_counts"], {"train": 1, "val": 1, "test": 1})
                 self.assertIn("not benchmark", " ".join(results["notes"]))
 
+    def test_tiny_real_micro_pilot_accepts_six_molecule_subset(self) -> None:
+        try:
+            import torch  # noqa: F401
+        except ImportError:
+            self.skipTest("PyTorch is not importable in this interpreter")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            processed = root / "processed" / "micro_pilot" / "molecules.json"
+            split_path = root / "splits" / "random_seed0" / "split.json"
+            processed.parent.mkdir(parents=True)
+            split_path.parent.mkdir(parents=True)
+            molecules = [
+                {
+                    "molecule_id": f"geom_micro_{index}",
+                    "smiles": "CO",
+                    "atom_symbols": ["C", "O", "H"],
+                    "bonds": [[0, 1, 1], [0, 2, 1]],
+                    "conformers": [
+                        {
+                            "conformer_id": str(index),
+                            "coords": [
+                                [0.0, 0.0, 0.0],
+                                [1.2 + 0.1 * index, 0.0, 0.0],
+                                [0.0, 1.0, 0.0],
+                            ],
+                        }
+                    ],
+                    "ring_atom_indices": [],
+                    "rotatable_bond_count": 0,
+                }
+                for index in range(6)
+            ]
+            processed.write_text(
+                json.dumps(
+                    {
+                        "dataset_kind": "geom_drugs_tiny_processed_dry_run",
+                        "subset_scope": "micro_pilot_processed_dry_run",
+                        "result_kind": "processed_output_dry_run_not_benchmark",
+                        "benchmark_result": False,
+                        "molecules": molecules,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            split_path.write_text(
+                json.dumps(
+                    {
+                        "dataset_kind": "geom_drugs_tiny_processed_dry_run",
+                        "result_kind": "split_dry_run_not_benchmark",
+                        "benchmark_result": False,
+                        "split_type": "random",
+                        "split_scope": "micro_pilot_processed_dry_run",
+                        "degenerate_tiny_split": False,
+                        "train": [f"geom_micro_{index}" for index in range(4)],
+                        "val": ["geom_micro_4"],
+                        "test": ["geom_micro_5"],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            config_path = root / "micro.yaml"
+            config_path.write_text(
+                f"""
+experiment:
+  name: geom_micro_pilot_isotropic_mols6_steps3_seed0
+  seed: 0
+  output_root: {root / "experiments"}
+
+data:
+  dataset_name: geom_drugs
+  dataset_kind: geom_drugs_tiny_processed_dry_run
+  raw_root: data/raw/geom_drugs
+  processed_root: {processed.parent}
+  split_root: {split_path.parent}
+  processed_artifact_path: {processed}
+  split_path: {split_path}
+  split_type: random
+  subset:
+    max_molecules: 6
+    max_conformers_per_mol: 1
+    tag: micro_pilot_processed_dry_run
+
+model:
+  backbone: minimal_linear_velocity_pilot
+  pilot_model: single_linear_velocity_pilot
+  hidden_dim: 0
+  num_layers: 1
+  time_embedding_dim: 1
+
+flow_matching:
+  objective: cartesian_linear
+  interpolation: linear
+
+corruption:
+  mode: isotropic
+  stiffness_table: heuristic_v1
+  protect_rings: true
+  protect_amides: true
+  isotropic_sigma: 0.25
+  bond_sigma: 0.02
+  angle_sigma: 0.08
+  torsion_sigma: 0.30
+
+train:
+  enabled: true
+  pilot_only: true
+  batch_scope: micro_pilot_train_split
+  max_steps: 3
+  hard_max_steps: 8
+  learning_rate: 1.0e-2
+  num_workers: 0
+  checkpointing_enabled: false
+
+sample:
+  enabled: false
+  num_samples_per_mol: 0
+  num_steps: 0
+
+eval:
+  enabled: true
+  eval_subset_size: 6
+  compute_train_val_test_losses: true
+  compute_cov_mat: false
+  compute_validity: false
+  compute_energy_checks: false
+
+logging:
+  save_manifest: true
+  save_results_json: true
+  save_log: true
+""",
+                encoding="utf-8",
+            )
+
+            outputs = run_tiny_real_pilot_configs(config_paths=(config_path,))
+            results = json.loads(outputs["isotropic"]["results"].read_text(encoding="utf-8"))
+            self.assertTrue(results["micro_pilot_run"])
+            self.assertEqual(results["sample_count"], 6)
+            self.assertEqual(results["dataset"]["split_counts"], {"train": 4, "val": 1, "test": 1})
+            self.assertEqual(results["metrics"]["split_sample_counts"], {"train": 4, "val": 1, "test": 1})
+            self.assertEqual(len(results["metrics"]["step_records"]), 3)
+            self.assertFalse(results["checkpoint_written"])
+            self.assertFalse(results["sampling_executed"])
+
     def test_smoke_comparison_writes_summary_and_report(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             output_root = Path(tmp)
@@ -1576,6 +1721,67 @@ logging:
             self.assertFalse(manifest["raw_data_modified"])
             self.assertFalse(manifest["processed_data_modified"])
             self.assertEqual(manifest["counts"], {"train": 1, "val": 1, "test": 1})
+
+    def test_geom_micro_pilot_processed_output_and_split_are_bounded(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            raw = root / "geom_drugs"
+            drugs = raw / "rdkit_folder" / "drugs"
+            processed = root / "processed"
+            drugs.mkdir(parents=True)
+            for index in range(6):
+                record = {
+                    "smiles": "CO",
+                    "totalconfs": 1,
+                    "uniqueconfs": 1,
+                    "charge": 0,
+                    "conformers": [
+                        {
+                            "geom_id": 100 + index,
+                            "relativeenergy": 0.0,
+                            "rd_mol": _FakeMol([[0.0, 0.0, 0.0], [1.2 + index, 0.0, 0.0]]),
+                        }
+                    ],
+                }
+                with (drugs / f"micro_mol_{index}.pickle").open("wb") as handle:
+                    pickle.dump(record, handle)
+
+            paths = run_geom_preflight(
+                raw_root=raw,
+                processed_root=processed,
+                manifest_path=root / "manifest.json",
+                report_path=root / "report.md",
+                write_micro_pilot_output=True,
+                max_processed_conformers_per_mol=1,
+            )
+            artifact = json.loads(paths["processed_artifact"].read_text(encoding="utf-8"))
+            processed_manifest = json.loads(paths["processed_manifest"].read_text(encoding="utf-8"))
+            self.assertEqual(artifact["subset_scope"], "micro_pilot_processed_dry_run")
+            self.assertEqual(artifact["bounds"]["max_molecules"], 6)
+            self.assertEqual(artifact["bounds"]["hard_max_molecules"], 6)
+            self.assertEqual(artifact["molecule_count"], 6)
+            self.assertEqual(artifact["conformer_count"], 6)
+            self.assertFalse(artifact["benchmark_result"])
+            self.assertFalse(processed_manifest["full_processed_data_written"])
+
+            split_paths = run_geom_tiny_split_dry_run(
+                processed_artifact_path=paths["processed_artifact"],
+                split_root=root / "splits",
+                split_type="random",
+                seed=0,
+                max_molecules=6,
+                split_scope="micro_pilot_processed_dry_run",
+            )
+            split = json.loads(split_paths["split"].read_text(encoding="utf-8"))
+            manifest = json.loads(split_paths["manifest"].read_text(encoding="utf-8"))
+            self.assertEqual(split["split_scope"], "micro_pilot_processed_dry_run")
+            self.assertFalse(split["benchmark_result"])
+            self.assertFalse(split["degenerate_tiny_split"])
+            self.assertEqual(len(split["train"]), 4)
+            self.assertEqual(len(split["val"]), 1)
+            self.assertEqual(len(split["test"]), 1)
+            self.assertEqual(manifest["bounds"]["hard_max_molecules"], 6)
+            self.assertEqual(manifest["counts"], {"train": 4, "val": 1, "test": 1})
 
 
 if __name__ == "__main__":

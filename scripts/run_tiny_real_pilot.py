@@ -13,7 +13,7 @@ ensure_stifflow_python()
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from src.train.tiny_real_pilot import DEFAULT_CONFIG_PATHS, run_tiny_real_pilot_configs
+from src.train.tiny_real_pilot import DEFAULT_CONFIG_PATHS, MICRO_PILOT_CONFIG_PATHS, run_tiny_real_pilot_configs
 
 
 def main() -> None:
@@ -28,13 +28,23 @@ def main() -> None:
         ),
     )
     parser.add_argument(
+        "--micro-pilot",
+        action="store_true",
+        help="Use the bounded micro-pilot configs instead of the three-molecule pilot configs.",
+    )
+    parser.add_argument(
         "--output-root",
         default=None,
         help="Optional output-root override for manifest/results/log files.",
     )
     args = parser.parse_args()
 
-    config_paths = tuple(Path(path) for path in args.configs) if args.configs else DEFAULT_CONFIG_PATHS
+    if args.configs:
+        config_paths = tuple(Path(path) for path in args.configs)
+    elif args.micro_pilot:
+        config_paths = MICRO_PILOT_CONFIG_PATHS
+    else:
+        config_paths = DEFAULT_CONFIG_PATHS
     outputs = run_tiny_real_pilot_configs(config_paths=config_paths, output_root=args.output_root)
     for mode, paths in outputs.items():
         print(f"{mode}_manifest: {paths['manifest']}")

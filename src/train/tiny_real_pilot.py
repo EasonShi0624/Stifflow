@@ -19,11 +19,17 @@ DEFAULT_CONFIG_PATHS = (
     Path("configs/train/tiny_real_pilot_isotropic.yaml"),
     Path("configs/train/tiny_real_pilot_stiffness.yaml"),
 )
+MICRO_PILOT_CONFIG_PATHS = (
+    Path("configs/train/micro_pilot_isotropic.yaml"),
+    Path("configs/train/micro_pilot_stiffness.yaml"),
+)
 DEFAULT_MODES = tiny_real_data.DEFAULT_MODES
 RESULT_KIND = "tiny_real_data_bounded_pilot_not_benchmark"
 EXECUTION_MODE = "local_cpu_tiny_real_bounded_pilot"
 DEFAULT_MAX_STEPS = 6
 HARD_MAX_STEPS = 8
+MIN_PILOT_MOLECULES = 3
+HARD_MAX_PILOT_MOLECULES = 6
 
 
 def run_tiny_real_pilot_configs(
@@ -61,7 +67,7 @@ def run_tiny_real_pilot(
     learning_rate = float(config["train"]["learning_rate"])
     processed_artifact_path = Path(config["data"]["processed_artifact_path"])
     split_path = Path(config["data"]["split_path"])
-    run_name = _run_name(corruption_mode, seed, max_steps)
+    run_name = str(config["experiment"].get("name") or _run_name(corruption_mode, seed, max_steps))
     config["experiment"]["name"] = run_name
 
     manifest_path = output_root / "manifests" / f"{run_name}.json"
@@ -69,6 +75,7 @@ def run_tiny_real_pilot(
     log_path = output_root / "logs" / f"{run_name}.log"
 
     artifact = tiny_real_data._load_tiny_real_artifact(processed_artifact_path)
+    subset_scope = artifact.get("subset_scope") or config["data"].get("subset", {}).get("tag")
     records = tiny_real_data._select_records(artifact["molecules"], max_molecules)
     split = tiny_real_data._load_tiny_real_split(split_path)
     split_membership = tiny_real_data._validate_split_coverage(split, records)
@@ -86,11 +93,13 @@ def run_tiny_real_pilot(
     )
     elapsed = time.time() - start
     split_counts = {key: len(split[key]) for key in ["train", "val", "test"]}
+    micro_pilot_run = max_molecules > 3 or subset_scope == "micro_pilot_processed_dry_run"
 
     common = {
         "run_name": run_name,
         "dataset_name": "geom_drugs",
         "dataset_kind": "geom_drugs_tiny_processed_dry_run",
+        "dataset_subset_scope": subset_scope,
         "processed_artifact_path": str(processed_artifact_path),
         "split_path": str(split_path),
         "random_seed": seed,
@@ -106,6 +115,7 @@ def run_tiny_real_pilot(
         "slurm_account": None,
         "pilot_run": True,
         "bounded_pilot": True,
+        "micro_pilot_run": micro_pilot_run,
         "dry_run": False,
         "training_executed": True,
         "model_training_started": True,
@@ -132,6 +142,7 @@ def run_tiny_real_pilot(
         "metrics_output_path": str(results_path),
         "bounds": {
             "max_molecules": max_molecules,
+            "hard_max_molecules": HARD_MAX_PILOT_MOLECULES,
             "input_molecule_count": len(artifact["molecules"]),
             "processed_record_count_used": len(records),
             "conformers_per_molecule_used": 1,
@@ -150,8 +161,8 @@ def run_tiny_real_pilot(
         },
         "notes": [
             "Bounded tiny real-data pilot only, not a benchmark result.",
-            f"Exactly {max_steps} CPU optimizer steps were run on one train molecule from the bounded three-molecule artifact.",
-            "Validation and test losses are interface diagnostics only because each split has one molecule.",
+            f"Exactly {max_steps} CPU optimizer steps were run on {split_counts['train']} train molecule(s) from a bounded {max_molecules}-molecule artifact.",
+            "Validation and test losses are interface diagnostics only for this bounded pilot subset.",
             "No checkpoint, model sampling, GPU execution, SLURM job, raw-data mutation, environment mutation, benchmark evaluation, or larger real training run was used.",
         ],
     }
@@ -160,6 +171,7 @@ def run_tiny_real_pilot(
         "dataset": {
             "name": "geom_drugs",
             "kind": "geom_drugs_tiny_processed_dry_run",
+            "subset_scope": subset_scope,
             "molecule_count": len(records),
             "split_type": split["split_type"],
             "split_counts": split_counts,
@@ -173,8 +185,8 @@ def run_tiny_real_pilot(
         },
         "runtime_seconds": elapsed,
         "notes": [
-            "This is a bounded tiny real-data CPU pilot on a three-molecule GEOM artifact.",
-            "The loop trains only the one train-split molecule and records val/test losses as tiny interface diagnostics.",
+            f"This is a bounded tiny real-data CPU pilot on a {max_molecules}-molecule GEOM artifact.",
+            "The loop trains only the train split and records val/test losses as tiny interface diagnostics.",
             "These values are not benchmark results and must not be used for scientific comparison.",
             "No checkpoint, model sampling, GPU execution, SLURM job, raw-data modification, environment mutation, benchmark evaluation, or larger real training run was used.",
         ],
@@ -193,8 +205,11 @@ def _validate_pilot_config(config: dict[str, Any]) -> None:
         raise ValueError("Tiny real pilot config must use dataset_name=geom_drugs")
     if config["data"].get("dataset_kind") != "geom_drugs_tiny_processed_dry_run":
         raise ValueError("Tiny real pilot config must use the bounded tiny processed artifact")
-    if int(config["data"]["subset"]["max_molecules"]) != 3:
-        raise ValueError("Tiny real pilot must use exactly the existing three-molecule artifact")
+    max_molecules = int(config["data"]["subset"]["max_molecules"])
+    if max_molecules < MIN_PILOT_MOLECULES:
+        raise ValueError(f"Tiny real pilot requires at least {MIN_PILOT_MOLECULES} molecules")
+    if max_molecules > HARD_MAX_PILOT_MOLECULES:
+        raise ValueError(f"Tiny real pilot is capped at {HARD_MAX_PILOT_MOLECULES} molecules")
     if int(config["data"]["subset"].get("max_conformers_per_mol", 0)) != 1:
         raise ValueError("Tiny real pilot must use one conformer per molecule")
     if config["corruption"]["mode"] not in DEFAULT_MODES:
@@ -216,6 +231,8 @@ def _validate_pilot_config(config: dict[str, Any]) -> None:
         raise ValueError(f"Tiny real pilot is capped at {HARD_MAX_STEPS} steps")
     if float(config["train"]["learning_rate"]) <= 0.0:
         raise ValueError("Tiny real pilot learning_rate must be positive")
+    if int(config["eval"].get("eval_subset_size", max_molecules)) != max_molecules:
+        raise ValueError("Tiny real pilot eval_subset_size must match the bounded molecule count")
 
 
 def _run_name(corruption_mode: str, seed: int, max_steps: int) -> str:
@@ -249,6 +266,7 @@ def _log_text(results: dict[str, Any], manifest_path: Path, results_path: Path) 
         f"execution_mode={results['execution_mode']}\n"
         "pilot_run=true\n"
         "bounded_pilot=true\n"
+        f"micro_pilot_run={str(results['micro_pilot_run']).lower()}\n"
         "training_executed=true\n"
         "model_training_started=true\n"
         "training_loop_executed=true\n"
@@ -269,6 +287,7 @@ def _log_text(results: dict[str, Any], manifest_path: Path, results_path: Path) 
         "scheduler=none\n"
         f"result_kind={RESULT_KIND}\n"
         f"sample_count={results['sample_count']}\n"
+        f"split_counts={results['dataset']['split_counts']}\n"
         f"train_initial_loss={metrics['initial_split_losses']['train']}\n"
         f"train_final_loss={metrics['final_split_losses']['train']}\n"
         f"val_final_loss={metrics['final_split_losses']['val']}\n"
