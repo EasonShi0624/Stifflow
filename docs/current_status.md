@@ -22,6 +22,7 @@ Current status:
 - `scripts/run_tiny_real_checkpoint_sampling_smoke.py` runs a bounded CPU-only train/save/reload/sample smoke for isotropic and stiffness-structured tiny real configurations, writing disposable smoke checkpoints only.
 - `scripts/summarize_tiny_real_lifecycle.py` writes an end-to-end tiny real-data smoke lifecycle JSON summary and markdown table across all current tiny real result stages.
 - `scripts/run_tiny_real_pilot.py` runs a bounded CPU-only tiny real-data pilot training loop for isotropic and stiffness-structured source configurations, using only the existing three-molecule artifact and writing no checkpoints or samples.
+- `scripts/compare_tiny_real_pilot.py` writes a bounded tiny real-data pilot comparison JSON summary and markdown table from the existing isotropic and stiffness-structured pilot results.
 - `scripts/compare_tiny_real_results.py` writes a tiny real-data dry-run JSON summary and markdown table across the RDKit, isotropic, and stiffness-structured tiny real dry-run outputs.
 - `scripts/compare_smoke_results.py` writes a smoke-only JSON summary and markdown table across isotropic, stiffness, and RDKit smoke outputs.
 - `scripts/prepare_geom.py --dry-run` runs a read-only GEOM-Drugs raw-data preflight plus a tiny metadata-only preprocessing dry-run over bounded `rdkit_folder/drugs/*.pickle` samples.
@@ -50,6 +51,7 @@ The repo contains:
 - CPU-only tiny real-data checkpoint-and-sampling smoke tests that write and reload disposable smoke checkpoints before one bounded sampling step;
 - an end-to-end tiny real-data smoke lifecycle summary/report that distinguishes baseline, dry-run, execution, training-smoke, and checkpoint/sampling-smoke stages;
 - a bounded CPU-only tiny real-data pilot training loop over the existing three-molecule artifact for isotropic and stiffness-structured configurations, labeled as pilot-only and non-benchmark;
+- a reporting-only bounded tiny real-data pilot comparison summary/report over the two current pilot outputs;
 - a tiny real-data dry-run comparison summary/report over the current RDKit, isotropic, and stiffness-structured tiny real outputs;
 - a CPU-only smoke comparison summary/report over current synthetic fixture outputs;
 - a read-only GEOM-Drugs preflight that reports raw-data availability and samples bounded raw pickle metadata;
