@@ -39,6 +39,7 @@ Current status:
 - `scripts/run_data_scale_check_checkpoint_sampling.py` writes a bounded 30-molecule processed dry-run artifact and split, then runs the same CPU-only checkpoint-and-sampling pilot settings for isotropic and stiffness-structured modes at seed `0`.
 - `scripts/run_data_scale_check_checkpoint_sampling_multiseed.py` runs the existing bounded 30-molecule checkpoint-and-sampling setup for both modes over seeds `0,1,2` and writes a deterministic non-benchmark multi-seed JSON/markdown summary.
 - `scripts/run_data_scale_check_500_checkpoint_sampling.py` writes a bounded 500-molecule processed dry-run artifact and nondegenerate 450/25/25 split, then runs the same CPU-only checkpoint-and-sampling pilot settings for isotropic and stiffness-structured modes at seed `0`.
+- `scripts/run_data_scale_check_500_checkpoint_sampling_multiseed.py` runs the existing bounded 500-molecule checkpoint-and-sampling setup for both modes over seeds `0,1,2` and writes a deterministic non-benchmark multi-seed JSON/markdown summary.
 - `scripts/evaluate.py` currently re-runs the same smoke evaluation path.
 
 This file is the canonical place to record **what is actually present today**, as opposed to the intended target design.
@@ -78,6 +79,7 @@ The repo contains:
 - a bounded CPU-only 30-molecule data-scale-check checkpoint/sampling runner with a compact JSON/log comparison of the seed-0 directional signal;
 - a bounded CPU-only 30-molecule data-scale-check checkpoint/sampling multi-seed runner and deterministic summary/report over seeds `0,1,2`;
 - a bounded CPU-only 500-molecule data-scale-check checkpoint/sampling runner with a compact JSON/log comparison of the seed-0 directional signal;
+- a bounded CPU-only 500-molecule data-scale-check checkpoint/sampling multi-seed runner and deterministic summary/report over seeds `0,1,2`;
 - honest placeholders for GEOM preprocessing, model sampling, and ablation orchestration.
 
 Still missing or intentionally incomplete:

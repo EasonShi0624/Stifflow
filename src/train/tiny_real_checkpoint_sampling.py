@@ -62,6 +62,12 @@ DEFAULT_DATA_SCALE_CHECK_MULTI_SEED_SUMMARY_PATH = Path(
 DEFAULT_DATA_SCALE_CHECK_MULTI_SEED_REPORT_PATH = Path(
     "reports/tables/geom_data_scale_check_ckpt_sample_multiseed_summary.md"
 )
+DEFAULT_DATA_SCALE_CHECK_500_MULTI_SEED_SUMMARY_PATH = Path(
+    "experiments/results/geom_data_scale_check_ckpt_sample_multiseed_summary_mols500.json"
+)
+DEFAULT_DATA_SCALE_CHECK_500_MULTI_SEED_REPORT_PATH = Path(
+    "reports/tables/geom_data_scale_check_ckpt_sample_multiseed_summary_mols500.md"
+)
 DATA_SCALE_CHECK_COMPARABLE_METRICS = (
     "reloaded_loss",
     "sampled_rmsd_to_target_overall_mean",
@@ -376,6 +382,22 @@ def run_data_scale_check_checkpoint_sampling_multiseed(
     return outputs
 
 
+def run_data_scale_check_500_checkpoint_sampling_multiseed(
+    seed_set: tuple[int, ...] = DEFAULT_DATA_SCALE_CHECK_CHECKPOINT_SEED_SET,
+    config_paths: tuple[str | Path, ...] = DATA_SCALE_CHECK_500_CONFIG_PATHS,
+    output_root: str | Path | None = None,
+    max_steps: int = DEFAULT_MICRO_PILOT_MAX_STEPS,
+    sample_step_size: float = DEFAULT_SAMPLE_STEP_SIZE,
+) -> dict[str, dict[int, dict[str, Path]]]:
+    return run_data_scale_check_checkpoint_sampling_multiseed(
+        seed_set=seed_set,
+        config_paths=config_paths,
+        output_root=output_root,
+        max_steps=max_steps,
+        sample_step_size=sample_step_size,
+    )
+
+
 def write_data_scale_check_checkpoint_sampling_multiseed_summary(
     result_paths: list[str | Path],
     summary_path: str | Path = DEFAULT_DATA_SCALE_CHECK_MULTI_SEED_SUMMARY_PATH,
@@ -385,6 +407,7 @@ def write_data_scale_check_checkpoint_sampling_multiseed_summary(
     max_steps: int = DEFAULT_MICRO_PILOT_MAX_STEPS,
 ) -> dict[str, Path]:
     _validate_data_scale_check_checkpoint_seed_set(expected_seeds)
+    scope = _data_scale_check_output_scope(max_molecules)
     rows = [_data_scale_check_comparison_row(Path(path)) for path in result_paths]
     _validate_data_scale_check_multiseed_rows(
         rows,
@@ -404,10 +427,10 @@ def write_data_scale_check_checkpoint_sampling_multiseed_summary(
     consistency = _data_scale_check_stiffness_consistency(aggregate_metric_comparisons)
     runtime_summary = _data_scale_check_multiseed_runtime_summary(rows)
     summary = {
-        "summary_name": "geom_data_scale_check_ckpt_sample_multiseed_summary",
+        "summary_name": f"geom_data_scale_check_ckpt_sample_multiseed_summary_mols{max_molecules}",
         "dataset_name": "geom_drugs",
         "dataset_kind": "geom_drugs_tiny_processed_dry_run",
-        "dataset_subset_scope": "data_scale_check_processed_dry_run",
+        "dataset_subset_scope": scope["subset_scope"],
         "result_kind": DATA_SCALE_CHECK_MULTI_SEED_SUMMARY_RESULT_KIND,
         "benchmark_result": False,
         "execution_mode": "local_cpu_data_scale_check_checkpoint_sampling_multiseed_report",
@@ -419,6 +442,7 @@ def write_data_scale_check_checkpoint_sampling_multiseed_summary(
         "bounded_pilot": True,
         "micro_pilot_run": False,
         "data_scale_check_run": True,
+        "data_scale_check_500_run": max_molecules == DATA_SCALE_CHECK_500_MAX_MOLECULES,
         "raw_data_modified": False,
         "environment_modified": False,
         "training_executed_by_summary": False,
@@ -428,6 +452,8 @@ def write_data_scale_check_checkpoint_sampling_multiseed_summary(
         "seed_count": len(expected_seeds),
         "mode_count": 2,
         "max_molecules": max_molecules,
+        "hard_max_molecules": scope["hard_max_molecules"],
+        "split_counts": scope["expected_split_counts"],
         "max_steps": max_steps,
         "input_result_paths": [str(path) for path in result_paths],
         "row_count": len(rows),
@@ -438,7 +464,7 @@ def write_data_scale_check_checkpoint_sampling_multiseed_summary(
         "runtime_summary": runtime_summary,
         "runtime_seconds": None,
         "notes": [
-            "Reporting-only aggregation of bounded 30-molecule data-scale-check checkpoint-and-sampling outputs across a fixed tiny seed set.",
+            f"Reporting-only aggregation of bounded {max_molecules}-molecule data-scale-check checkpoint-and-sampling outputs across a fixed tiny seed set.",
             "Each input row uses the same bounded artifact, fixed split, model, optimizer, five-step cap, and one-step sampling settings; only the experiment seed changes.",
             "Loss and sampled RMSD values are bounded pilot diagnostics only, not benchmark metrics or evidence of model quality.",
             "Runtime metadata is kept for accounting checks only; tiny runtime differences are not interpreted as performance results.",
@@ -1206,10 +1232,11 @@ def _fmt(value: float) -> str:
 
 def _data_scale_check_multiseed_markdown(summary: dict[str, Any]) -> str:
     consistency = summary["stiffness_consistency"]
+    max_molecules = summary["max_molecules"]
     lines = [
-        "# Bounded 30-Molecule Checkpoint/Sampling Multi-Seed Summary",
+        f"# Bounded {max_molecules}-Molecule Checkpoint/Sampling Multi-Seed Summary",
         "",
-        "This report aggregates bounded 30-molecule data-scale-check checkpoint-and-sampling pilots across a fixed tiny seed set. It is bounded pilot-only and not a benchmark result.",
+        f"This report aggregates bounded {max_molecules}-molecule data-scale-check checkpoint-and-sampling pilots across a fixed tiny seed set. It is bounded pilot-only and not a benchmark result.",
         "",
         "## Safety Labels",
         "",

@@ -1927,6 +1927,133 @@ logging:
                 self.assertEqual(row["training_sample_count"], 450)
                 self.assertTrue(row["runtime_seconds_reliable"])
 
+    def test_data_scale_check_500_multiseed_summary_is_deterministic(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            result_paths = []
+            molecule_ids = [f"geom_scale500_{index:03d}" for index in range(500)]
+            split_by_index = ["train"] * 450 + ["val"] * 25 + ["test"] * 25
+            for seed in [0, 1, 2]:
+                for mode, label, offset in [
+                    ("isotropic", "isotropic", 0.40),
+                    ("stiffness_structured", "stiffness", 0.30),
+                ]:
+                    path = root / f"{label}_seed{seed}.json"
+                    sampled = [offset + 0.0001 * index + 0.00001 * seed for index in range(500)]
+                    payload = {
+                        "run_name": f"geom_data_scale_check_ckpt_sample_{label}_mols500_steps5_seed{seed}",
+                        "dataset_name": "geom_drugs",
+                        "dataset_kind": "geom_drugs_tiny_processed_dry_run",
+                        "dataset_subset_scope": "data_scale_check_500_processed_dry_run",
+                        "processed_artifact_path": "data/processed/geom_drugs_subset/data_scale_check_500/molecules.json",
+                        "split_path": "data/splits/geom_drugs_data_scale_check_500/random_seed0/split.json",
+                        "random_seed": seed,
+                        "corruption_mode": mode,
+                        "model_name": "single_linear_velocity_smoke",
+                        "backbone": "minimal_linear_velocity_pilot",
+                        "execution_mode": "local_cpu_tiny_real_data_scale_check_checkpoint_sampling",
+                        "result_kind": "tiny_real_data_bounded_data_scale_check_checkpoint_sampling_not_benchmark",
+                        "benchmark_result": False,
+                        "hardware": "cpu_only",
+                        "gpu_used": False,
+                        "scheduler": None,
+                        "slurm_account": None,
+                        "pilot_run": True,
+                        "bounded_pilot": True,
+                        "micro_pilot_run": False,
+                        "data_scale_check_run": True,
+                        "data_scale_check_500_run": True,
+                        "dry_run": False,
+                        "training_executed": True,
+                        "model_training_started": True,
+                        "training_loop_executed": True,
+                        "bounded_real_training_loop_executed": True,
+                        "larger_real_training_run_started": False,
+                        "max_steps": 5,
+                        "hard_max_steps": 5,
+                        "optimizer_created": True,
+                        "optimizer_step_count": 5,
+                        "backward_executed": True,
+                        "backward_pass_count": 5,
+                        "checkpoint_path": f"experiments/checkpoints/{label}_seed{seed}.pt",
+                        "checkpoint_written": True,
+                        "checkpoint_reloaded": True,
+                        "checkpoint_scope": "disposable_data_scale_check_500_checkpoint_sampling_only",
+                        "sampling_executed": True,
+                        "sample_step_count": 1,
+                        "sample_step_size": 0.1,
+                        "forward_executed": True,
+                        "loss_computed": True,
+                        "training_sample_count": 450,
+                        "sample_count": 500,
+                        "runtime_scope": "checkpoint_train_save_reload_sample_after_full_cpu_checkpoint_sampling_warmup",
+                        "runtime_seconds_reliable": True,
+                        "dataset": {
+                            "name": "geom_drugs",
+                            "kind": "geom_drugs_tiny_processed_dry_run",
+                            "subset_scope": "data_scale_check_500_processed_dry_run",
+                            "molecule_count": 500,
+                            "split_type": "random",
+                            "split_scope": "data_scale_check_500_processed_dry_run",
+                            "split_counts": {"train": 450, "val": 25, "test": 25},
+                            "degenerate_tiny_split": False,
+                        },
+                        "flow_matching": {"objective": "cartesian_linear", "interpolation": "linear"},
+                        "metrics": {
+                            "metric_scope": "geom_drugs_data_scale_check_checkpoint_sampling",
+                            "model_name": "single_linear_velocity_smoke",
+                            "reloaded_loss": 0.70 + 0.01 * seed if mode == "isotropic" else 0.60 + 0.01 * seed,
+                            "train_steps": [{"optimizer_step": index + 1} for index in range(5)],
+                            "sampled_molecules": [
+                                {
+                                    "molecule_id": molecule_id,
+                                    "split": split,
+                                    "atom_count": 3,
+                                    "sample_step_count": 1,
+                                    "sample_step_size": 0.1,
+                                    "sampled_rmsd_to_target": rmsd,
+                                    "predicted_velocity_norm": 1.0,
+                                }
+                                for molecule_id, split, rmsd in zip(molecule_ids, split_by_index, sampled)
+                            ],
+                        },
+                        "runtime_seconds": 0.50 + 0.01 * seed,
+                        "notes": ["Bounded 500-molecule data-scale-check pilot only, not benchmark results."],
+                    }
+                    path.write_text(json.dumps(payload), encoding="utf-8")
+                    result_paths.append(path)
+
+            first = write_data_scale_check_checkpoint_sampling_multiseed_summary(
+                result_paths=result_paths,
+                summary_path=root / "summary.json",
+                report_path=root / "summary.md",
+                expected_seeds=(0, 1, 2),
+                max_molecules=500,
+            )
+            first_summary_text = first["summary"].read_text(encoding="utf-8")
+            second = write_data_scale_check_checkpoint_sampling_multiseed_summary(
+                result_paths=result_paths,
+                summary_path=root / "summary2.json",
+                report_path=root / "summary2.md",
+                expected_seeds=(0, 1, 2),
+                max_molecules=500,
+            )
+            self.assertEqual(first_summary_text, second["summary"].read_text(encoding="utf-8"))
+
+            summary = json.loads(first_summary_text)
+            report = first["report"].read_text(encoding="utf-8")
+            self.assertEqual(summary["max_molecules"], 500)
+            self.assertEqual(summary["split_counts"], {"train": 450, "val": 25, "test": 25})
+            self.assertTrue(summary["data_scale_check_500_run"])
+            self.assertEqual(summary["row_count"], 6)
+            self.assertEqual(summary["stiffness_consistency"]["verdict"], "stiffness_wins_consistently")
+            self.assertTrue(summary["runtime_summary"]["all_runtime_seconds_reliable"])
+            aggregate = {row["metric"]: row for row in summary["aggregate_metric_comparisons"]}
+            self.assertEqual(aggregate["reloaded_loss"]["stiffness_win_count"], 3)
+            self.assertEqual(aggregate["sampled_rmsd_to_target_test_mean"]["stiffness_win_count"], 3)
+            self.assertIn("Bounded 500-Molecule Checkpoint/Sampling Multi-Seed Summary", report)
+            self.assertIn("stiffness_wins_consistently", report)
+
     def test_micro_pilot_checkpoint_sampling_comparison_flags_legacy_runtime_mismatch(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
