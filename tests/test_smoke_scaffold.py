@@ -21,6 +21,7 @@ from src.train.pipeline import run_smoke_pipeline
 from src.train.smoke import run_smoke
 from src.train.tiny_real import run_tiny_real_model_dry_runs
 from src.train.tiny_real_execution import run_tiny_real_execution_smoke_tests
+from src.train.tiny_real_single_step import run_tiny_real_single_step_smoke_tests
 from src.utils.config import load_config
 
 
@@ -508,6 +509,111 @@ logging:
                 self.assertEqual(results["metrics"]["forward_pass_count"], 1)
                 self.assertEqual(results["metrics"]["trainable_parameter_count"], 0)
                 self.assertGreaterEqual(results["metrics"]["mean_velocity_mse"], 0.0)
+                self.assertEqual(results["dataset"]["split_counts"], {"train": 1, "val": 1, "test": 1})
+
+    def test_tiny_real_single_step_smoke_writes_training_step_outputs(self) -> None:
+        try:
+            import torch  # noqa: F401
+        except ImportError:
+            self.skipTest("PyTorch is not importable in this interpreter")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            processed = root / "processed" / "molecules.json"
+            split_path = root / "splits" / "split.json"
+            processed.parent.mkdir(parents=True)
+            split_path.parent.mkdir(parents=True)
+            molecules = [
+                {
+                    "molecule_id": f"geom_tiny_{index}",
+                    "smiles": "CO",
+                    "atom_symbols": ["C", "O", "H"],
+                    "bonds": [[0, 1, 1], [0, 2, 1]],
+                    "conformers": [
+                        {
+                            "conformer_id": str(index),
+                            "coords": [
+                                [0.0, 0.0, 0.0],
+                                [1.2 + 0.1 * index, 0.0, 0.0],
+                                [0.0, 1.0, 0.0],
+                            ],
+                        }
+                    ],
+                    "ring_atom_indices": [],
+                    "rotatable_bond_count": 0,
+                }
+                for index in range(3)
+            ]
+            processed.write_text(
+                json.dumps(
+                    {
+                        "dataset_kind": "geom_drugs_tiny_processed_dry_run",
+                        "result_kind": "processed_output_dry_run_not_benchmark",
+                        "benchmark_result": False,
+                        "molecules": molecules,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            split_path.write_text(
+                json.dumps(
+                    {
+                        "dataset_kind": "geom_drugs_tiny_processed_dry_run",
+                        "result_kind": "split_dry_run_not_benchmark",
+                        "benchmark_result": False,
+                        "split_type": "random",
+                        "degenerate_tiny_split": False,
+                        "train": ["geom_tiny_0"],
+                        "val": ["geom_tiny_1"],
+                        "test": ["geom_tiny_2"],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            outputs = run_tiny_real_single_step_smoke_tests(
+                processed_artifact_path=processed,
+                split_path=split_path,
+                output_root=root / "experiments",
+                seed=0,
+                max_molecules=3,
+            )
+
+            self.assertEqual(set(outputs), {"isotropic", "stiffness_structured"})
+            for mode, paths in outputs.items():
+                manifest = json.loads(paths["manifest"].read_text(encoding="utf-8"))
+                results = json.loads(paths["results"].read_text(encoding="utf-8"))
+                self.assertEqual(
+                    manifest["result_kind"],
+                    "tiny_real_data_single_step_training_smoke_not_benchmark",
+                )
+                self.assertEqual(
+                    results["result_kind"],
+                    "tiny_real_data_single_step_training_smoke_not_benchmark",
+                )
+                self.assertFalse(results["benchmark_result"])
+                self.assertEqual(results["hardware"], "cpu_only")
+                self.assertFalse(results["gpu_used"])
+                self.assertTrue(results["training_executed"])
+                self.assertTrue(results["model_training_started"])
+                self.assertFalse(results["training_loop_executed"])
+                self.assertTrue(results["single_step_training_smoke_executed"])
+                self.assertEqual(results["max_steps"], 1)
+                self.assertTrue(results["optimizer_created"])
+                self.assertEqual(results["optimizer_step_count"], 1)
+                self.assertTrue(results["backward_executed"])
+                self.assertEqual(results["backward_pass_count"], 1)
+                self.assertFalse(results["checkpoint_written"])
+                self.assertFalse(results["sampling_executed"])
+                self.assertTrue(results["forward_executed"])
+                self.assertTrue(results["loss_computed"])
+                self.assertEqual(results["corruption_mode"], mode)
+                self.assertEqual(results["sample_count"], 3)
+                self.assertEqual(results["metrics"]["optimizer_step_count"], 1)
+                self.assertEqual(results["metrics"]["backward_pass_count"], 1)
+                self.assertGreater(results["metrics"]["trainable_parameter_count"], 0)
+                self.assertGreaterEqual(results["metrics"]["loss_before_step"], 0.0)
+                self.assertGreaterEqual(results["metrics"]["loss_after_step"], 0.0)
                 self.assertEqual(results["dataset"]["split_counts"], {"train": 1, "val": 1, "test": 1})
 
     def test_smoke_comparison_writes_summary_and_report(self) -> None:

@@ -178,6 +178,22 @@ This reads the same three-molecule tiny processed artifact and tiny split dry-ru
 
 The outputs are labeled `tiny_real_data_model_execution_smoke_not_benchmark`, `benchmark_result: false`, `hardware: cpu_only`, `gpu_used: false`, `training_executed: false`, `model_training_started: false`, `training_loop_executed: false`, `optimizer_created: false`, `backward_executed: false`, `checkpoint_written: false`, `sampling_executed: false`, and `slurm_account: null`. This validates forward/loss plumbing only and is not model training, model sampling, or a benchmark result.
 
+Current tiny real-data single-step training smoke:
+
+```bash
+python scripts/run_tiny_real_single_step_smoke.py
+```
+
+This reads the same three-molecule tiny processed artifact and tiny split dry-run, then runs exactly one CPU-only forward/loss/backward/optimizer step for both isotropic and stiffness-structured source configurations. It writes:
+- `experiments/manifests/geom_tiny_real_single_step_isotropic_seed0.json`
+- `experiments/results/geom_tiny_real_single_step_isotropic_seed0.json`
+- `experiments/logs/geom_tiny_real_single_step_isotropic_seed0.log`
+- `experiments/manifests/geom_tiny_real_single_step_stiffness_seed0.json`
+- `experiments/results/geom_tiny_real_single_step_stiffness_seed0.json`
+- `experiments/logs/geom_tiny_real_single_step_stiffness_seed0.log`
+
+The outputs are labeled `tiny_real_data_single_step_training_smoke_not_benchmark`, `benchmark_result: false`, `hardware: cpu_only`, `gpu_used: false`, `training_executed: true`, `model_training_started: true`, `training_loop_executed: false`, `single_step_training_smoke_executed: true`, `max_steps: 1`, `optimizer_created: true`, `optimizer_step_count: 1`, `backward_executed: true`, `backward_pass_count: 1`, `checkpoint_written: false`, `sampling_executed: false`, and `slurm_account: null`. This validates one bounded training step only and is not a real training run or benchmark result.
+
 Current tiny real-data dry-run comparison report:
 
 ```bash
