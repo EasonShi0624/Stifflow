@@ -356,6 +356,21 @@ It also writes:
 
 The per-run outputs are labeled `tiny_real_data_bounded_micro_pilot_checkpoint_sampling_not_benchmark`, `benchmark_result: false`, `hardware: cpu_only`, `gpu_used: false`, `pilot_run: true`, `bounded_pilot: true`, `micro_pilot_run: true`, `checkpoint_scope: disposable_micro_pilot_checkpoint_sampling_only`, `sampling_executed: true`, and `slurm_account: null`. The multi-seed summary is labeled `tiny_real_data_bounded_micro_pilot_checkpoint_sampling_multiseed_summary_not_benchmark` and reports per-seed winners, aggregate means, stiffness consistency, and runtime metadata for accounting only.
 
+Current bounded 30-molecule data-scale checkpoint-and-sampling check:
+
+```bash
+python scripts/run_data_scale_check_checkpoint_sampling.py
+```
+
+This writes a bounded 30-molecule processed dry-run artifact and 28/1/1 random split, then runs the same CPU-only checkpoint/sampling pilot settings for isotropic and stiffness-structured source configurations at seed `0`. It writes:
+- `data/processed/geom_drugs_subset/data_scale_check/molecules.json`
+- `data/splits/geom_drugs_data_scale_check/random_seed0/split.json`
+- `experiments/results/geom_data_scale_check_ckpt_sample_isotropic_mols30_steps5_seed0.json`
+- `experiments/results/geom_data_scale_check_ckpt_sample_stiffness_mols30_steps5_seed0.json`
+- `experiments/results/geom_data_scale_check_ckpt_sample_comparison_mols30_steps5_seed0.json`
+
+The per-run outputs are labeled `tiny_real_data_bounded_data_scale_check_checkpoint_sampling_not_benchmark`, `benchmark_result: false`, `hardware: cpu_only`, `gpu_used: false`, `pilot_run: true`, `bounded_pilot: true`, `data_scale_check_run: true`, `checkpoint_scope: disposable_data_scale_check_checkpoint_sampling_only`, `sampling_executed: true`, and `slurm_account: null`. The comparison is labeled `tiny_real_data_bounded_data_scale_check_checkpoint_sampling_comparison_not_benchmark` and reports whether the seed-0 directional signal is preserved. This is still a bounded non-benchmark data-scale check, not a larger real training run.
+
 Current bounded tiny real-data pilot comparison report:
 
 ```bash

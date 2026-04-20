@@ -26,11 +26,22 @@ MICRO_PILOT_CONFIG_PATHS = (
     Path("configs/train/micro_pilot_isotropic.yaml"),
     Path("configs/train/micro_pilot_stiffness.yaml"),
 )
+DATA_SCALE_CHECK_CONFIG_PATHS = (
+    Path("configs/train/data_scale_check_isotropic.yaml"),
+    Path("configs/train/data_scale_check_stiffness.yaml"),
+)
 MICRO_PILOT_RESULT_KIND = "tiny_real_data_bounded_micro_pilot_checkpoint_sampling_not_benchmark"
+DATA_SCALE_CHECK_RESULT_KIND = "tiny_real_data_bounded_data_scale_check_checkpoint_sampling_not_benchmark"
+DATA_SCALE_CHECK_COMPARISON_RESULT_KIND = (
+    "tiny_real_data_bounded_data_scale_check_checkpoint_sampling_comparison_not_benchmark"
+)
 MICRO_PILOT_EXECUTION_MODE = "local_cpu_tiny_real_micro_pilot_checkpoint_sampling"
+DATA_SCALE_CHECK_EXECUTION_MODE = "local_cpu_tiny_real_data_scale_check_checkpoint_sampling"
 MICRO_PILOT_MAX_MOLECULES = 6
+DATA_SCALE_CHECK_MAX_MOLECULES = 30
 DEFAULT_MICRO_PILOT_MAX_STEPS = HARD_MAX_STEPS
 MICRO_PILOT_CHECKPOINT_SCOPE = "disposable_micro_pilot_checkpoint_sampling_only"
+DATA_SCALE_CHECK_CHECKPOINT_SCOPE = "disposable_data_scale_check_checkpoint_sampling_only"
 MICRO_PILOT_RUNTIME_SCOPE = "checkpoint_train_save_reload_sample_after_full_cpu_checkpoint_sampling_warmup"
 DEFAULT_MICRO_PILOT_CHECKPOINT_SEED_SET = (0, 1, 2)
 HARD_MAX_MICRO_PILOT_CHECKPOINT_SEEDS = 3
@@ -287,6 +298,104 @@ def run_micro_pilot_checkpoint_sampling_multiseed(
     return outputs
 
 
+def run_data_scale_check_checkpoint_sampling_configs(
+    config_paths: tuple[str | Path, ...] = DATA_SCALE_CHECK_CONFIG_PATHS,
+    output_root: str | Path | None = None,
+    seed: int = 0,
+    max_steps: int = DEFAULT_MICRO_PILOT_MAX_STEPS,
+    sample_step_size: float = DEFAULT_SAMPLE_STEP_SIZE,
+) -> dict[str, dict[str, Path]]:
+    return run_micro_pilot_checkpoint_sampling_configs(
+        config_paths=config_paths,
+        output_root=output_root,
+        seed=seed,
+        max_steps=max_steps,
+        sample_step_size=sample_step_size,
+    )
+
+
+def write_data_scale_check_checkpoint_sampling_comparison(
+    result_paths: list[str | Path],
+    output_root: str | Path = "experiments",
+    seed: int = 0,
+    max_molecules: int = DATA_SCALE_CHECK_MAX_MOLECULES,
+    max_steps: int = DEFAULT_MICRO_PILOT_MAX_STEPS,
+) -> dict[str, Path]:
+    output_root = Path(output_root)
+    run_name = f"geom_data_scale_check_ckpt_sample_comparison_mols{max_molecules}_steps{max_steps}_seed{seed}"
+    manifest_path = output_root / "manifests" / f"{run_name}.json"
+    results_path = output_root / "results" / f"{run_name}.json"
+    log_path = output_root / "logs" / f"{run_name}.log"
+    rows = [_data_scale_check_comparison_row(Path(path)) for path in result_paths]
+    by_mode = {row["corruption_mode"]: row for row in rows}
+    if set(by_mode) != {"isotropic", "stiffness_structured"}:
+        raise ValueError(f"Data-scale-check comparison requires isotropic and stiffness rows, got {sorted(by_mode)}")
+    _validate_data_scale_check_rows(rows, seed=seed, max_molecules=max_molecules, max_steps=max_steps)
+    metric_comparisons = _data_scale_check_metric_comparisons(by_mode)
+    directional_signal_preserved = all(row["stiffness_outcome"] == "better" for row in metric_comparisons)
+    common = {
+        "run_name": run_name,
+        "dataset_name": "geom_drugs",
+        "dataset_kind": "geom_drugs_tiny_processed_dry_run",
+        "dataset_subset_scope": "data_scale_check_processed_dry_run",
+        "result_kind": DATA_SCALE_CHECK_COMPARISON_RESULT_KIND,
+        "benchmark_result": False,
+        "execution_mode": "local_cpu_data_scale_check_checkpoint_sampling_comparison",
+        "hardware": "cpu_only",
+        "gpu_used": False,
+        "scheduler": None,
+        "slurm_account": None,
+        "pilot_run": True,
+        "bounded_pilot": True,
+        "micro_pilot_run": False,
+        "data_scale_check_run": True,
+        "training_executed_by_comparison": False,
+        "sampling_executed_by_comparison": False,
+        "larger_real_training_run_started": False,
+        "raw_data_modified": False,
+        "environment_modified": False,
+        "input_result_paths": [str(path) for path in result_paths],
+        "random_seed": seed,
+        "max_molecules": max_molecules,
+        "max_steps": max_steps,
+    }
+    manifest = {
+        **common,
+        "git_commit": _git_commit(),
+        "metrics_output_path": str(results_path),
+        "log_path": str(log_path),
+        "notes": [
+            "Bounded 30-molecule data-scale-check comparison only, not a benchmark result.",
+            "The comparison reads two existing bounded pilot outputs and does not run additional training or sampling.",
+            "No raw-data mutation, environment mutation, GPU execution, SLURM job, benchmark evaluation, or larger real training run was used.",
+        ],
+    }
+    results = {
+        **common,
+        "row_count": len(rows),
+        "rows": rows,
+        "metric_comparisons": metric_comparisons,
+        "directional_signal_preserved": directional_signal_preserved,
+        "summary": (
+            "stiffness_better_on_all_tracked_metrics"
+            if directional_signal_preserved
+            else "directional_signal_mixed_or_not_preserved"
+        ),
+        "runtime_note": "Runtime is recorded for accounting only; tiny CPU timing differences are not interpreted as model performance.",
+        "notes": [
+            "This is a compact bounded data-scale-check comparison, not report-only infrastructure and not a benchmark result.",
+            "Lower values are treated as better for reloaded_loss and sampled RMSD diagnostics.",
+            "The directional signal is considered preserved only if stiffness is better on reloaded_loss, overall sampled RMSD, and train/val/test sampled RMSD means.",
+        ],
+    }
+    for directory in [manifest_path.parent, results_path.parent, log_path.parent]:
+        directory.mkdir(parents=True, exist_ok=True)
+    manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    results_path.write_text(json.dumps(results, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    log_path.write_text(_data_scale_check_comparison_log(results, manifest_path, results_path), encoding="utf-8")
+    return {"manifest": manifest_path, "results": results_path, "log": log_path}
+
+
 def run_micro_pilot_checkpoint_sampling(
     config: dict[str, Any],
     config_path: str | Path | None = None,
@@ -299,10 +408,12 @@ def run_micro_pilot_checkpoint_sampling(
     seed = int(config["experiment"]["seed"])
     corruption_mode = config["corruption"]["mode"]
     max_molecules = int(config["data"]["subset"]["max_molecules"])
+    subset_tag = str(config["data"]["subset"].get("tag"))
+    scope = _checkpoint_sampling_scope_settings(max_molecules=max_molecules, subset_tag=subset_tag)
     learning_rate = float(config["train"]["learning_rate"])
     processed_artifact_path = Path(config["data"]["processed_artifact_path"])
     split_path = Path(config["data"]["split_path"])
-    run_name = _micro_checkpoint_run_name(corruption_mode, seed, max_molecules, max_steps)
+    run_name = _checkpoint_run_name(scope["run_prefix"], corruption_mode, seed, max_molecules, max_steps)
     manifest_path = output_root / "manifests" / f"{run_name}.json"
     results_path = output_root / "results" / f"{run_name}.json"
     log_path = output_root / "logs" / f"{run_name}.log"
@@ -311,18 +422,23 @@ def run_micro_pilot_checkpoint_sampling(
     config["experiment"]["name"] = run_name
     config["train"]["max_steps"] = int(max_steps)
     config["train"]["hard_max_steps"] = HARD_MAX_STEPS
-    config["train"]["batch_scope"] = "micro_pilot_train_split"
+    config["train"]["batch_scope"] = scope["batch_scope"]
     config["train"]["checkpointing_enabled"] = True
-    config["train"]["checkpoint_scope"] = MICRO_PILOT_CHECKPOINT_SCOPE
+    config["train"]["checkpoint_scope"] = scope["checkpoint_scope"]
     config["model"]["checkpoint_sampling_smoke_model"] = "single_linear_velocity_smoke"
     config["sample"] = {
         "enabled": True,
         "pilot_only": True,
         "sample_step_count": 1,
         "sample_step_size": float(sample_step_size),
-        "sample_scope": "all_six_micro_pilot_molecules",
+        "sample_scope": scope["sample_scope"],
     }
-    _validate_micro_pilot_checkpoint_sampling_config(config, max_steps=max_steps, sample_step_size=sample_step_size)
+    _validate_micro_pilot_checkpoint_sampling_config(
+        config,
+        max_steps=max_steps,
+        sample_step_size=sample_step_size,
+        scope=scope,
+    )
 
     artifact = tiny_real_data._load_tiny_real_artifact(processed_artifact_path)
     subset_scope = artifact.get("subset_scope") or config["data"].get("subset", {}).get("tag")
@@ -363,8 +479,8 @@ def run_micro_pilot_checkpoint_sampling(
         "corruption_mode": corruption_mode,
         "model_name": metrics["model_name"],
         "backbone": config["model"]["backbone"],
-        "execution_mode": MICRO_PILOT_EXECUTION_MODE,
-        "result_kind": MICRO_PILOT_RESULT_KIND,
+        "execution_mode": scope["execution_mode"],
+        "result_kind": scope["result_kind"],
         "benchmark_result": False,
         "hardware": "cpu_only",
         "gpu_used": False,
@@ -372,7 +488,8 @@ def run_micro_pilot_checkpoint_sampling(
         "slurm_account": None,
         "pilot_run": True,
         "bounded_pilot": True,
-        "micro_pilot_run": True,
+        "micro_pilot_run": scope["micro_pilot_run"],
+        "data_scale_check_run": scope["data_scale_check_run"],
         "dry_run": False,
         "training_executed": True,
         "model_training_started": True,
@@ -388,7 +505,7 @@ def run_micro_pilot_checkpoint_sampling(
         "checkpoint_path": str(checkpoint_path),
         "checkpoint_written": True,
         "checkpoint_reloaded": True,
-        "checkpoint_scope": MICRO_PILOT_CHECKPOINT_SCOPE,
+        "checkpoint_scope": scope["checkpoint_scope"],
         "sampling_executed": True,
         "sample_step_count": 1,
         "sample_step_size": float(sample_step_size),
@@ -407,7 +524,7 @@ def run_micro_pilot_checkpoint_sampling(
         "metrics_output_path": str(results_path),
         "bounds": {
             "max_molecules": max_molecules,
-            "hard_max_molecules": MICRO_PILOT_MAX_MOLECULES,
+            "hard_max_molecules": scope["hard_max_molecules"],
             "input_molecule_count": len(artifact["molecules"]),
             "processed_record_count_used": len(records),
             "conformers_per_molecule_used": 1,
@@ -431,9 +548,9 @@ def run_micro_pilot_checkpoint_sampling(
             "counts": split_counts,
         },
         "notes": [
-            "Bounded six-molecule micro-pilot checkpoint-and-sampling run only, not a benchmark result.",
+            f"{scope['description']} checkpoint-and-sampling run only, not a benchmark result.",
             f"A disposable pilot-only checkpoint was written and reloaded after {int(max_steps)} CPU optimizer steps on the {split_counts['train']}-molecule train split.",
-            "A single bounded sampling step was run across the six-molecule micro-pilot artifact.",
+            f"A single bounded sampling step was run across the {max_molecules}-molecule bounded artifact.",
             "No raw-data mutation, environment mutation, GPU execution, SLURM job, benchmark evaluation, reusable checkpoint, or larger real training run was used.",
         ],
     }
@@ -451,7 +568,7 @@ def run_micro_pilot_checkpoint_sampling(
         },
         "flow_matching": config["flow_matching"],
         "metrics": {
-            "metric_scope": "geom_drugs_micro_pilot_checkpoint_sampling",
+            "metric_scope": scope["metric_scope"],
             **metrics,
         },
         "runtime_seconds": elapsed,
@@ -460,7 +577,7 @@ def run_micro_pilot_checkpoint_sampling(
         "runtime_backend": runtime_backend,
         "runtime_warmup_scope": "full_cpu_checkpoint_sampling_operation",
         "notes": [
-            "This is a bounded six-molecule GEOM micro-pilot CPU checkpoint-and-sampling run.",
+            f"This is a {scope['description']} GEOM CPU checkpoint-and-sampling run.",
             "The checkpoint is disposable pilot-only output, not a reusable research checkpoint.",
             "Sampled-coordinate values validate checkpoint reload and sampling plumbing only and are not benchmark results.",
             "runtime_seconds measures only checkpoint train/save/reload/sample after CPU backend warm-up so comparable modes do not include one-time import overhead.",
@@ -491,39 +608,41 @@ def _validate_micro_pilot_checkpoint_sampling_config(
     config: dict[str, Any],
     max_steps: int,
     sample_step_size: float,
+    scope: dict[str, Any],
 ) -> None:
+    scope_label = scope["scope_label"]
     if config["data"]["dataset_name"] != "geom_drugs":
-        raise ValueError("Micro-pilot checkpoint/sampling config must use dataset_name=geom_drugs")
+        raise ValueError(f"{scope_label} checkpoint/sampling config must use dataset_name=geom_drugs")
     if config["data"].get("dataset_kind") != "geom_drugs_tiny_processed_dry_run":
-        raise ValueError("Micro-pilot checkpoint/sampling config must use the bounded tiny processed artifact")
-    if int(config["data"]["subset"]["max_molecules"]) != MICRO_PILOT_MAX_MOLECULES:
-        raise ValueError("Micro-pilot checkpoint/sampling must use exactly the six-molecule artifact")
-    if config["data"]["subset"].get("tag") != "micro_pilot_processed_dry_run":
-        raise ValueError("Micro-pilot checkpoint/sampling requires subset tag micro_pilot_processed_dry_run")
+        raise ValueError(f"{scope_label} checkpoint/sampling config must use the bounded tiny processed artifact")
+    if int(config["data"]["subset"]["max_molecules"]) != scope["max_molecules"]:
+        raise ValueError(f"{scope_label} checkpoint/sampling must use exactly {scope['max_molecules']} molecules")
+    if config["data"]["subset"].get("tag") != scope["subset_tag"]:
+        raise ValueError(f"{scope_label} checkpoint/sampling requires subset tag {scope['subset_tag']}")
     if int(config["data"]["subset"].get("max_conformers_per_mol", 0)) != 1:
-        raise ValueError("Micro-pilot checkpoint/sampling must use one conformer per molecule")
+        raise ValueError(f"{scope_label} checkpoint/sampling must use one conformer per molecule")
     if config["corruption"]["mode"] not in DEFAULT_MODES:
-        raise ValueError(f"Unsupported micro-pilot checkpoint/sampling mode: {config['corruption']['mode']}")
+        raise ValueError(f"Unsupported {scope_label} checkpoint/sampling mode: {config['corruption']['mode']}")
     if config["model"].get("pilot_model") != "single_linear_velocity_pilot":
-        raise ValueError("Micro-pilot checkpoint/sampling config must name pilot_model=single_linear_velocity_pilot")
+        raise ValueError(f"{scope_label} checkpoint/sampling config must name pilot_model=single_linear_velocity_pilot")
     if config["train"].get("enabled") is not True:
-        raise ValueError("Micro-pilot checkpoint/sampling config must enable train.enabled")
+        raise ValueError(f"{scope_label} checkpoint/sampling config must enable train.enabled")
     if config["train"].get("pilot_only") is not True:
-        raise ValueError("Micro-pilot checkpoint/sampling config must set train.pilot_only=true")
+        raise ValueError(f"{scope_label} checkpoint/sampling config must set train.pilot_only=true")
     if config["train"].get("checkpointing_enabled") is not True:
-        raise ValueError("Micro-pilot checkpoint/sampling must enable checkpointing")
+        raise ValueError(f"{scope_label} checkpoint/sampling must enable checkpointing")
     if config["sample"].get("enabled") is not True:
-        raise ValueError("Micro-pilot checkpoint/sampling must enable sampling")
+        raise ValueError(f"{scope_label} checkpoint/sampling must enable sampling")
     if max_steps <= 1:
-        raise ValueError("Micro-pilot checkpoint/sampling requires more than one optimizer step")
+        raise ValueError(f"{scope_label} checkpoint/sampling requires more than one optimizer step")
     if max_steps > HARD_MAX_STEPS:
-        raise ValueError(f"Micro-pilot checkpoint/sampling is capped at {HARD_MAX_STEPS} optimizer steps")
+        raise ValueError(f"{scope_label} checkpoint/sampling is capped at {HARD_MAX_STEPS} optimizer steps")
     if float(config["train"]["learning_rate"]) <= 0.0:
-        raise ValueError("Micro-pilot checkpoint/sampling learning_rate must be positive")
+        raise ValueError(f"{scope_label} checkpoint/sampling learning_rate must be positive")
     if sample_step_size <= 0.0 or sample_step_size > 1.0:
-        raise ValueError("Micro-pilot checkpoint/sampling sample_step_size must be in (0, 1]")
-    if int(config["eval"].get("eval_subset_size", 0)) != MICRO_PILOT_MAX_MOLECULES:
-        raise ValueError("Micro-pilot checkpoint/sampling eval_subset_size must be six")
+        raise ValueError(f"{scope_label} checkpoint/sampling sample_step_size must be in (0, 1]")
+    if int(config["eval"].get("eval_subset_size", 0)) != scope["max_molecules"]:
+        raise ValueError(f"{scope_label} checkpoint/sampling eval_subset_size must match max_molecules")
 
 
 def _validate_micro_pilot_checkpoint_seed_set(seed_set: tuple[int, ...]) -> None:
@@ -550,13 +669,194 @@ def _run_name(corruption_mode: str, seed: int, max_steps: int) -> str:
 
 
 def _micro_checkpoint_run_name(corruption_mode: str, seed: int, max_molecules: int, max_steps: int) -> str:
+    return _checkpoint_run_name("geom_micro_pilot_ckpt_sample", corruption_mode, seed, max_molecules, max_steps)
+
+
+def _checkpoint_run_name(
+    prefix: str,
+    corruption_mode: str,
+    seed: int,
+    max_molecules: int,
+    max_steps: int,
+) -> str:
     if corruption_mode == "isotropic":
         label = "isotropic"
     elif corruption_mode == "stiffness_structured":
         label = "stiffness"
     else:
-        raise ValueError(f"Unsupported micro-pilot checkpoint/sampling mode: {corruption_mode}")
-    return f"geom_micro_pilot_ckpt_sample_{label}_mols{int(max_molecules)}_steps{int(max_steps)}_seed{seed}"
+        raise ValueError(f"Unsupported bounded checkpoint/sampling mode: {corruption_mode}")
+    return f"{prefix}_{label}_mols{int(max_molecules)}_steps{int(max_steps)}_seed{seed}"
+
+
+def _checkpoint_sampling_scope_settings(max_molecules: int, subset_tag: str) -> dict[str, Any]:
+    if max_molecules == MICRO_PILOT_MAX_MOLECULES and subset_tag == "micro_pilot_processed_dry_run":
+        return {
+            "scope_label": "micro-pilot",
+            "subset_tag": "micro_pilot_processed_dry_run",
+            "run_prefix": "geom_micro_pilot_ckpt_sample",
+            "description": "Bounded six-molecule micro-pilot",
+            "result_kind": MICRO_PILOT_RESULT_KIND,
+            "execution_mode": MICRO_PILOT_EXECUTION_MODE,
+            "checkpoint_scope": MICRO_PILOT_CHECKPOINT_SCOPE,
+            "batch_scope": "micro_pilot_train_split",
+            "sample_scope": "all_six_micro_pilot_molecules",
+            "metric_scope": "geom_drugs_micro_pilot_checkpoint_sampling",
+            "hard_max_molecules": MICRO_PILOT_MAX_MOLECULES,
+            "max_molecules": MICRO_PILOT_MAX_MOLECULES,
+            "micro_pilot_run": True,
+            "data_scale_check_run": False,
+        }
+    if max_molecules == DATA_SCALE_CHECK_MAX_MOLECULES and subset_tag == "data_scale_check_processed_dry_run":
+        return {
+            "scope_label": "data-scale-check",
+            "subset_tag": "data_scale_check_processed_dry_run",
+            "run_prefix": "geom_data_scale_check_ckpt_sample",
+            "description": "Bounded 30-molecule data-scale-check",
+            "result_kind": DATA_SCALE_CHECK_RESULT_KIND,
+            "execution_mode": DATA_SCALE_CHECK_EXECUTION_MODE,
+            "checkpoint_scope": DATA_SCALE_CHECK_CHECKPOINT_SCOPE,
+            "batch_scope": "data_scale_check_train_split",
+            "sample_scope": "all_thirty_data_scale_check_molecules",
+            "metric_scope": "geom_drugs_data_scale_check_checkpoint_sampling",
+            "hard_max_molecules": DATA_SCALE_CHECK_MAX_MOLECULES,
+            "max_molecules": DATA_SCALE_CHECK_MAX_MOLECULES,
+            "micro_pilot_run": False,
+            "data_scale_check_run": True,
+        }
+    raise ValueError(
+        "Unsupported bounded checkpoint/sampling scope: "
+        f"max_molecules={max_molecules} subset_tag={subset_tag!r}"
+    )
+
+
+def _data_scale_check_comparison_row(path: Path) -> dict[str, Any]:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if payload.get("result_kind") != DATA_SCALE_CHECK_RESULT_KIND:
+        raise ValueError(f"Not a data-scale-check checkpoint/sampling result: {path}")
+    if payload.get("benchmark_result") is not False:
+        raise ValueError(f"Data-scale-check result must be benchmark_result=false: {path}")
+    if payload.get("hardware") != "cpu_only" or payload.get("gpu_used") is not False:
+        raise ValueError(f"Data-scale-check result must be CPU-only: {path}")
+    if payload.get("scheduler") is not None or payload.get("slurm_account") is not None:
+        raise ValueError(f"Data-scale-check result unexpectedly records scheduler use: {path}")
+    if payload.get("data_scale_check_run") is not True or payload.get("bounded_pilot") is not True:
+        raise ValueError(f"Data-scale-check result is not labeled as bounded data-scale check: {path}")
+    if payload.get("larger_real_training_run_started") is not False:
+        raise ValueError(f"Data-scale-check result unexpectedly started a larger real training run: {path}")
+    metrics = payload["metrics"]
+    sampled = metrics["sampled_molecules"]
+    return {
+        "source_path": str(path),
+        "run_name": payload["run_name"],
+        "corruption_mode": payload["corruption_mode"],
+        "random_seed": int(payload["random_seed"]),
+        "sample_count": int(payload["sample_count"]),
+        "training_sample_count": int(payload["training_sample_count"]),
+        "max_steps": int(payload["max_steps"]),
+        "runtime_seconds": float(payload["runtime_seconds"]),
+        "runtime_scope": payload["runtime_scope"],
+        "runtime_seconds_reliable": bool(payload["runtime_seconds_reliable"]),
+        "split_counts": payload["dataset"]["split_counts"],
+        "reloaded_loss": float(metrics["reloaded_loss"]),
+        "sampled_rmsd_overall_mean": _mean_sampled_rmsd(sampled),
+        "sampled_rmsd_by_split_mean": {
+            split: _mean_sampled_rmsd([item for item in sampled if item["split"] == split])
+            for split in ["train", "val", "test"]
+        },
+        "safety_labels": {
+            "benchmark_result": payload["benchmark_result"],
+            "hardware": payload["hardware"],
+            "gpu_used": payload["gpu_used"],
+            "pilot_run": payload["pilot_run"],
+            "bounded_pilot": payload["bounded_pilot"],
+            "data_scale_check_run": payload["data_scale_check_run"],
+            "larger_real_training_run_started": payload["larger_real_training_run_started"],
+            "checkpoint_scope": payload["checkpoint_scope"],
+            "sampling_executed": payload["sampling_executed"],
+            "slurm_account": payload["slurm_account"],
+        },
+    }
+
+
+def _validate_data_scale_check_rows(
+    rows: list[dict[str, Any]],
+    seed: int,
+    max_molecules: int,
+    max_steps: int,
+) -> None:
+    for row in rows:
+        if row["random_seed"] != seed:
+            raise ValueError("Data-scale-check comparison expects a single fixed seed")
+        if row["sample_count"] != max_molecules:
+            raise ValueError("Data-scale-check comparison sample count mismatch")
+        if row["max_steps"] != max_steps:
+            raise ValueError("Data-scale-check comparison max_steps mismatch")
+        if row["split_counts"] != {"train": max_molecules - 2, "val": 1, "test": 1}:
+            raise ValueError("Data-scale-check comparison split counts mismatch")
+        if row["runtime_scope"] != MICRO_PILOT_RUNTIME_SCOPE or row["runtime_seconds_reliable"] is not True:
+            raise ValueError("Data-scale-check comparison requires reliable fixed-scope runtime metadata")
+
+
+def _data_scale_check_metric_comparisons(by_mode: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+    isotropic = by_mode["isotropic"]
+    stiffness = by_mode["stiffness_structured"]
+    comparisons = [
+        _lower_is_better_comparison("reloaded_loss", isotropic["reloaded_loss"], stiffness["reloaded_loss"]),
+        _lower_is_better_comparison(
+            "sampled_rmsd_to_target_overall_mean",
+            isotropic["sampled_rmsd_overall_mean"],
+            stiffness["sampled_rmsd_overall_mean"],
+        ),
+    ]
+    for split in ["train", "val", "test"]:
+        comparisons.append(
+            _lower_is_better_comparison(
+                f"sampled_rmsd_to_target_{split}_mean",
+                isotropic["sampled_rmsd_by_split_mean"][split],
+                stiffness["sampled_rmsd_by_split_mean"][split],
+            )
+        )
+    return comparisons
+
+
+def _lower_is_better_comparison(metric: str, isotropic: float, stiffness: float) -> dict[str, Any]:
+    delta = stiffness - isotropic
+    if abs(delta) <= 1.0e-12:
+        outcome = "tied"
+    elif delta < 0.0:
+        outcome = "better"
+    else:
+        outcome = "worse"
+    return {
+        "metric": metric,
+        "isotropic": isotropic,
+        "stiffness_structured": stiffness,
+        "stiffness_minus_isotropic": delta,
+        "stiffness_outcome": outcome,
+        "direction": "lower_is_better",
+    }
+
+
+def _mean_sampled_rmsd(sampled: list[dict[str, Any]]) -> float:
+    if not sampled:
+        raise ValueError("Cannot compute sampled RMSD mean over an empty split")
+    return sum(float(item["sampled_rmsd_to_target"]) for item in sampled) / len(sampled)
+
+
+def _data_scale_check_comparison_log(results: dict[str, Any], manifest_path: Path, results_path: Path) -> str:
+    return (
+        f"run_name={results['run_name']}\n"
+        f"result_kind={results['result_kind']}\n"
+        "benchmark_result=false\n"
+        "data_scale_check_run=true\n"
+        "training_executed_by_comparison=false\n"
+        "sampling_executed_by_comparison=false\n"
+        f"directional_signal_preserved={str(results['directional_signal_preserved']).lower()}\n"
+        f"summary={results['summary']}\n"
+        f"manifest={manifest_path}\n"
+        f"results={results_path}\n"
+        "note=Bounded 30-molecule data-scale-check comparison only; no GPU, scheduler job, raw-data mutation, environment mutation, benchmark, or larger real training run.\n"
+    )
 
 
 def _git_commit() -> str | None:
@@ -609,7 +909,8 @@ def _micro_log_text(results: dict[str, Any], manifest_path: Path, results_path: 
         f"execution_mode={results['execution_mode']}\n"
         "pilot_run=true\n"
         "bounded_pilot=true\n"
-        "micro_pilot_run=true\n"
+        f"micro_pilot_run={str(results['micro_pilot_run']).lower()}\n"
+        f"data_scale_check_run={str(results['data_scale_check_run']).lower()}\n"
         "training_executed=true\n"
         "model_training_started=true\n"
         "training_loop_executed=true\n"
@@ -629,12 +930,12 @@ def _micro_log_text(results: dict[str, Any], manifest_path: Path, results_path: 
         "hardware=cpu_only\n"
         "gpu_used=false\n"
         "scheduler=none\n"
-        f"result_kind={MICRO_PILOT_RESULT_KIND}\n"
+        f"result_kind={results['result_kind']}\n"
         f"initial_loss={metrics['initial_loss']}\n"
         f"reloaded_loss={metrics['reloaded_loss']}\n"
         f"sampled_molecule_count={len(metrics['sampled_molecules'])}\n"
         f"manifest={manifest_path}\n"
         f"results={results_path}\n"
         f"checkpoint={results['checkpoint_path']}\n"
-        "note=Bounded six-molecule micro-pilot checkpoint/sampling only; disposable pilot checkpoint, no GPU, scheduler job, environment mutation, benchmark, or larger real training run.\n"
+        "note=Bounded real-data checkpoint/sampling only; disposable pilot checkpoint, no GPU, scheduler job, environment mutation, benchmark, or larger real training run.\n"
     )

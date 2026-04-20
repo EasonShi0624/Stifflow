@@ -1,0 +1,70 @@
+# Bounded data-scale-check configuration.
+# This is not a benchmark config; it is capped to a 30-molecule processed dry-run artifact.
+
+experiment:
+  name: geom_data_scale_check_ckpt_sample_isotropic_mols30_steps5_seed0
+  seed: 0
+  output_root: experiments
+
+data:
+  dataset_name: geom_drugs
+  dataset_kind: geom_drugs_tiny_processed_dry_run
+  raw_root: data/raw/geom_drugs
+  processed_root: data/processed/geom_drugs_subset/data_scale_check
+  split_root: data/splits/geom_drugs_data_scale_check/random_seed0
+  processed_artifact_path: data/processed/geom_drugs_subset/data_scale_check/molecules.json
+  split_path: data/splits/geom_drugs_data_scale_check/random_seed0/split.json
+  split_type: random
+  subset:
+    max_molecules: 30
+    max_conformers_per_mol: 1
+    tag: data_scale_check_processed_dry_run
+
+model:
+  backbone: minimal_linear_velocity_pilot
+  pilot_model: single_linear_velocity_pilot
+  hidden_dim: 0
+  num_layers: 1
+  time_embedding_dim: 1
+
+flow_matching:
+  objective: cartesian_linear
+  interpolation: linear
+
+corruption:
+  mode: isotropic
+  stiffness_table: heuristic_v1
+  protect_rings: true
+  protect_amides: true
+  isotropic_sigma: 0.25
+  bond_sigma: 0.02
+  angle_sigma: 0.08
+  torsion_sigma: 0.30
+
+train:
+  enabled: true
+  pilot_only: true
+  batch_scope: data_scale_check_train_split
+  max_steps: 5
+  hard_max_steps: 5
+  learning_rate: 1.0e-2
+  num_workers: 0
+  checkpointing_enabled: false
+
+sample:
+  enabled: false
+  num_samples_per_mol: 0
+  num_steps: 0
+
+eval:
+  enabled: true
+  eval_subset_size: 30
+  compute_train_val_test_losses: true
+  compute_cov_mat: false
+  compute_validity: false
+  compute_energy_checks: false
+
+logging:
+  save_manifest: true
+  save_results_json: true
+  save_log: true

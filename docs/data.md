@@ -160,6 +160,14 @@ data/processed/geom_drugs_subset/micro_pilot/
 
 The micro-pilot artifact uses the same non-benchmark schema and is capped at six molecules, one conformer per molecule, and the configured atom/pickle-size limits. It is labeled with `subset_scope: micro_pilot_processed_dry_run`, `benchmark_result: false`, and `full_processed_data_written: false`.
 
+Current bounded data-scale-check processed-output dry-run:
+
+```bash
+python scripts/run_data_scale_check_checkpoint_sampling.py
+```
+
+This command writes a strictly bounded 30-molecule processed dry-run artifact under `data/processed/geom_drugs_subset/data_scale_check/` before running the seed-0 checkpoint/sampling pilot. The artifact preserves the same `molecules.json` schema and non-benchmark labels as the six-molecule micro-pilot, with `subset_scope: data_scale_check_processed_dry_run`, `benchmark_result: false`, `full_processed_data_written: false`, one conformer per molecule, and `hard_max_molecules: 30`.
+
 Current tiny split-interface dry-run:
 
 ```bash
@@ -183,6 +191,8 @@ python scripts/make_geom_tiny_split.py --micro-pilot
 ```
 
 This writes a non-benchmark split under `data/splits/geom_drugs_micro_pilot/random_seed0/`, capped at six molecules. With the default six-molecule micro-pilot artifact, the random dry-run split contains four train molecules, one validation molecule, and one test molecule.
+
+The data-scale-check command writes the analogous non-benchmark random split under `data/splits/geom_drugs_data_scale_check/random_seed0/`, capped at 30 molecules. With the default artifact, the existing split construction logic writes 28 train molecules, one validation molecule, and one test molecule.
 
 These commands do **not** modify raw data, create a real train/validation/test benchmark split, train models, or run benchmark evaluation.
 
