@@ -918,6 +918,7 @@ def _data_scale_check_output_scope(max_molecules: int) -> dict[str, Any]:
             "max_molecules": DATA_SCALE_CHECK_MAX_MOLECULES,
             "hard_max_molecules": DATA_SCALE_CHECK_MAX_MOLECULES,
             "checkpoint_scope": DATA_SCALE_CHECK_CHECKPOINT_SCOPE,
+            "expected_split_counts": {"train": 28, "val": 1, "test": 1},
         }
     if max_molecules == DATA_SCALE_CHECK_500_MAX_MOLECULES:
         return {
@@ -925,6 +926,7 @@ def _data_scale_check_output_scope(max_molecules: int) -> dict[str, Any]:
             "max_molecules": DATA_SCALE_CHECK_500_MAX_MOLECULES,
             "hard_max_molecules": DATA_SCALE_CHECK_500_MAX_MOLECULES,
             "checkpoint_scope": DATA_SCALE_CHECK_500_CHECKPOINT_SCOPE,
+            "expected_split_counts": {"train": 450, "val": 25, "test": 25},
         }
     raise ValueError(f"Unsupported data-scale-check comparison molecule count: {max_molecules}")
 
@@ -994,11 +996,11 @@ def _validate_data_scale_check_rows(
             raise ValueError("Data-scale-check comparison subset scope mismatch")
         if row["sample_count"] != max_molecules:
             raise ValueError("Data-scale-check comparison sample count mismatch")
-        if row["training_sample_count"] != max_molecules - 2:
+        if row["training_sample_count"] != scope["expected_split_counts"]["train"]:
             raise ValueError("Data-scale-check comparison training sample count mismatch")
         if row["max_steps"] != max_steps:
             raise ValueError("Data-scale-check comparison max_steps mismatch")
-        if row["split_counts"] != {"train": max_molecules - 2, "val": 1, "test": 1}:
+        if row["split_counts"] != scope["expected_split_counts"]:
             raise ValueError("Data-scale-check comparison split counts mismatch")
         if row["safety_labels"]["checkpoint_scope"] != scope["checkpoint_scope"]:
             raise ValueError("Data-scale-check comparison checkpoint scope mismatch")
@@ -1026,11 +1028,11 @@ def _validate_data_scale_check_multiseed_rows(
             raise ValueError("Data-scale-check multi-seed summary subset scope mismatch")
         if row["sample_count"] != max_molecules:
             raise ValueError("Data-scale-check multi-seed summary sample count mismatch")
-        if row["training_sample_count"] != max_molecules - 2:
+        if row["training_sample_count"] != scope["expected_split_counts"]["train"]:
             raise ValueError("Data-scale-check multi-seed summary training sample count mismatch")
         if row["max_steps"] != max_steps:
             raise ValueError("Data-scale-check multi-seed summary max_steps mismatch")
-        if row["split_counts"] != {"train": max_molecules - 2, "val": 1, "test": 1}:
+        if row["split_counts"] != scope["expected_split_counts"]:
             raise ValueError("Data-scale-check multi-seed summary split counts mismatch")
         if row["safety_labels"]["checkpoint_scope"] != scope["checkpoint_scope"]:
             raise ValueError("Data-scale-check multi-seed summary checkpoint scope mismatch")

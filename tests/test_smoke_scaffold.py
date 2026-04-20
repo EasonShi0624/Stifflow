@@ -1818,7 +1818,7 @@ logging:
             root = Path(tmp)
             result_paths = []
             molecule_ids = [f"geom_scale500_{index:03d}" for index in range(500)]
-            split_by_index = ["train"] * 498 + ["val", "test"]
+            split_by_index = ["train"] * 450 + ["val"] * 25 + ["test"] * 25
             for mode, label, offset in [
                 ("isotropic", "isotropic", 0.40),
                 ("stiffness_structured", "stiffness", 0.30),
@@ -1869,7 +1869,7 @@ logging:
                     "sample_step_size": 0.1,
                     "forward_executed": True,
                     "loss_computed": True,
-                    "training_sample_count": 498,
+                    "training_sample_count": 450,
                     "sample_count": 500,
                     "runtime_scope": "checkpoint_train_save_reload_sample_after_full_cpu_checkpoint_sampling_warmup",
                     "runtime_seconds_reliable": True,
@@ -1880,7 +1880,7 @@ logging:
                         "molecule_count": 500,
                         "split_type": "random",
                         "split_scope": "data_scale_check_500_processed_dry_run",
-                        "split_counts": {"train": 498, "val": 1, "test": 1},
+                        "split_counts": {"train": 450, "val": 25, "test": 25},
                         "degenerate_tiny_split": False,
                     },
                     "flow_matching": {"objective": "cartesian_linear", "interpolation": "linear"},
@@ -1924,7 +1924,7 @@ logging:
             self.assertEqual(len(results["metric_comparisons"]), 5)
             for row in results["rows"]:
                 self.assertEqual(row["sample_count"], 500)
-                self.assertEqual(row["training_sample_count"], 498)
+                self.assertEqual(row["training_sample_count"], 450)
                 self.assertTrue(row["runtime_seconds_reliable"])
 
     def test_micro_pilot_checkpoint_sampling_comparison_flags_legacy_runtime_mismatch(self) -> None:
@@ -3135,11 +3135,11 @@ logging:
             self.assertEqual(split["split_scope"], "data_scale_check_500_processed_dry_run")
             self.assertFalse(split["benchmark_result"])
             self.assertFalse(split["degenerate_tiny_split"])
-            self.assertEqual(len(split["train"]), 498)
-            self.assertEqual(len(split["val"]), 1)
-            self.assertEqual(len(split["test"]), 1)
+            self.assertEqual(len(split["train"]), 450)
+            self.assertEqual(len(split["val"]), 25)
+            self.assertEqual(len(split["test"]), 25)
             self.assertEqual(manifest["bounds"]["hard_max_molecules"], 500)
-            self.assertEqual(manifest["counts"], {"train": 498, "val": 1, "test": 1})
+            self.assertEqual(manifest["counts"], {"train": 450, "val": 25, "test": 25})
 
 
 if __name__ == "__main__":

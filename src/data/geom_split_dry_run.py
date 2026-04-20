@@ -15,6 +15,8 @@ RESULT_KIND = "split_dry_run_not_benchmark"
 MICRO_PILOT_HARD_MAX_MOLECULES = 6
 DATA_SCALE_CHECK_HARD_MAX_MOLECULES = 30
 DATA_SCALE_CHECK_500_HARD_MAX_MOLECULES = 500
+DATA_SCALE_CHECK_500_VAL_MOLECULES = 25
+DATA_SCALE_CHECK_500_TEST_MOLECULES = 25
 
 
 def run_geom_tiny_split_dry_run(
@@ -102,6 +104,12 @@ def make_tiny_split(
         train, val, test = molecule_ids, [], []
     elif len(molecule_ids) == 2:
         train, val, test = molecule_ids[:1], molecule_ids[1:], []
+    elif split_scope == "data_scale_check_500_processed_dry_run" and len(molecule_ids) == 500:
+        val_count = DATA_SCALE_CHECK_500_VAL_MOLECULES
+        test_count = DATA_SCALE_CHECK_500_TEST_MOLECULES
+        train = molecule_ids[: -(val_count + test_count)]
+        val = molecule_ids[-(val_count + test_count) : -test_count]
+        test = molecule_ids[-test_count:]
     else:
         train, val, test = molecule_ids[:-2], molecule_ids[-2:-1], molecule_ids[-1:]
 

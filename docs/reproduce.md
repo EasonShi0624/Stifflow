@@ -395,7 +395,7 @@ Current bounded 500-molecule data-scale checkpoint-and-sampling check:
 python scripts/run_data_scale_check_500_checkpoint_sampling.py
 ```
 
-This writes a bounded 500-molecule processed dry-run artifact and 498/1/1 random split, then runs the same CPU-only checkpoint/sampling pilot settings used by the 30-molecule check for isotropic and stiffness-structured source configurations at seed `0`. It preserves the processed-output schema, one-conformer-per-molecule policy, split construction logic, model, optimizer, five-step cap, checkpoint/reload path, and one-step sampling settings. It writes:
+This writes a bounded 500-molecule processed dry-run artifact and nondegenerate 450/25/25 random split, then runs the same CPU-only checkpoint/sampling pilot settings used by the 30-molecule check for isotropic and stiffness-structured source configurations at seed `0`. It preserves the processed-output schema, one-conformer-per-molecule policy, model, optimizer, five-step cap, checkpoint/reload path, and one-step sampling settings. It writes:
 - `data/processed/geom_drugs_subset/data_scale_check_500/molecules.json`
 - `data/splits/geom_drugs_data_scale_check_500/random_seed0/split.json`
 - `experiments/results/geom_data_scale_check_ckpt_sample_isotropic_mols500_steps5_seed0.json`

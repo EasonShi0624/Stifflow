@@ -56,7 +56,7 @@ This file tracks the current prioritized work queue.
    - `scripts/run_micro_pilot_checkpoint_sampling_multiseed.py` runs the bounded CPU-only six-molecule checkpoint-and-sampling pilot across the fixed tiny seed set `0,1,2` for both modes and writes a non-benchmark multi-seed summary.
    - `scripts/run_data_scale_check_checkpoint_sampling.py` writes a bounded 30-molecule processed dry-run and split, then runs the same CPU-only checkpoint-and-sampling pilot settings for both modes at seed `0`.
    - `scripts/run_data_scale_check_checkpoint_sampling_multiseed.py` runs the existing bounded 30-molecule checkpoint-and-sampling setup across the fixed tiny seed set `0,1,2` for both modes and writes a non-benchmark multi-seed summary.
-   - `scripts/run_data_scale_check_500_checkpoint_sampling.py` writes a bounded 500-molecule processed dry-run and split, then runs the same CPU-only checkpoint-and-sampling pilot settings for both modes at seed `0`.
+   - `scripts/run_data_scale_check_500_checkpoint_sampling.py` writes a bounded 500-molecule processed dry-run and nondegenerate 450/25/25 split, then runs the same CPU-only checkpoint-and-sampling pilot settings for both modes at seed `0`.
    - Micro-pilot checkpoint/sampling runtime accounting now excludes one-time PyTorch CPU backend warm-up from comparable per-mode `runtime_seconds`.
    - Larger real training and real sampling are still not implemented.
 
