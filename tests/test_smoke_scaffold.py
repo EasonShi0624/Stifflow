@@ -17,6 +17,7 @@ from src.data.geom_preflight import run_geom_preflight
 from src.data.geom_split_dry_run import run_geom_tiny_split_dry_run
 from src.eval.smoke_compare import write_smoke_comparison
 from src.eval.tiny_real_compare import write_tiny_real_comparison
+from src.eval.tiny_real_lifecycle import write_tiny_real_lifecycle_summary
 from src.train.pipeline import run_smoke_pipeline
 from src.train.smoke import run_smoke
 from src.train.tiny_real import run_tiny_real_model_dry_runs
@@ -958,6 +959,164 @@ logging:
             )
             self.assertIn("Tiny Real-Data Dry-Run Summary", report)
             self.assertIn("not a benchmark result", report)
+
+    def test_tiny_real_lifecycle_summary_writes_stage_report(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            output_root = Path(tmp)
+            common = {
+                "benchmark_result": False,
+                "hardware": "cpu_only",
+                "scheduler": None,
+                "slurm_account": None,
+                "dataset": {
+                    "kind": "geom_drugs_tiny_processed_dry_run",
+                    "molecule_count": 3,
+                    "split_counts": {"train": 1, "val": 1, "test": 1},
+                },
+            }
+            payloads = [
+                {
+                    **common,
+                    "run_name": "rdkit",
+                    "result_kind": "tiny_real_data_dry_run_not_benchmark",
+                    "baseline_name": "rdkit_etkdg_v3_mmff",
+                    "training_executed": False,
+                    "sampling_executed": False,
+                    "metrics": {
+                        "attempted_molecule_count": 3,
+                        "success_rate": 1.0,
+                        "mean_aligned_rmsd_to_tiny_real_conformer": 0.5,
+                        "mean_abs_bond_length_delta": 0.02,
+                        "mean_mmff_energy": -1.0,
+                    },
+                },
+                {
+                    **common,
+                    "run_name": "model_iso",
+                    "result_kind": "tiny_real_data_model_dry_run_not_benchmark",
+                    "corruption_mode": "isotropic",
+                    "training_executed": False,
+                    "sampling_executed": False,
+                    "sample_count": 3,
+                    "metrics": {
+                        "cov_mat": {"mat_r_smoke": 0.4},
+                        "validity": {"mean_abs_bond_length_delta": 0.1},
+                    },
+                },
+                {
+                    **common,
+                    "run_name": "model_stiff",
+                    "result_kind": "tiny_real_data_model_dry_run_not_benchmark",
+                    "corruption_mode": "stiffness_structured",
+                    "training_executed": False,
+                    "sampling_executed": False,
+                    "sample_count": 3,
+                    "metrics": {
+                        "cov_mat": {"mat_r_smoke": 0.3},
+                        "validity": {"mean_abs_bond_length_delta": 0.05},
+                    },
+                },
+                {
+                    **common,
+                    "run_name": "execution_iso",
+                    "result_kind": "tiny_real_data_model_execution_smoke_not_benchmark",
+                    "corruption_mode": "isotropic",
+                    "gpu_used": False,
+                    "training_executed": False,
+                    "sampling_executed": False,
+                    "sample_count": 3,
+                    "metrics": {"sample_count": 3, "mean_velocity_mse": 0.2},
+                },
+                {
+                    **common,
+                    "run_name": "single_iso",
+                    "result_kind": "tiny_real_data_single_step_training_smoke_not_benchmark",
+                    "corruption_mode": "isotropic",
+                    "gpu_used": False,
+                    "training_executed": True,
+                    "sampling_executed": False,
+                    "checkpoint_written": False,
+                    "sample_count": 3,
+                    "optimizer_step_count": 1,
+                    "backward_pass_count": 1,
+                    "metrics": {
+                        "sample_count": 3,
+                        "loss_before_step": 0.5,
+                        "loss_after_step": 0.4,
+                        "optimizer_step_count": 1,
+                        "backward_pass_count": 1,
+                    },
+                },
+                {
+                    **common,
+                    "run_name": "multi_iso",
+                    "result_kind": "tiny_real_data_bounded_multistep_training_smoke_not_benchmark",
+                    "corruption_mode": "isotropic",
+                    "gpu_used": False,
+                    "training_executed": True,
+                    "sampling_executed": False,
+                    "checkpoint_written": False,
+                    "larger_real_training_run_started": False,
+                    "sample_count": 3,
+                    "optimizer_step_count": 3,
+                    "backward_pass_count": 3,
+                    "metrics": {
+                        "sample_count": 3,
+                        "initial_loss": 0.5,
+                        "final_loss": 0.3,
+                        "optimizer_step_count": 3,
+                        "backward_pass_count": 3,
+                        "step_records": [{"optimizer_step": 1}, {"optimizer_step": 2}, {"optimizer_step": 3}],
+                    },
+                },
+                {
+                    **common,
+                    "run_name": "ckpt_iso",
+                    "result_kind": "tiny_real_data_checkpoint_sampling_smoke_not_benchmark",
+                    "corruption_mode": "isotropic",
+                    "gpu_used": False,
+                    "training_executed": True,
+                    "sampling_executed": True,
+                    "checkpoint_written": True,
+                    "checkpoint_reloaded": True,
+                    "checkpoint_scope": "disposable_smoke_only",
+                    "larger_real_training_run_started": False,
+                    "sample_count": 3,
+                    "optimizer_step_count": 3,
+                    "backward_pass_count": 3,
+                    "metrics": {
+                        "sample_count": 3,
+                        "initial_loss": 0.5,
+                        "reloaded_loss": 0.35,
+                        "optimizer_step_count": 3,
+                        "backward_pass_count": 3,
+                        "train_steps": [{"optimizer_step": 1}, {"optimizer_step": 2}, {"optimizer_step": 3}],
+                        "sampled_molecules": [{"sampled_rmsd_to_target": 0.2}],
+                    },
+                },
+            ]
+            result_paths = []
+            for index, payload in enumerate(payloads):
+                path = output_root / f"result_{index}.json"
+                path.write_text(json.dumps(payload), encoding="utf-8")
+                result_paths.append(path)
+
+            paths = write_tiny_real_lifecycle_summary(
+                result_paths=result_paths,
+                summary_path=output_root / "summary.json",
+                report_path=output_root / "summary.md",
+            )
+            summary = json.loads(paths["summary"].read_text(encoding="utf-8"))
+            report = paths["report"].read_text(encoding="utf-8")
+            self.assertEqual(summary["result_kind"], "tiny_real_data_lifecycle_smoke_summary_not_benchmark")
+            self.assertFalse(summary["benchmark_result"])
+            self.assertFalse(summary["larger_real_training_run_started"])
+            self.assertEqual(summary["row_count"], len(payloads))
+            self.assertEqual(summary["stage_counts"]["model_dry_run"], 2)
+            self.assertEqual(summary["stage_counts"]["checkpoint_sampling_smoke"], 1)
+            self.assertIn("Tiny Real-Data End-to-End Smoke Lifecycle Summary", report)
+            self.assertIn("not a benchmark result", report)
+            self.assertIn("checkpoint_sampling_smoke", report)
 
     def test_geom_preflight_reports_missing_raw_root(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
