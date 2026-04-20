@@ -228,6 +228,18 @@ This reads the same three-molecule tiny processed artifact and tiny split dry-ru
 
 The outputs are labeled `tiny_real_data_checkpoint_sampling_smoke_not_benchmark`, `benchmark_result: false`, `hardware: cpu_only`, `gpu_used: false`, `bounded_training_smoke_executed: true`, `larger_real_training_run_started: false`, `checkpoint_written: true`, `checkpoint_reloaded: true`, `checkpoint_scope: disposable_smoke_only`, `sampling_executed: true`, `sample_step_count: 1`, and `slurm_account: null`. The checkpoints are disposable smoke artifacts, not reusable research checkpoints, and the sampled coordinates are plumbing diagnostics only, not benchmark samples.
 
+Current tiny real-data end-to-end smoke lifecycle summary:
+
+```bash
+python scripts/summarize_tiny_real_lifecycle.py
+```
+
+This reads the current tiny real-data result JSON files across the RDKit baseline, model dry-runs, execution smoke, single-step training smoke, bounded multi-step training smoke, and checkpoint/sampling smoke stages. It writes:
+- `experiments/results/geom_tiny_real_lifecycle_summary.json`
+- `reports/tables/geom_tiny_real_lifecycle_summary.md`
+
+The summary is labeled `tiny_real_data_lifecycle_smoke_summary_not_benchmark`, `benchmark_result: false`, `hardware: cpu_only`, `larger_real_training_run_started: false`, and `slurm_account: null`. It is a reporting-only aggregation of existing smoke artifacts; it does not read raw data, load checkpoint contents, start training, run sampling, or produce benchmark results.
+
 Current tiny real-data dry-run comparison report:
 
 ```bash

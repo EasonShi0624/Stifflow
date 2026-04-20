@@ -62,6 +62,7 @@ This file tracks the current prioritized work queue.
    - RDKit smoke outputs record Python/RDKit versions and distinguish import, fixture, ETKDG, MMFF, alignment, and runtime failures.
    - Smoke comparison report aggregates isotropic, stiffness, and RDKit smoke outputs into JSON and markdown.
    - Tiny real-data dry-run comparison report aggregates the current RDKit, isotropic, and stiffness-structured tiny real outputs into JSON and markdown.
+   - Tiny real-data lifecycle summary aggregates all current tiny real stages into one non-benchmark JSON and markdown report.
 
 10. **Draft one smoke-test config**
    - Baseline backbone
