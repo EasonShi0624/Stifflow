@@ -31,6 +31,7 @@ Current status:
 - `scripts/make_geom_tiny_split.py` writes a deliberately tiny real-data split dry-run artifact for split-interface validation only.
 - `scripts/make_geom_tiny_split.py --micro-pilot` writes a bounded six-molecule micro-pilot split dry-run artifact.
 - `scripts/run_tiny_real_pilot.py --micro-pilot` runs the existing bounded CPU-only pilot loop on the six-molecule micro-pilot artifact.
+- `scripts/compare_tiny_real_pilot.py --micro-pilot` writes a bounded micro-pilot comparison JSON summary and markdown table from the existing isotropic and stiffness-structured micro-pilot results.
 - `scripts/evaluate.py` currently re-runs the same smoke evaluation path.
 
 This file is the canonical place to record **what is actually present today**, as opposed to the intended target design.
@@ -62,6 +63,7 @@ The repo contains:
 - an opt-in micro-pilot processed-output dry-run capped at six molecules and one conformer per molecule;
 - a tiny real-data split dry-run that writes a non-benchmark `split.json` plus manifest from the tiny processed artifact;
 - a micro-pilot split dry-run and configurable bounded pilot path over the six-molecule artifact;
+- a reporting-only bounded micro-pilot comparison summary/report over the two current six-molecule pilot outputs;
 - honest placeholders for GEOM preprocessing, model sampling, and ablation orchestration.
 
 Still missing or intentionally incomplete:

@@ -69,6 +69,7 @@ This file tracks the current prioritized work queue.
    - Tiny real-data dry-run comparison report aggregates the current RDKit, isotropic, and stiffness-structured tiny real outputs into JSON and markdown.
    - Tiny real-data lifecycle summary aggregates all current tiny real stages into one non-benchmark JSON and markdown report.
    - Tiny real-data bounded pilot comparison report aggregates the two current pilot outputs into JSON and markdown without running training.
+   - Bounded micro-pilot comparison report aggregates the two current six-molecule pilot outputs into JSON and markdown without running training.
 
 10. **Draft one smoke-test config**
    - Baseline backbone

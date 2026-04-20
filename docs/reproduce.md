@@ -275,6 +275,18 @@ This reads the six-molecule micro-pilot processed artifact and split dry-run, th
 
 The outputs remain labeled `tiny_real_data_bounded_pilot_not_benchmark`, `benchmark_result: false`, `hardware: cpu_only`, `gpu_used: false`, `micro_pilot_run: true`, `bounded_pilot: true`, `larger_real_training_run_started: false`, `checkpoint_written: false`, `sampling_executed: false`, and `slurm_account: null`. This is a bounded micro-pilot only, not a larger real training run or benchmark result.
 
+Current bounded micro-pilot comparison report:
+
+```bash
+python scripts/compare_tiny_real_pilot.py --micro-pilot
+```
+
+This reads the two current bounded six-molecule micro-pilot result JSON files and writes a reporting-only comparison of subset metadata, train/validation/test counts, final losses, per-step loss traces, and safety labels. It writes:
+- `experiments/results/geom_micro_pilot_summary.json`
+- `reports/tables/geom_micro_pilot_summary.md`
+
+The summary is labeled `tiny_real_data_bounded_micro_pilot_comparison_not_benchmark`, `comparison_scope: micro_pilot`, `benchmark_result: false`, `hardware: cpu_only`, `gpu_used: false`, `training_executed_by_summary: false`, `sampling_executed_by_summary: false`, `larger_real_training_run_started: false`, and `slurm_account: null`. It does not read raw data, start training, run sampling, write checkpoints, use GPUs, submit jobs, or modify the environment.
+
 Current bounded tiny real-data pilot comparison report:
 
 ```bash
