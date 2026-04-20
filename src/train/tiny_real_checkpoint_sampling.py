@@ -35,6 +35,9 @@ DATA_SCALE_CHECK_RESULT_KIND = "tiny_real_data_bounded_data_scale_check_checkpoi
 DATA_SCALE_CHECK_COMPARISON_RESULT_KIND = (
     "tiny_real_data_bounded_data_scale_check_checkpoint_sampling_comparison_not_benchmark"
 )
+DATA_SCALE_CHECK_MULTI_SEED_SUMMARY_RESULT_KIND = (
+    "tiny_real_data_bounded_data_scale_check_checkpoint_sampling_multiseed_summary_not_benchmark"
+)
 MICRO_PILOT_EXECUTION_MODE = "local_cpu_tiny_real_micro_pilot_checkpoint_sampling"
 DATA_SCALE_CHECK_EXECUTION_MODE = "local_cpu_tiny_real_data_scale_check_checkpoint_sampling"
 MICRO_PILOT_MAX_MOLECULES = 6
@@ -45,6 +48,21 @@ DATA_SCALE_CHECK_CHECKPOINT_SCOPE = "disposable_data_scale_check_checkpoint_samp
 MICRO_PILOT_RUNTIME_SCOPE = "checkpoint_train_save_reload_sample_after_full_cpu_checkpoint_sampling_warmup"
 DEFAULT_MICRO_PILOT_CHECKPOINT_SEED_SET = (0, 1, 2)
 HARD_MAX_MICRO_PILOT_CHECKPOINT_SEEDS = 3
+DEFAULT_DATA_SCALE_CHECK_CHECKPOINT_SEED_SET = (0, 1, 2)
+HARD_MAX_DATA_SCALE_CHECK_CHECKPOINT_SEEDS = 3
+DEFAULT_DATA_SCALE_CHECK_MULTI_SEED_SUMMARY_PATH = Path(
+    "experiments/results/geom_data_scale_check_ckpt_sample_multiseed_summary.json"
+)
+DEFAULT_DATA_SCALE_CHECK_MULTI_SEED_REPORT_PATH = Path(
+    "reports/tables/geom_data_scale_check_ckpt_sample_multiseed_summary.md"
+)
+DATA_SCALE_CHECK_COMPARABLE_METRICS = (
+    "reloaded_loss",
+    "sampled_rmsd_to_target_overall_mean",
+    "sampled_rmsd_to_target_train_mean",
+    "sampled_rmsd_to_target_val_mean",
+    "sampled_rmsd_to_target_test_mean",
+)
 
 
 def run_tiny_real_checkpoint_sampling_smoke_tests(
@@ -312,6 +330,107 @@ def run_data_scale_check_checkpoint_sampling_configs(
         max_steps=max_steps,
         sample_step_size=sample_step_size,
     )
+
+
+def run_data_scale_check_checkpoint_sampling_multiseed(
+    seed_set: tuple[int, ...] = DEFAULT_DATA_SCALE_CHECK_CHECKPOINT_SEED_SET,
+    config_paths: tuple[str | Path, ...] = DATA_SCALE_CHECK_CONFIG_PATHS,
+    output_root: str | Path | None = None,
+    max_steps: int = DEFAULT_MICRO_PILOT_MAX_STEPS,
+    sample_step_size: float = DEFAULT_SAMPLE_STEP_SIZE,
+) -> dict[str, dict[int, dict[str, Path]]]:
+    _validate_data_scale_check_checkpoint_seed_set(seed_set)
+    outputs: dict[str, dict[int, dict[str, Path]]] = {}
+    for seed in seed_set:
+        seed_outputs = run_data_scale_check_checkpoint_sampling_configs(
+            config_paths=config_paths,
+            output_root=output_root,
+            seed=int(seed),
+            max_steps=max_steps,
+            sample_step_size=sample_step_size,
+        )
+        for mode, paths in seed_outputs.items():
+            outputs.setdefault(mode, {})[int(seed)] = paths
+    return outputs
+
+
+def write_data_scale_check_checkpoint_sampling_multiseed_summary(
+    result_paths: list[str | Path],
+    summary_path: str | Path = DEFAULT_DATA_SCALE_CHECK_MULTI_SEED_SUMMARY_PATH,
+    report_path: str | Path = DEFAULT_DATA_SCALE_CHECK_MULTI_SEED_REPORT_PATH,
+    expected_seeds: tuple[int, ...] = DEFAULT_DATA_SCALE_CHECK_CHECKPOINT_SEED_SET,
+    max_molecules: int = DATA_SCALE_CHECK_MAX_MOLECULES,
+    max_steps: int = DEFAULT_MICRO_PILOT_MAX_STEPS,
+) -> dict[str, Path]:
+    _validate_data_scale_check_checkpoint_seed_set(expected_seeds)
+    rows = [_data_scale_check_comparison_row(Path(path)) for path in result_paths]
+    _validate_data_scale_check_multiseed_rows(
+        rows,
+        expected_seeds=expected_seeds,
+        max_molecules=max_molecules,
+        max_steps=max_steps,
+    )
+    rows_by_seed = _data_scale_check_rows_by_seed(rows)
+    per_seed_comparisons = [
+        {
+            "seed": seed,
+            "metric_comparisons": _data_scale_check_metric_comparisons(rows_by_seed[seed]),
+        }
+        for seed in sorted(rows_by_seed)
+    ]
+    aggregate_metric_comparisons = _aggregate_data_scale_check_metric_comparisons(per_seed_comparisons)
+    consistency = _data_scale_check_stiffness_consistency(aggregate_metric_comparisons)
+    runtime_summary = _data_scale_check_multiseed_runtime_summary(rows)
+    summary = {
+        "summary_name": "geom_data_scale_check_ckpt_sample_multiseed_summary",
+        "dataset_name": "geom_drugs",
+        "dataset_kind": "geom_drugs_tiny_processed_dry_run",
+        "dataset_subset_scope": "data_scale_check_processed_dry_run",
+        "result_kind": DATA_SCALE_CHECK_MULTI_SEED_SUMMARY_RESULT_KIND,
+        "benchmark_result": False,
+        "execution_mode": "local_cpu_data_scale_check_checkpoint_sampling_multiseed_report",
+        "hardware": "cpu_only",
+        "gpu_used": False,
+        "scheduler": None,
+        "slurm_account": None,
+        "pilot_run": True,
+        "bounded_pilot": True,
+        "micro_pilot_run": False,
+        "data_scale_check_run": True,
+        "raw_data_modified": False,
+        "environment_modified": False,
+        "training_executed_by_summary": False,
+        "sampling_executed_by_summary": False,
+        "larger_real_training_run_started": False,
+        "seed_set": list(expected_seeds),
+        "seed_count": len(expected_seeds),
+        "mode_count": 2,
+        "max_molecules": max_molecules,
+        "max_steps": max_steps,
+        "input_result_paths": [str(path) for path in result_paths],
+        "row_count": len(rows),
+        "rows": rows,
+        "per_seed_comparisons": per_seed_comparisons,
+        "aggregate_metric_comparisons": aggregate_metric_comparisons,
+        "stiffness_consistency": consistency,
+        "runtime_summary": runtime_summary,
+        "runtime_seconds": None,
+        "notes": [
+            "Reporting-only aggregation of bounded 30-molecule data-scale-check checkpoint-and-sampling outputs across a fixed tiny seed set.",
+            "Each input row uses the same bounded artifact, fixed split, model, optimizer, five-step cap, and one-step sampling settings; only the experiment seed changes.",
+            "Loss and sampled RMSD values are bounded pilot diagnostics only, not benchmark metrics or evidence of model quality.",
+            "Runtime metadata is kept for accounting checks only; tiny runtime differences are not interpreted as performance results.",
+            "Summary generation runtime is intentionally omitted so the report is deterministic for identical inputs.",
+            "No raw-data modification, environment mutation, GPU execution, SLURM job, training, sampling, checkpointing, or larger real training run was performed by this summary.",
+        ],
+    }
+    summary_path = Path(summary_path)
+    report_path = Path(report_path)
+    summary_path.parent.mkdir(parents=True, exist_ok=True)
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    summary_path.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    report_path.write_text(_data_scale_check_multiseed_markdown(summary), encoding="utf-8")
+    return {"summary": summary_path, "report": report_path}
 
 
 def write_data_scale_check_checkpoint_sampling_comparison(
@@ -658,6 +777,20 @@ def _validate_micro_pilot_checkpoint_seed_set(seed_set: tuple[int, ...]) -> None
         raise ValueError("Micro-pilot checkpoint/sampling seeds must be non-negative integers")
 
 
+def _validate_data_scale_check_checkpoint_seed_set(seed_set: tuple[int, ...]) -> None:
+    if not seed_set:
+        raise ValueError("Data-scale-check checkpoint/sampling multi-seed run requires at least one seed")
+    if len(seed_set) > HARD_MAX_DATA_SCALE_CHECK_CHECKPOINT_SEEDS:
+        raise ValueError(
+            "Data-scale-check checkpoint/sampling multi-seed run is capped at "
+            f"{HARD_MAX_DATA_SCALE_CHECK_CHECKPOINT_SEEDS} seeds"
+        )
+    if len(set(seed_set)) != len(seed_set):
+        raise ValueError("Data-scale-check checkpoint/sampling seed set must contain unique seeds")
+    if any(int(seed) < 0 for seed in seed_set):
+        raise ValueError("Data-scale-check checkpoint/sampling seeds must be non-negative integers")
+
+
 def _run_name(corruption_mode: str, seed: int, max_steps: int) -> str:
     if corruption_mode == "isotropic":
         label = "isotropic"
@@ -797,6 +930,43 @@ def _validate_data_scale_check_rows(
             raise ValueError("Data-scale-check comparison requires reliable fixed-scope runtime metadata")
 
 
+def _validate_data_scale_check_multiseed_rows(
+    rows: list[dict[str, Any]],
+    expected_seeds: tuple[int, ...],
+    max_molecules: int,
+    max_steps: int,
+) -> None:
+    expected_pairs = {
+        ("isotropic", int(seed)) for seed in expected_seeds
+    } | {
+        ("stiffness_structured", int(seed)) for seed in expected_seeds
+    }
+    observed_pairs = {(row["corruption_mode"], int(row["random_seed"])) for row in rows}
+    if observed_pairs != expected_pairs:
+        raise ValueError(f"Data-scale-check rows do not match expected mode/seed pairs: {observed_pairs}")
+    for row in rows:
+        if row["sample_count"] != max_molecules:
+            raise ValueError("Data-scale-check multi-seed summary sample count mismatch")
+        if row["training_sample_count"] != max_molecules - 2:
+            raise ValueError("Data-scale-check multi-seed summary training sample count mismatch")
+        if row["max_steps"] != max_steps:
+            raise ValueError("Data-scale-check multi-seed summary max_steps mismatch")
+        if row["split_counts"] != {"train": max_molecules - 2, "val": 1, "test": 1}:
+            raise ValueError("Data-scale-check multi-seed summary split counts mismatch")
+        if row["runtime_scope"] != MICRO_PILOT_RUNTIME_SCOPE or row["runtime_seconds_reliable"] is not True:
+            raise ValueError("Data-scale-check multi-seed summary requires reliable fixed-scope runtime metadata")
+
+
+def _data_scale_check_rows_by_seed(rows: list[dict[str, Any]]) -> dict[int, dict[str, dict[str, Any]]]:
+    grouped: dict[int, dict[str, dict[str, Any]]] = {}
+    for row in rows:
+        grouped.setdefault(int(row["random_seed"]), {})[row["corruption_mode"]] = row
+    for seed, by_mode in grouped.items():
+        if set(by_mode) != {"isotropic", "stiffness_structured"}:
+            raise ValueError(f"Seed {seed} does not have both data-scale-check modes")
+    return grouped
+
+
 def _data_scale_check_metric_comparisons(by_mode: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
     isotropic = by_mode["isotropic"]
     stiffness = by_mode["stiffness_structured"]
@@ -817,6 +987,104 @@ def _data_scale_check_metric_comparisons(by_mode: dict[str, dict[str, Any]]) -> 
             )
         )
     return comparisons
+
+
+def _aggregate_data_scale_check_metric_comparisons(
+    per_seed_comparisons: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    rows = []
+    for metric in DATA_SCALE_CHECK_COMPARABLE_METRICS:
+        metric_rows = [
+            row
+            for seed_comparison in per_seed_comparisons
+            for row in seed_comparison["metric_comparisons"]
+            if row["metric"] == metric
+        ]
+        if len(metric_rows) != len(per_seed_comparisons):
+            raise ValueError(f"Missing data-scale-check per-seed comparison for metric {metric}")
+        isotropic_values = [row["isotropic"] for row in metric_rows]
+        stiffness_values = [row["stiffness_structured"] for row in metric_rows]
+        outcomes = [row["stiffness_outcome"] for row in metric_rows]
+        rows.append(
+            {
+                "metric": metric,
+                "isotropic_mean": _mean_values(isotropic_values),
+                "stiffness_structured_mean": _mean_values(stiffness_values),
+                "stiffness_minus_isotropic_mean": _mean_values(stiffness_values)
+                - _mean_values(isotropic_values),
+                "stiffness_outcome_by_seed": outcomes,
+                "stiffness_win_count": outcomes.count("better"),
+                "stiffness_tie_count": outcomes.count("tied"),
+                "stiffness_loss_count": outcomes.count("worse"),
+                "seed_count": len(metric_rows),
+                "aggregate_outcome": _data_scale_check_consistency_label(outcomes),
+                "direction": "lower_is_better",
+            }
+        )
+    return rows
+
+
+def _data_scale_check_stiffness_consistency(
+    aggregate_metric_comparisons: list[dict[str, Any]],
+) -> dict[str, Any]:
+    outcomes = [
+        outcome
+        for row in aggregate_metric_comparisons
+        for outcome in row["stiffness_outcome_by_seed"]
+    ]
+    win_count = outcomes.count("better")
+    tie_count = outcomes.count("tied")
+    loss_count = outcomes.count("worse")
+    if outcomes and win_count == len(outcomes):
+        verdict = "stiffness_wins_consistently"
+    elif loss_count == 0 and win_count > 0:
+        verdict = "stiffness_nonworse_with_some_wins"
+    elif win_count > 0 and loss_count > 0:
+        verdict = "mixed"
+    elif tie_count == len(outcomes):
+        verdict = "tied"
+    else:
+        verdict = "inconclusive"
+    return {
+        "verdict": verdict,
+        "tracked_metric_seed_comparison_count": len(outcomes),
+        "stiffness_win_count": win_count,
+        "stiffness_tie_count": tie_count,
+        "stiffness_loss_count": loss_count,
+    }
+
+
+def _data_scale_check_consistency_label(outcomes: list[str]) -> str:
+    if outcomes and all(outcome == "better" for outcome in outcomes):
+        return "stiffness_wins_all_seeds"
+    if outcomes and all(outcome in {"better", "tied"} for outcome in outcomes) and any(
+        outcome == "better" for outcome in outcomes
+    ):
+        return "stiffness_nonworse_all_seeds"
+    if any(outcome == "better" for outcome in outcomes) and any(outcome == "worse" for outcome in outcomes):
+        return "mixed"
+    if outcomes and all(outcome == "tied" for outcome in outcomes):
+        return "tied"
+    return "inconclusive"
+
+
+def _data_scale_check_multiseed_runtime_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    by_mode: dict[str, list[dict[str, Any]]] = {"isotropic": [], "stiffness_structured": []}
+    for row in rows:
+        by_mode[row["corruption_mode"]].append(row)
+    runtime_seconds_by_mode = {
+        mode: [row["runtime_seconds"] for row in sorted(mode_rows, key=lambda item: item["random_seed"])]
+        for mode, mode_rows in by_mode.items()
+    }
+    return {
+        "runtime_seconds_by_mode": runtime_seconds_by_mode,
+        "runtime_seconds_mean_by_mode": {
+            mode: _mean_values(values) for mode, values in runtime_seconds_by_mode.items()
+        },
+        "runtime_scope_set": sorted({row["runtime_scope"] for row in rows}),
+        "all_runtime_seconds_reliable": all(row["runtime_seconds_reliable"] for row in rows),
+        "note": "Runtime is recorded for accounting only; tiny CPU timing differences are not interpreted as model performance.",
+    }
 
 
 def _lower_is_better_comparison(metric: str, isotropic: float, stiffness: float) -> dict[str, Any]:
@@ -841,6 +1109,103 @@ def _mean_sampled_rmsd(sampled: list[dict[str, Any]]) -> float:
     if not sampled:
         raise ValueError("Cannot compute sampled RMSD mean over an empty split")
     return sum(float(item["sampled_rmsd_to_target"]) for item in sampled) / len(sampled)
+
+
+def _mean_values(values: list[float]) -> float:
+    if not values:
+        raise ValueError("Cannot compute mean over an empty value list")
+    return sum(float(value) for value in values) / len(values)
+
+
+def _fmt(value: float) -> str:
+    return f"{float(value):.6g}"
+
+
+def _data_scale_check_multiseed_markdown(summary: dict[str, Any]) -> str:
+    consistency = summary["stiffness_consistency"]
+    lines = [
+        "# Bounded 30-Molecule Checkpoint/Sampling Multi-Seed Summary",
+        "",
+        "This report aggregates bounded 30-molecule data-scale-check checkpoint-and-sampling pilots across a fixed tiny seed set. It is bounded pilot-only and not a benchmark result.",
+        "",
+        "## Safety Labels",
+        "",
+        "| Field | Value |",
+        "|---|---:|",
+        f"| result_kind | `{summary['result_kind']}` |",
+        f"| benchmark_result | `{summary['benchmark_result']}` |",
+        f"| seed_set | `{summary['seed_set']}` |",
+        f"| max_molecules | `{summary['max_molecules']}` |",
+        f"| max_steps | `{summary['max_steps']}` |",
+        f"| hardware | `{summary['hardware']}` |",
+        f"| gpu_used | `{summary['gpu_used']}` |",
+        f"| training_executed_by_summary | `{summary['training_executed_by_summary']}` |",
+        f"| sampling_executed_by_summary | `{summary['sampling_executed_by_summary']}` |",
+        f"| larger_real_training_run_started | `{summary['larger_real_training_run_started']}` |",
+        "",
+        "## Stability Verdict",
+        "",
+        f"- verdict: `{consistency['verdict']}`",
+        f"- stiffness wins: `{consistency['stiffness_win_count']}`",
+        f"- stiffness ties: `{consistency['stiffness_tie_count']}`",
+        f"- stiffness losses: `{consistency['stiffness_loss_count']}`",
+        "",
+        "## Aggregate Metrics",
+        "",
+        "| Metric | Isotropic mean | Stiffness mean | Stiffness - Isotropic | Seed outcomes | Aggregate outcome |",
+        "|---|---:|---:|---:|---|---|",
+    ]
+    for row in summary["aggregate_metric_comparisons"]:
+        lines.append(
+            f"| `{row['metric']}` | {_fmt(row['isotropic_mean'])} | "
+            f"{_fmt(row['stiffness_structured_mean'])} | "
+            f"{_fmt(row['stiffness_minus_isotropic_mean'])} | "
+            f"`{row['stiffness_outcome_by_seed']}` | {row['aggregate_outcome']} |"
+        )
+    lines.extend(
+        [
+            "",
+            "## Per-Seed Metrics",
+            "",
+            "| Seed | Metric | Isotropic | Stiffness | Stiffness - Isotropic | Outcome |",
+            "|---:|---|---:|---:|---:|---|",
+        ]
+    )
+    for seed_comparison in summary["per_seed_comparisons"]:
+        for row in seed_comparison["metric_comparisons"]:
+            lines.append(
+                f"| {seed_comparison['seed']} | `{row['metric']}` | {_fmt(row['isotropic'])} | "
+                f"{_fmt(row['stiffness_structured'])} | {_fmt(row['stiffness_minus_isotropic'])} | "
+                f"{row['stiffness_outcome']} |"
+            )
+    runtime = summary["runtime_summary"]
+    lines.extend(
+        [
+            "",
+            "## Runtime Accounting",
+            "",
+            "| Mode | runtimes_seconds | mean_seconds |",
+            "|---|---|---:|",
+            (
+                "| isotropic | "
+                f"`{[_fmt(value) for value in runtime['runtime_seconds_by_mode']['isotropic']]}` | "
+                f"{_fmt(runtime['runtime_seconds_mean_by_mode']['isotropic'])} |"
+            ),
+            (
+                "| stiffness_structured | "
+                f"`{[_fmt(value) for value in runtime['runtime_seconds_by_mode']['stiffness_structured']]}` | "
+                f"{_fmt(runtime['runtime_seconds_mean_by_mode']['stiffness_structured'])} |"
+            ),
+            "",
+            f"- runtime_scope_set: `{runtime['runtime_scope_set']}`",
+            f"- all_runtime_seconds_reliable: `{runtime['all_runtime_seconds_reliable']}`",
+            f"- note: {runtime['note']}",
+            "",
+            "Lower values are marked better for `reloaded_loss` and sampled RMSD diagnostics. These are bounded pilot diagnostics only and are not benchmark results.",
+            "",
+        ]
+    )
+    return "\n".join(lines)
 
 
 def _data_scale_check_comparison_log(results: dict[str, Any], manifest_path: Path, results_path: Path) -> str:

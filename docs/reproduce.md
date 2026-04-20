@@ -371,6 +371,24 @@ This writes a bounded 30-molecule processed dry-run artifact and 28/1/1 random s
 
 The per-run outputs are labeled `tiny_real_data_bounded_data_scale_check_checkpoint_sampling_not_benchmark`, `benchmark_result: false`, `hardware: cpu_only`, `gpu_used: false`, `pilot_run: true`, `bounded_pilot: true`, `data_scale_check_run: true`, `checkpoint_scope: disposable_data_scale_check_checkpoint_sampling_only`, `sampling_executed: true`, and `slurm_account: null`. The comparison is labeled `tiny_real_data_bounded_data_scale_check_checkpoint_sampling_comparison_not_benchmark` and reports whether the seed-0 directional signal is preserved. This is still a bounded non-benchmark data-scale check, not a larger real training run.
 
+Current bounded 30-molecule data-scale checkpoint-and-sampling multi-seed run:
+
+```bash
+python scripts/run_data_scale_check_checkpoint_sampling_multiseed.py
+```
+
+This reads the existing bounded 30-molecule processed artifact and fixed 28/1/1 split through the data-scale-check configs, then runs the same CPU-only checkpoint/sampling pilot settings for isotropic and stiffness-structured source configurations over seeds `0,1,2`. It does not rebuild the processed artifact or split, and it does not change the molecule count, split logic, model, optimizer, five-step cap, or one-step sampling settings. It writes per-mode/per-seed manifest, result, log, and disposable checkpoint files named like:
+- `experiments/results/geom_data_scale_check_ckpt_sample_isotropic_mols30_steps5_seed0.json`
+- `experiments/results/geom_data_scale_check_ckpt_sample_isotropic_mols30_steps5_seed1.json`
+- `experiments/results/geom_data_scale_check_ckpt_sample_isotropic_mols30_steps5_seed2.json`
+- matching `stiffness` files for seeds `0`, `1`, and `2`
+
+It also writes:
+- `experiments/results/geom_data_scale_check_ckpt_sample_multiseed_summary.json`
+- `reports/tables/geom_data_scale_check_ckpt_sample_multiseed_summary.md`
+
+The per-run outputs remain labeled `tiny_real_data_bounded_data_scale_check_checkpoint_sampling_not_benchmark`, `benchmark_result: false`, `hardware: cpu_only`, `gpu_used: false`, `pilot_run: true`, `bounded_pilot: true`, `data_scale_check_run: true`, `checkpoint_scope: disposable_data_scale_check_checkpoint_sampling_only`, `sampling_executed: true`, and `slurm_account: null`. The multi-seed summary is labeled `tiny_real_data_bounded_data_scale_check_checkpoint_sampling_multiseed_summary_not_benchmark` and reports per-seed winners, aggregate means, stiffness consistency, and runtime metadata for accounting only. This is still a bounded non-benchmark data-scale check, not a larger real training run.
+
 Current bounded tiny real-data pilot comparison report:
 
 ```bash
