@@ -38,6 +38,7 @@ Current status:
 - `scripts/run_micro_pilot_checkpoint_sampling_multiseed.py` runs the bounded six-molecule CPU-only checkpoint-and-sampling pilot for both modes over the fixed tiny seed set `0,1,2` and writes a deterministic multi-seed JSON/markdown summary.
 - `scripts/run_data_scale_check_checkpoint_sampling.py` writes a bounded 30-molecule processed dry-run artifact and split, then runs the same CPU-only checkpoint-and-sampling pilot settings for isotropic and stiffness-structured modes at seed `0`.
 - `scripts/run_data_scale_check_checkpoint_sampling_multiseed.py` runs the existing bounded 30-molecule checkpoint-and-sampling setup for both modes over seeds `0,1,2` and writes a deterministic non-benchmark multi-seed JSON/markdown summary.
+- `scripts/run_data_scale_check_500_checkpoint_sampling.py` writes a bounded 500-molecule processed dry-run artifact and split, then runs the same CPU-only checkpoint-and-sampling pilot settings for isotropic and stiffness-structured modes at seed `0`.
 - `scripts/evaluate.py` currently re-runs the same smoke evaluation path.
 
 This file is the canonical place to record **what is actually present today**, as opposed to the intended target design.
@@ -76,6 +77,7 @@ The repo contains:
 - a bounded CPU-only micro-pilot checkpoint/sampling multi-seed runner and deterministic summary/report over seeds `0,1,2`;
 - a bounded CPU-only 30-molecule data-scale-check checkpoint/sampling runner with a compact JSON/log comparison of the seed-0 directional signal;
 - a bounded CPU-only 30-molecule data-scale-check checkpoint/sampling multi-seed runner and deterministic summary/report over seeds `0,1,2`;
+- a bounded CPU-only 500-molecule data-scale-check checkpoint/sampling runner with a compact JSON/log comparison of the seed-0 directional signal;
 - honest placeholders for GEOM preprocessing, model sampling, and ablation orchestration.
 
 Still missing or intentionally incomplete:
@@ -85,9 +87,9 @@ Still missing or intentionally incomplete:
 - full real GEOM-Drugs raw-data schema/parser beyond bounded metadata inspection;
 - real GEOM-scale RDKit ETKDG/MMFF baseline runner beyond the three-molecule dry-run;
 - real equivariant neural backbone implementation and full model training;
-- any real model training beyond the bounded three-molecule pilot, bounded six-molecule micro-pilot, and bounded 30-molecule data-scale check;
-- trainable model loops beyond the bounded tiny smoke checks, the bounded three-molecule pilot, bounded six-molecule micro-pilot, and bounded 30-molecule data-scale check;
-- real model sampling beyond bounded tiny smoke checks, the bounded six-molecule micro-pilot checkpoint/sampling pilot, and bounded 30-molecule checkpoint/sampling data-scale check;
+- any real model training beyond the bounded three-molecule pilot, bounded six-molecule micro-pilot, and bounded 30/500-molecule data-scale checks;
+- trainable model loops beyond the bounded tiny smoke checks, the bounded three-molecule pilot, bounded six-molecule micro-pilot, and bounded 30/500-molecule data-scale checks;
+- real model sampling beyond bounded tiny smoke checks, the bounded six-molecule micro-pilot checkpoint/sampling pilot, and bounded 30/500-molecule checkpoint/sampling data-scale checks;
 - real COV/MAT over generated conformer ensembles;
 - PoseBusters/MMFF/UFF/xTB integrations;
 - full random-vs-scaffold benchmark runs.

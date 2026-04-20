@@ -14,6 +14,7 @@ EXPECTED_DATASET_KIND = "geom_drugs_tiny_processed_dry_run"
 RESULT_KIND = "split_dry_run_not_benchmark"
 MICRO_PILOT_HARD_MAX_MOLECULES = 6
 DATA_SCALE_CHECK_HARD_MAX_MOLECULES = 30
+DATA_SCALE_CHECK_500_HARD_MAX_MOLECULES = 500
 
 
 def run_geom_tiny_split_dry_run(

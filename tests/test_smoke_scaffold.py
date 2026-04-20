@@ -1813,6 +1813,120 @@ logging:
             self.assertIn("Bounded 30-Molecule Checkpoint/Sampling Multi-Seed Summary", report)
             self.assertIn("stiffness_wins_consistently", report)
 
+    def test_data_scale_check_500_comparison_accepts_bounded_scope(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            result_paths = []
+            molecule_ids = [f"geom_scale500_{index:03d}" for index in range(500)]
+            split_by_index = ["train"] * 498 + ["val", "test"]
+            for mode, label, offset in [
+                ("isotropic", "isotropic", 0.40),
+                ("stiffness_structured", "stiffness", 0.30),
+            ]:
+                path = root / f"{label}.json"
+                sampled = [offset + 0.0001 * index for index in range(500)]
+                payload = {
+                    "run_name": f"geom_data_scale_check_ckpt_sample_{label}_mols500_steps5_seed0",
+                    "dataset_name": "geom_drugs",
+                    "dataset_kind": "geom_drugs_tiny_processed_dry_run",
+                    "dataset_subset_scope": "data_scale_check_500_processed_dry_run",
+                    "processed_artifact_path": "data/processed/geom_drugs_subset/data_scale_check_500/molecules.json",
+                    "split_path": "data/splits/geom_drugs_data_scale_check_500/random_seed0/split.json",
+                    "random_seed": 0,
+                    "corruption_mode": mode,
+                    "model_name": "single_linear_velocity_smoke",
+                    "backbone": "minimal_linear_velocity_pilot",
+                    "execution_mode": "local_cpu_tiny_real_data_scale_check_checkpoint_sampling",
+                    "result_kind": "tiny_real_data_bounded_data_scale_check_checkpoint_sampling_not_benchmark",
+                    "benchmark_result": False,
+                    "hardware": "cpu_only",
+                    "gpu_used": False,
+                    "scheduler": None,
+                    "slurm_account": None,
+                    "pilot_run": True,
+                    "bounded_pilot": True,
+                    "micro_pilot_run": False,
+                    "data_scale_check_run": True,
+                    "data_scale_check_500_run": True,
+                    "dry_run": False,
+                    "training_executed": True,
+                    "model_training_started": True,
+                    "training_loop_executed": True,
+                    "bounded_real_training_loop_executed": True,
+                    "larger_real_training_run_started": False,
+                    "max_steps": 5,
+                    "hard_max_steps": 5,
+                    "optimizer_created": True,
+                    "optimizer_step_count": 5,
+                    "backward_executed": True,
+                    "backward_pass_count": 5,
+                    "checkpoint_path": f"experiments/checkpoints/{label}_seed0.pt",
+                    "checkpoint_written": True,
+                    "checkpoint_reloaded": True,
+                    "checkpoint_scope": "disposable_data_scale_check_500_checkpoint_sampling_only",
+                    "sampling_executed": True,
+                    "sample_step_count": 1,
+                    "sample_step_size": 0.1,
+                    "forward_executed": True,
+                    "loss_computed": True,
+                    "training_sample_count": 498,
+                    "sample_count": 500,
+                    "runtime_scope": "checkpoint_train_save_reload_sample_after_full_cpu_checkpoint_sampling_warmup",
+                    "runtime_seconds_reliable": True,
+                    "dataset": {
+                        "name": "geom_drugs",
+                        "kind": "geom_drugs_tiny_processed_dry_run",
+                        "subset_scope": "data_scale_check_500_processed_dry_run",
+                        "molecule_count": 500,
+                        "split_type": "random",
+                        "split_scope": "data_scale_check_500_processed_dry_run",
+                        "split_counts": {"train": 498, "val": 1, "test": 1},
+                        "degenerate_tiny_split": False,
+                    },
+                    "flow_matching": {"objective": "cartesian_linear", "interpolation": "linear"},
+                    "metrics": {
+                        "metric_scope": "geom_drugs_data_scale_check_checkpoint_sampling",
+                        "model_name": "single_linear_velocity_smoke",
+                        "reloaded_loss": 0.70 if mode == "isotropic" else 0.60,
+                        "train_steps": [{"optimizer_step": index + 1} for index in range(5)],
+                        "sampled_molecules": [
+                            {
+                                "molecule_id": molecule_id,
+                                "split": split,
+                                "atom_count": 3,
+                                "sample_step_count": 1,
+                                "sample_step_size": 0.1,
+                                "sampled_rmsd_to_target": rmsd,
+                                "predicted_velocity_norm": 1.0,
+                            }
+                            for molecule_id, split, rmsd in zip(molecule_ids, split_by_index, sampled)
+                        ],
+                    },
+                    "runtime_seconds": 0.5,
+                    "notes": ["Bounded 500-molecule data-scale-check pilot only, not benchmark results."],
+                }
+                path.write_text(json.dumps(payload), encoding="utf-8")
+                result_paths.append(path)
+
+            comparison = write_data_scale_check_checkpoint_sampling_comparison(
+                result_paths=result_paths,
+                output_root=root / "experiments",
+                seed=0,
+                max_molecules=500,
+                max_steps=5,
+            )
+            results = json.loads(comparison["results"].read_text(encoding="utf-8"))
+            self.assertEqual(results["max_molecules"], 500)
+            self.assertEqual(results["dataset_subset_scope"], "data_scale_check_500_processed_dry_run")
+            self.assertTrue(results["data_scale_check_500_run"])
+            self.assertEqual(results["hard_max_molecules"], 500)
+            self.assertTrue(results["directional_signal_preserved"])
+            self.assertEqual(len(results["metric_comparisons"]), 5)
+            for row in results["rows"]:
+                self.assertEqual(row["sample_count"], 500)
+                self.assertEqual(row["training_sample_count"], 498)
+                self.assertTrue(row["runtime_seconds_reliable"])
+
     def test_micro_pilot_checkpoint_sampling_comparison_flags_legacy_runtime_mismatch(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -2964,6 +3078,68 @@ logging:
             self.assertEqual(len(split["test"]), 1)
             self.assertEqual(manifest["bounds"]["hard_max_molecules"], 30)
             self.assertEqual(manifest["counts"], {"train": 28, "val": 1, "test": 1})
+
+    def test_geom_data_scale_check_500_processed_output_and_split_are_bounded(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            raw = root / "geom_drugs"
+            drugs = raw / "rdkit_folder" / "drugs"
+            processed = root / "processed"
+            drugs.mkdir(parents=True)
+            for index in range(500):
+                record = {
+                    "smiles": "CO",
+                    "totalconfs": 1,
+                    "uniqueconfs": 1,
+                    "charge": 0,
+                    "conformers": [
+                        {
+                            "geom_id": 100 + index,
+                            "relativeenergy": 0.0,
+                            "rd_mol": _FakeMol([[0.0, 0.0, 0.0], [1.2 + index, 0.0, 0.0]]),
+                        }
+                    ],
+                }
+                with (drugs / f"scale500_mol_{index:03d}.pickle").open("wb") as handle:
+                    pickle.dump(record, handle)
+
+            paths = run_geom_preflight(
+                raw_root=raw,
+                processed_root=processed,
+                manifest_path=root / "manifest.json",
+                report_path=root / "report.md",
+                write_data_scale_check_500_output=True,
+                max_processed_conformers_per_mol=1,
+            )
+            artifact = json.loads(paths["processed_artifact"].read_text(encoding="utf-8"))
+            processed_manifest = json.loads(paths["processed_manifest"].read_text(encoding="utf-8"))
+            self.assertEqual(artifact["subset_scope"], "data_scale_check_500_processed_dry_run")
+            self.assertEqual(artifact["bounds"]["max_molecules"], 500)
+            self.assertEqual(artifact["bounds"]["hard_max_molecules"], 500)
+            self.assertEqual(artifact["molecule_count"], 500)
+            self.assertEqual(artifact["conformer_count"], 500)
+            self.assertFalse(artifact["benchmark_result"])
+            self.assertFalse(processed_manifest["full_processed_data_written"])
+
+            split_paths = run_geom_tiny_split_dry_run(
+                processed_artifact_path=paths["processed_artifact"],
+                split_root=root / "splits",
+                split_type="random",
+                seed=0,
+                max_molecules=500,
+                split_scope="data_scale_check_500_processed_dry_run",
+                hard_max_molecules=500,
+            )
+            split = json.loads(split_paths["split"].read_text(encoding="utf-8"))
+            manifest = json.loads(split_paths["manifest"].read_text(encoding="utf-8"))
+            self.assertEqual(split["split_scope"], "data_scale_check_500_processed_dry_run")
+            self.assertFalse(split["benchmark_result"])
+            self.assertFalse(split["degenerate_tiny_split"])
+            self.assertEqual(len(split["train"]), 498)
+            self.assertEqual(len(split["val"]), 1)
+            self.assertEqual(len(split["test"]), 1)
+            self.assertEqual(manifest["bounds"]["hard_max_molecules"], 500)
+            self.assertEqual(manifest["counts"], {"train": 498, "val": 1, "test": 1})
 
 
 if __name__ == "__main__":
