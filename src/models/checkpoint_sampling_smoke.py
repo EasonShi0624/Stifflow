@@ -16,15 +16,19 @@ def run_checkpoint_sampling_smoke(
     max_steps: int = 3,
     learning_rate: float = 1.0e-2,
     sample_step_size: float = 0.1,
+    sampling_samples: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Train briefly, save/load a disposable checkpoint, and sample once."""
 
     if not samples:
         raise ValueError("Cannot run checkpoint/sampling smoke on an empty sample list")
+    if sampling_samples is not None and not sampling_samples:
+        raise ValueError("Cannot run checkpoint/sampling smoke with an empty sampling sample list")
     if max_steps <= 0 or max_steps > 5:
         raise ValueError("checkpoint/sampling smoke max_steps must be between 1 and 5")
     if sample_step_size <= 0.0 or sample_step_size > 1.0:
         raise ValueError("sample_step_size must be in (0, 1]")
+    sampling_samples = samples if sampling_samples is None else sampling_samples
 
     torch = _load_torch()
     torch.manual_seed(int(seed))
@@ -78,7 +82,7 @@ def run_checkpoint_sampling_smoke(
     with torch.no_grad():
         prediction_after_reload = reloaded_model(features)
         reloaded_loss = loss_fn(prediction_after_reload, targets)
-        sampled = _sample_coordinates(torch, reloaded_model, samples, sample_step_size)
+        sampled = _sample_coordinates(torch, reloaded_model, sampling_samples, sample_step_size)
 
     return {
         "model_name": "single_linear_velocity_smoke",
@@ -87,13 +91,14 @@ def run_checkpoint_sampling_smoke(
         "device": "cpu",
         "cuda_available": bool(torch.cuda.is_available()),
         "trainable_parameter_count": sum(parameter.numel() for parameter in reloaded_model.parameters()),
-        "forward_pass_count": int(max_steps) + 1 + len(samples),
+        "forward_pass_count": int(max_steps) + 1 + len(sampling_samples),
         "backward_pass_count": int(max_steps),
         "optimizer_step_count": int(max_steps),
         "optimizer_name": "SGD",
         "learning_rate": float(learning_rate),
         "sample_step_size": float(sample_step_size),
-        "sample_count": len(samples),
+        "training_sample_count": len(samples),
+        "sample_count": len(sampling_samples),
         "atom_count": int(features.shape[0]),
         "component_count": int(targets.numel()),
         "checkpoint_path": str(checkpoint_path),
@@ -107,6 +112,19 @@ def run_checkpoint_sampling_smoke(
         "sampled_molecules": sampled,
         "per_sample_training_loss": _per_sample_metrics(torch, prediction_after_reload, targets, per_sample_slices),
         "note": "Tiny checkpoint/reload/sampling smoke metrics only; not benchmark metrics.",
+    }
+
+
+def warm_up_checkpoint_sampling_runtime() -> dict[str, Any]:
+    """Load the CPU backend before timing comparable bounded pilot runs."""
+
+    torch = _load_torch()
+    torch.set_num_threads(1)
+    return {
+        "backend": "torch_cpu",
+        "torch_version": getattr(torch, "__version__", "unknown"),
+        "device": "cpu",
+        "cuda_available": bool(torch.cuda.is_available()),
     }
 
 

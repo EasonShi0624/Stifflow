@@ -33,6 +33,8 @@ Current status:
 - `scripts/run_tiny_real_pilot.py --micro-pilot` runs the existing bounded CPU-only pilot loop on the six-molecule micro-pilot artifact.
 - `scripts/compare_tiny_real_pilot.py --micro-pilot` writes a bounded micro-pilot comparison JSON summary and markdown table from the existing isotropic and stiffness-structured micro-pilot results.
 - `scripts/run_micro_pilot_multiseed.py` runs the bounded six-molecule micro-pilot for isotropic and stiffness-structured modes over a fixed tiny seed set and writes a multi-seed JSON/markdown summary.
+- `scripts/run_micro_pilot_checkpoint_sampling.py` runs a single-seed bounded six-molecule CPU-only micro-pilot checkpoint-and-sampling run for both modes, writing disposable pilot-only checkpoints plus manifest/result/log outputs.
+- `scripts/compare_micro_pilot_checkpoint_sampling.py` writes a reporting-only JSON/markdown comparison of the two current bounded micro-pilot checkpoint-and-sampling outputs and flags suspicious runtime inconsistencies.
 - `scripts/evaluate.py` currently re-runs the same smoke evaluation path.
 
 This file is the canonical place to record **what is actually present today**, as opposed to the intended target design.
@@ -66,6 +68,8 @@ The repo contains:
 - a micro-pilot split dry-run and configurable bounded pilot path over the six-molecule artifact;
 - a reporting-only bounded micro-pilot comparison summary/report over the two current six-molecule pilot outputs;
 - a bounded CPU-only multi-seed micro-pilot runner and summary over a fixed tiny seed set for both source modes;
+- a bounded CPU-only single-seed micro-pilot checkpoint-and-sampling runner that trains only the six-molecule split's train subset, writes disposable pilot-only checkpoints, reloads them, and runs one bounded sampling step;
+- a reporting-only bounded micro-pilot checkpoint/sampling comparison that compares reloaded loss, sampled RMSD diagnostics, per-molecule sampled RMSD, and runtime accounting reliability;
 - honest placeholders for GEOM preprocessing, model sampling, and ablation orchestration.
 
 Still missing or intentionally incomplete:
@@ -77,7 +81,7 @@ Still missing or intentionally incomplete:
 - real equivariant neural backbone implementation and full model training;
 - any real model training beyond the bounded three-molecule pilot and bounded six-molecule micro-pilot;
 - trainable model loops beyond the bounded tiny smoke checks, the bounded three-molecule pilot, and the bounded six-molecule micro-pilot;
-- real model sampling beyond bounded tiny smoke checks;
+- real model sampling beyond bounded tiny smoke checks and the bounded six-molecule micro-pilot checkpoint/sampling pilot;
 - real COV/MAT over generated conformer ensembles;
 - PoseBusters/MMFF/UFF/xTB integrations;
 - full random-vs-scaffold benchmark runs.
