@@ -287,6 +287,27 @@ This reads the two current bounded six-molecule micro-pilot result JSON files an
 
 The summary is labeled `tiny_real_data_bounded_micro_pilot_comparison_not_benchmark`, `comparison_scope: micro_pilot`, `benchmark_result: false`, `hardware: cpu_only`, `gpu_used: false`, `training_executed_by_summary: false`, `sampling_executed_by_summary: false`, `larger_real_training_run_started: false`, and `slurm_account: null`. It does not read raw data, start training, run sampling, write checkpoints, use GPUs, submit jobs, or modify the environment.
 
+Current bounded multi-seed micro-pilot:
+
+```bash
+python scripts/run_micro_pilot_multiseed.py
+```
+
+This runs the bounded six-molecule micro-pilot for isotropic and stiffness-structured source configurations over the fixed tiny seed set `0,1`, then writes one multi-seed summary. It writes per-seed pilot outputs such as:
+- `experiments/manifests/geom_micro_pilot_isotropic_mols6_steps6_seed0.json`
+- `experiments/results/geom_micro_pilot_isotropic_mols6_steps6_seed0.json`
+- `experiments/logs/geom_micro_pilot_isotropic_mols6_steps6_seed0.log`
+- `experiments/manifests/geom_micro_pilot_isotropic_mols6_steps6_seed1.json`
+- `experiments/results/geom_micro_pilot_isotropic_mols6_steps6_seed1.json`
+- `experiments/logs/geom_micro_pilot_isotropic_mols6_steps6_seed1.log`
+- matching `stiffness` files for seeds `0` and `1`
+
+It also writes:
+- `experiments/results/geom_micro_pilot_multiseed_summary.json`
+- `reports/tables/geom_micro_pilot_multiseed_summary.md`
+
+The per-seed outputs remain labeled `tiny_real_data_bounded_pilot_not_benchmark`, `benchmark_result: false`, `hardware: cpu_only`, `gpu_used: false`, `micro_pilot_run: true`, `bounded_pilot: true`, `larger_real_training_run_started: false`, `checkpoint_written: false`, `sampling_executed: false`, and `slurm_account: null`. The summary is labeled `tiny_real_data_bounded_micro_pilot_multiseed_summary_not_benchmark`, with `seed_set: [0, 1]`. This is a bounded micro-pilot stability diagnostic only, not a benchmark result.
+
 Current bounded tiny real-data pilot comparison report:
 
 ```bash
