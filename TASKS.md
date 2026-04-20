@@ -46,6 +46,7 @@ This file tracks the current prioritized work queue.
    - `scripts/run_tiny_real_execution_smoke.py` runs one parameter-free CPU forward/loss-style execution smoke pass for isotropic and stiffness-structured tiny real configurations without optimizers, backward passes, checkpoints, sampling, or training loops.
    - `scripts/run_tiny_real_single_step_smoke.py` runs exactly one CPU-only forward/loss/backward/optimizer-step smoke for isotropic and stiffness-structured tiny real configurations without a real training loop, checkpoints, sampling, or benchmark claims.
    - `scripts/run_tiny_real_multi_step_smoke.py` runs a hard-capped CPU-only three-step training smoke for isotropic and stiffness-structured tiny real configurations, records per-step metadata, and does not write checkpoints or start larger training.
+   - `scripts/run_tiny_real_checkpoint_sampling_smoke.py` runs a bounded CPU-only train/save/reload/sample smoke for isotropic and stiffness-structured tiny real configurations, writing disposable smoke checkpoints only.
    - Real training and sampling are still not implemented.
 
 9. **Add evaluation scaffolding**
@@ -57,6 +58,7 @@ This file tracks the current prioritized work queue.
    - Tiny real-data execution smoke outputs emit bounded forward/loss diagnostics labeled as non-benchmark and not training.
    - Tiny real-data single-step training smoke outputs emit bounded loss/gradient/optimizer-step diagnostics labeled as non-benchmark and not real training.
    - Tiny real-data bounded multi-step smoke outputs emit per-step loss/gradient diagnostics labeled as non-benchmark and not larger training.
+   - Tiny real-data checkpoint-and-sampling smoke outputs emit disposable checkpoint/reload and one-step sampling diagnostics labeled as non-benchmark.
    - RDKit smoke outputs record Python/RDKit versions and distinguish import, fixture, ETKDG, MMFF, alignment, and runtime failures.
    - Smoke comparison report aggregates isotropic, stiffness, and RDKit smoke outputs into JSON and markdown.
    - Tiny real-data dry-run comparison report aggregates the current RDKit, isotropic, and stiffness-structured tiny real outputs into JSON and markdown.
