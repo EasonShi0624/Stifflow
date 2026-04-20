@@ -16,6 +16,7 @@ Current status:
 - `scripts/run_rdkit_smoke.py` runs a tiny local RDKit ETKDGv3 + MMFF smoke baseline if RDKit is importable, recording Python/RDKit versions and categorized failure modes.
 - `scripts/run_rdkit_tiny_real.py` runs RDKit ETKDGv3 + MMFF on the tiny three-molecule real-data dry-run artifact if RDKit is importable.
 - `scripts/run_tiny_real_model_dry_runs.py` runs tiny real-data model-side dry-runs for isotropic and stiffness-structured source configurations on the existing three-molecule processed artifact and tiny split, without neural training.
+- `scripts/compare_tiny_real_results.py` writes a tiny real-data dry-run JSON summary and markdown table across the RDKit, isotropic, and stiffness-structured tiny real dry-run outputs.
 - `scripts/compare_smoke_results.py` writes a smoke-only JSON summary and markdown table across isotropic, stiffness, and RDKit smoke outputs.
 - `scripts/prepare_geom.py --dry-run` runs a read-only GEOM-Drugs raw-data preflight plus a tiny metadata-only preprocessing dry-run over bounded `rdkit_folder/drugs/*.pickle` samples.
 - `scripts/prepare_geom.py --dry-run --write-tiny-processed-output` writes a deliberately tiny real-data processed-output dry-run artifact, currently capped at three molecules, for extraction-schema validation only.
@@ -37,6 +38,7 @@ The repo contains:
 - a CPU-only RDKit ETKDGv3 + MMFF smoke wrapper for the synthetic fixture;
 - a CPU-only RDKit ETKDGv3 + MMFF tiny real-data dry-run wrapper over the bounded GEOM artifact;
 - CPU-only tiny real-data model-side dry-runs that validate isotropic and stiffness-structured source construction against the bounded GEOM artifact and tiny split;
+- a tiny real-data dry-run comparison summary/report over the current RDKit, isotropic, and stiffness-structured tiny real outputs;
 - a CPU-only smoke comparison summary/report over current synthetic fixture outputs;
 - a read-only GEOM-Drugs preflight that reports raw-data availability and samples bounded raw pickle metadata;
 - an opt-in tiny real-data processed-output dry-run that writes a non-benchmark `molecules.json` plus manifest with enough bounded molecules for a non-degenerate split dry-run;
