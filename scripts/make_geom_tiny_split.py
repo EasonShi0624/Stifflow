@@ -41,17 +41,30 @@ def main() -> None:
         action="store_true",
         help="Use the bounded micro-pilot processed artifact and split root defaults.",
     )
+    parser.add_argument(
+        "--data-scale-check",
+        action="store_true",
+        help="Use the bounded 30-molecule data-scale-check processed artifact and split root defaults.",
+    )
     args = parser.parse_args()
-    if args.micro_pilot:
+    if args.data_scale_check:
+        processed_artifact = args.processed_artifact or "data/processed/geom_drugs_subset/data_scale_check/molecules.json"
+        split_root = args.split_root or "data/splits/geom_drugs_data_scale_check"
+        max_molecules = args.max_molecules if args.max_molecules is not None else 30
+        split_scope = "data_scale_check_processed_dry_run"
+        hard_max_molecules = 30
+    elif args.micro_pilot:
         processed_artifact = args.processed_artifact or "data/processed/geom_drugs_subset/micro_pilot/molecules.json"
         split_root = args.split_root or "data/splits/geom_drugs_micro_pilot"
         max_molecules = args.max_molecules if args.max_molecules is not None else 6
         split_scope = "micro_pilot_processed_dry_run"
+        hard_max_molecules = 6
     else:
         processed_artifact = args.processed_artifact or "data/processed/geom_drugs_subset/tiny_real_dry_run/molecules.json"
         split_root = args.split_root or "data/splits/geom_drugs_tiny_real_dry_run"
         max_molecules = args.max_molecules if args.max_molecules is not None else 3
         split_scope = None
+        hard_max_molecules = 6
 
     paths = run_geom_tiny_split_dry_run(
         processed_artifact_path=processed_artifact,
@@ -60,6 +73,7 @@ def main() -> None:
         seed=args.seed,
         max_molecules=max_molecules,
         split_scope=split_scope,
+        hard_max_molecules=hard_max_molecules,
     )
     print(f"split: {paths['split']}")
     print(f"manifest: {paths['manifest']}")

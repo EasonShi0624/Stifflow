@@ -73,6 +73,14 @@ def main() -> None:
         ),
     )
     parser.add_argument(
+        "--write-data-scale-check-output",
+        action="store_true",
+        help=(
+            "Opt in to writing a strictly bounded 30-molecule data-scale-check processed "
+            "dry-run artifact under the processed root."
+        ),
+    )
+    parser.add_argument(
         "--tiny-processed-tag",
         default="tiny_real_dry_run",
         help="Subdirectory name under processed root for the tiny processed-output dry-run.",
@@ -103,10 +111,17 @@ def main() -> None:
             "Run with --dry-run for the read-only raw-data preflight."
         )
 
-    write_tiny_processed_output = args.write_tiny_processed_output or args.write_micro_pilot_output
+    write_tiny_processed_output = (
+        args.write_tiny_processed_output or args.write_micro_pilot_output or args.write_data_scale_check_output
+    )
     tiny_processed_tag = args.tiny_processed_tag
     max_processed_molecules = args.max_processed_molecules
-    if args.write_micro_pilot_output:
+    if args.write_data_scale_check_output:
+        if tiny_processed_tag == "tiny_real_dry_run":
+            tiny_processed_tag = "data_scale_check"
+        if max_processed_molecules == 3:
+            max_processed_molecules = 30
+    elif args.write_micro_pilot_output:
         if tiny_processed_tag == "tiny_real_dry_run":
             tiny_processed_tag = "micro_pilot"
         if max_processed_molecules == 3:
@@ -123,6 +138,7 @@ def main() -> None:
         max_pickle_bytes=args.max_pickle_bytes,
         write_tiny_processed_output=write_tiny_processed_output,
         write_micro_pilot_output=args.write_micro_pilot_output,
+        write_data_scale_check_output=args.write_data_scale_check_output,
         tiny_processed_tag=tiny_processed_tag,
         max_processed_molecules=max_processed_molecules,
         max_processed_conformers_per_mol=args.max_processed_conformers_per_mol,

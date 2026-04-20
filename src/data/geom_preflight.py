@@ -22,6 +22,7 @@ EXPECTED_LAYOUT_HINTS = [
     "mols",
 ]
 TINY_PROCESSED_HARD_MAX_MOLECULES = 6
+DATA_SCALE_CHECK_HARD_MAX_MOLECULES = 30
 
 
 def run_geom_preflight(
@@ -35,6 +36,7 @@ def run_geom_preflight(
     max_pickle_bytes: int = 1_000_000,
     write_tiny_processed_output: bool = False,
     write_micro_pilot_output: bool = False,
+    write_data_scale_check_output: bool = False,
     tiny_processed_tag: str = "tiny_real_dry_run",
     max_processed_molecules: int = 3,
     max_processed_conformers_per_mol: int = 1,
@@ -51,7 +53,21 @@ def run_geom_preflight(
             tiny_processed_tag = "micro_pilot"
         if max_processed_molecules == 3:
             max_processed_molecules = TINY_PROCESSED_HARD_MAX_MOLECULES
-    output_scope = "micro_pilot_processed_dry_run" if write_micro_pilot_output else "tiny_real_processed_dry_run"
+    if write_data_scale_check_output:
+        write_tiny_processed_output = True
+        if tiny_processed_tag == "tiny_real_dry_run":
+            tiny_processed_tag = "data_scale_check"
+        if max_processed_molecules == 3:
+            max_processed_molecules = DATA_SCALE_CHECK_HARD_MAX_MOLECULES
+    if write_data_scale_check_output:
+        output_scope = "data_scale_check_processed_dry_run"
+        hard_max_molecules = DATA_SCALE_CHECK_HARD_MAX_MOLECULES
+    elif write_micro_pilot_output:
+        output_scope = "micro_pilot_processed_dry_run"
+        hard_max_molecules = TINY_PROCESSED_HARD_MAX_MOLECULES
+    else:
+        output_scope = "tiny_real_processed_dry_run"
+        hard_max_molecules = TINY_PROCESSED_HARD_MAX_MOLECULES
 
     raw_summary = inspect_raw_root(raw_root, max_scan_entries=max_scan_entries)
     preprocessing_dry_run = inspect_preprocessing_dry_run(
@@ -70,6 +86,7 @@ def run_geom_preflight(
         max_pickle_bytes=max_pickle_bytes,
         max_atoms=max_processed_atoms,
         output_scope=output_scope,
+        hard_max_molecules=hard_max_molecules,
     )
     manifest = {
         "run_name": "geom_drugs_preflight",
@@ -101,6 +118,7 @@ def run_geom_preflight(
             "would_write_full_processed_data": False,
             "would_write_tiny_processed_dry_run": write_tiny_processed_output,
             "would_write_micro_pilot_processed_dry_run": write_micro_pilot_output,
+            "would_write_data_scale_check_processed_dry_run": write_data_scale_check_output,
             "next_real_step": "Define and review the processed GEOM record schema before writing full processed data.",
         },
         "runtime_seconds": time.time() - start,
@@ -274,11 +292,10 @@ def write_tiny_processed_dry_run(
     max_pickle_bytes: int = 1_000_000,
     max_atoms: int = 128,
     output_scope: str = "tiny_real_processed_dry_run",
+    hard_max_molecules: int = TINY_PROCESSED_HARD_MAX_MOLECULES,
 ) -> dict[str, Any]:
-    if max_molecules > TINY_PROCESSED_HARD_MAX_MOLECULES:
-        raise ValueError(
-            f"Tiny processed dry-run is capped at {TINY_PROCESSED_HARD_MAX_MOLECULES} molecules"
-        )
+    if max_molecules > hard_max_molecules:
+        raise ValueError(f"Tiny processed dry-run scope {output_scope!r} is capped at {hard_max_molecules} molecules")
     output_dir = processed_root / output_tag
     artifact_path = output_dir / "molecules.json"
     manifest_path = output_dir / "manifest.json"
@@ -288,7 +305,7 @@ def write_tiny_processed_dry_run(
         "max_pickle_bytes": max_pickle_bytes,
         "max_atoms": max_atoms,
         "max_pickle_files_considered": max(1, max_molecules * 20),
-        "hard_max_molecules": TINY_PROCESSED_HARD_MAX_MOLECULES,
+        "hard_max_molecules": hard_max_molecules,
     }
     summary: dict[str, Any] = {
         "enabled": enabled,

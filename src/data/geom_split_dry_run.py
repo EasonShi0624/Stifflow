@@ -13,6 +13,7 @@ from src.data.splits import SplitError, load_split
 EXPECTED_DATASET_KIND = "geom_drugs_tiny_processed_dry_run"
 RESULT_KIND = "split_dry_run_not_benchmark"
 MICRO_PILOT_HARD_MAX_MOLECULES = 6
+DATA_SCALE_CHECK_HARD_MAX_MOLECULES = 30
 
 
 def run_geom_tiny_split_dry_run(
@@ -22,9 +23,10 @@ def run_geom_tiny_split_dry_run(
     seed: int = 0,
     max_molecules: int = 3,
     split_scope: str | None = None,
+    hard_max_molecules: int = MICRO_PILOT_HARD_MAX_MOLECULES,
 ) -> dict[str, Path]:
-    if max_molecules > MICRO_PILOT_HARD_MAX_MOLECULES:
-        raise SplitError(f"Tiny GEOM split dry-run is capped at {MICRO_PILOT_HARD_MAX_MOLECULES} molecules")
+    if max_molecules > hard_max_molecules:
+        raise SplitError(f"Tiny GEOM split dry-run scope is capped at {hard_max_molecules} molecules")
     processed_artifact_path = Path(processed_artifact_path)
     split_root = Path(split_root)
     output_dir = split_root / f"{split_type}_seed{seed}"
@@ -62,7 +64,7 @@ def run_geom_tiny_split_dry_run(
         "seed": seed,
         "bounds": {
             "max_molecules": max_molecules,
-            "hard_max_molecules": MICRO_PILOT_HARD_MAX_MOLECULES,
+            "hard_max_molecules": hard_max_molecules,
             "input_molecule_count": len(payload["molecules"]),
             "written_molecule_count": len(records),
         },
