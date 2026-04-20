@@ -21,6 +21,7 @@ EXPECTED_LAYOUT_HINTS = [
     "molecules",
     "mols",
 ]
+TINY_PROCESSED_HARD_MAX_MOLECULES = 6
 
 
 def run_geom_preflight(
@@ -33,6 +34,7 @@ def run_geom_preflight(
     max_dry_run_conformers_per_mol: int = 3,
     max_pickle_bytes: int = 1_000_000,
     write_tiny_processed_output: bool = False,
+    write_micro_pilot_output: bool = False,
     tiny_processed_tag: str = "tiny_real_dry_run",
     max_processed_molecules: int = 3,
     max_processed_conformers_per_mol: int = 1,
@@ -43,6 +45,13 @@ def run_geom_preflight(
     processed_root = Path(processed_root)
     manifest_path = Path(manifest_path)
     report_path = Path(report_path)
+    if write_micro_pilot_output:
+        write_tiny_processed_output = True
+        if tiny_processed_tag == "tiny_real_dry_run":
+            tiny_processed_tag = "micro_pilot"
+        if max_processed_molecules == 3:
+            max_processed_molecules = TINY_PROCESSED_HARD_MAX_MOLECULES
+    output_scope = "micro_pilot_processed_dry_run" if write_micro_pilot_output else "tiny_real_processed_dry_run"
 
     raw_summary = inspect_raw_root(raw_root, max_scan_entries=max_scan_entries)
     preprocessing_dry_run = inspect_preprocessing_dry_run(
@@ -60,6 +69,7 @@ def run_geom_preflight(
         max_conformers_per_mol=max_processed_conformers_per_mol,
         max_pickle_bytes=max_pickle_bytes,
         max_atoms=max_processed_atoms,
+        output_scope=output_scope,
     )
     manifest = {
         "run_name": "geom_drugs_preflight",
@@ -90,6 +100,7 @@ def run_geom_preflight(
             "would_modify_raw_data": False,
             "would_write_full_processed_data": False,
             "would_write_tiny_processed_dry_run": write_tiny_processed_output,
+            "would_write_micro_pilot_processed_dry_run": write_micro_pilot_output,
             "next_real_step": "Define and review the processed GEOM record schema before writing full processed data.",
         },
         "runtime_seconds": time.time() - start,
@@ -262,7 +273,12 @@ def write_tiny_processed_dry_run(
     max_conformers_per_mol: int = 1,
     max_pickle_bytes: int = 1_000_000,
     max_atoms: int = 128,
+    output_scope: str = "tiny_real_processed_dry_run",
 ) -> dict[str, Any]:
+    if max_molecules > TINY_PROCESSED_HARD_MAX_MOLECULES:
+        raise ValueError(
+            f"Tiny processed dry-run is capped at {TINY_PROCESSED_HARD_MAX_MOLECULES} molecules"
+        )
     output_dir = processed_root / output_tag
     artifact_path = output_dir / "molecules.json"
     manifest_path = output_dir / "manifest.json"
@@ -272,6 +288,7 @@ def write_tiny_processed_dry_run(
         "max_pickle_bytes": max_pickle_bytes,
         "max_atoms": max_atoms,
         "max_pickle_files_considered": max(1, max_molecules * 20),
+        "hard_max_molecules": TINY_PROCESSED_HARD_MAX_MOLECULES,
     }
     summary: dict[str, Any] = {
         "enabled": enabled,
@@ -281,6 +298,7 @@ def write_tiny_processed_dry_run(
         "artifact_path": str(artifact_path),
         "manifest_path": str(manifest_path),
         "dataset_kind": "geom_drugs_tiny_processed_dry_run",
+        "subset_scope": output_scope,
         "result_kind": "processed_output_dry_run_not_benchmark",
         "benchmark_result": False,
         "bounds": bounds,
@@ -352,6 +370,7 @@ def write_tiny_processed_dry_run(
         "result_kind": summary["result_kind"],
         "benchmark_result": False,
         "description": "Tiny bounded real GEOM-Drugs processed-output dry-run. Not benchmark data.",
+        "subset_scope": output_scope,
         "source_dataset": "geom_drugs",
         "raw_root": str(raw_root),
         "bounds": bounds,
@@ -360,6 +379,7 @@ def write_tiny_processed_dry_run(
         "molecules": molecules,
         "notes": [
             "This file is intentionally tiny and exists only to validate real GEOM extraction wiring.",
+            f"Subset scope: {output_scope}.",
             "It must not be used as a benchmark dataset or training corpus.",
         ],
     }
@@ -367,6 +387,7 @@ def write_tiny_processed_dry_run(
         "run_name": output_tag,
         "dataset_name": "geom_drugs",
         "dataset_kind": summary["dataset_kind"],
+        "subset_scope": output_scope,
         "result_kind": summary["result_kind"],
         "benchmark_result": False,
         "execution_mode": "local_cpu_tiny_processed_output_dry_run",
@@ -686,6 +707,7 @@ def _markdown_report(manifest: dict[str, Any]) -> str:
             f"- Status: `{tiny_processed['status']}`",
             f"- Written: `{str(tiny_processed['written']).lower()}`",
             f"- Result kind: `{tiny_processed['result_kind']}`",
+            f"- Subset scope: `{tiny_processed['subset_scope']}`",
             f"- Benchmark result: `{str(tiny_processed['benchmark_result']).lower()}`",
             f"- Molecules written: `{tiny_processed['molecule_count']}`",
             f"- Conformers written: `{tiny_processed['conformer_count']}`",
@@ -708,6 +730,7 @@ def _markdown_report(manifest: dict[str, Any]) -> str:
             "- Would modify raw data: `false`",
             "- Would write full processed data: `false`",
             f"- Would write tiny processed dry-run: `{str(manifest['dry_run_plan']['would_write_tiny_processed_dry_run']).lower()}`",
+            f"- Would write micro-pilot processed dry-run: `{str(manifest['dry_run_plan']['would_write_micro_pilot_processed_dry_run']).lower()}`",
             "",
             "## Notes",
             "",

@@ -150,6 +150,16 @@ data/processed/geom_drugs_subset/tiny_real_dry_run/
 
 That artifact is labeled `geom_drugs_tiny_processed_dry_run` and `processed_output_dry_run_not_benchmark`. By default it is capped at three molecules and one conformer per molecule so the split-interface dry-run can exercise train/validation/test partitions. It is only for validating extraction wiring and must not be treated as a real training subset or benchmark result.
 
+With the explicit `--write-micro-pilot-output` flag, the same dry-run path writes a slightly larger but still strictly bounded micro-pilot artifact under:
+
+```text
+data/processed/geom_drugs_subset/micro_pilot/
+├── manifest.json
+└── molecules.json
+```
+
+The micro-pilot artifact uses the same non-benchmark schema and is capped at six molecules, one conformer per molecule, and the configured atom/pickle-size limits. It is labeled with `subset_scope: micro_pilot_processed_dry_run`, `benchmark_result: false`, and `full_processed_data_written: false`.
+
 Current tiny split-interface dry-run:
 
 ```bash
@@ -165,6 +175,14 @@ data/splits/geom_drugs_tiny_real_dry_run/random_seed0/
 ```
 
 The split artifact is labeled `split_dry_run_not_benchmark`. With the default three-molecule processed dry-run, it writes one molecule ID per partition. If the tiny processed artifact contains fewer than three molecules, validation/test partitions may be empty and the split is marked `degenerate_tiny_split: true`.
+
+For the bounded micro-pilot artifact, run:
+
+```bash
+python scripts/make_geom_tiny_split.py --micro-pilot
+```
+
+This writes a non-benchmark split under `data/splits/geom_drugs_micro_pilot/random_seed0/`, capped at six molecules. With the default six-molecule micro-pilot artifact, the random dry-run split contains four train molecules, one validation molecule, and one test molecule.
 
 These commands do **not** modify raw data, create a real train/validation/test benchmark split, train models, or run benchmark evaluation.
 

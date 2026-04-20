@@ -27,7 +27,10 @@ Current status:
 - `scripts/compare_smoke_results.py` writes a smoke-only JSON summary and markdown table across isotropic, stiffness, and RDKit smoke outputs.
 - `scripts/prepare_geom.py --dry-run` runs a read-only GEOM-Drugs raw-data preflight plus a tiny metadata-only preprocessing dry-run over bounded `rdkit_folder/drugs/*.pickle` samples.
 - `scripts/prepare_geom.py --dry-run --write-tiny-processed-output` writes a deliberately tiny real-data processed-output dry-run artifact, currently capped at three molecules, for extraction-schema validation only.
+- `scripts/prepare_geom.py --dry-run --write-micro-pilot-output` writes a six-molecule, one-conformer-per-molecule, non-benchmark micro-pilot processed-output dry-run artifact.
 - `scripts/make_geom_tiny_split.py` writes a deliberately tiny real-data split dry-run artifact for split-interface validation only.
+- `scripts/make_geom_tiny_split.py --micro-pilot` writes a bounded six-molecule micro-pilot split dry-run artifact.
+- `scripts/run_tiny_real_pilot.py --micro-pilot` runs the existing bounded CPU-only pilot loop on the six-molecule micro-pilot artifact.
 - `scripts/evaluate.py` currently re-runs the same smoke evaluation path.
 
 This file is the canonical place to record **what is actually present today**, as opposed to the intended target design.
@@ -56,7 +59,9 @@ The repo contains:
 - a CPU-only smoke comparison summary/report over current synthetic fixture outputs;
 - a read-only GEOM-Drugs preflight that reports raw-data availability and samples bounded raw pickle metadata;
 - an opt-in tiny real-data processed-output dry-run that writes a non-benchmark `molecules.json` plus manifest with enough bounded molecules for a non-degenerate split dry-run;
+- an opt-in micro-pilot processed-output dry-run capped at six molecules and one conformer per molecule;
 - a tiny real-data split dry-run that writes a non-benchmark `split.json` plus manifest from the tiny processed artifact;
+- a micro-pilot split dry-run and configurable bounded pilot path over the six-molecule artifact;
 - honest placeholders for GEOM preprocessing, model sampling, and ablation orchestration.
 
 Still missing or intentionally incomplete:
@@ -66,8 +71,8 @@ Still missing or intentionally incomplete:
 - full real GEOM-Drugs raw-data schema/parser beyond bounded metadata inspection;
 - real GEOM-scale RDKit ETKDG/MMFF baseline runner beyond the three-molecule dry-run;
 - real equivariant neural backbone implementation and full model training;
-- any real model training beyond the bounded three-molecule pilot;
-- trainable model loops beyond the bounded tiny smoke checks and the bounded three-molecule pilot;
+- any real model training beyond the bounded three-molecule pilot and bounded six-molecule micro-pilot;
+- trainable model loops beyond the bounded tiny smoke checks, the bounded three-molecule pilot, and the bounded six-molecule micro-pilot;
 - real model sampling beyond bounded tiny smoke checks;
 - real COV/MAT over generated conformer ensembles;
 - PoseBusters/MMFF/UFF/xTB integrations;
@@ -81,7 +86,7 @@ If any of the above now exist, update this file.
 
 The next implementation pass should aim to turn the smoke scaffold into the first real runnable milestone:
 
-1. grow the bounded tiny real pilot only after a real subset and stronger backbone path are explicitly approved;
+1. grow beyond the bounded six-molecule micro-pilot only after a real subset and stronger backbone path are explicitly approved;
 2. add scaffold-split tests using fixture scaffold labels;
 3. add a real training-loop smoke test or separate smoke scripts from future training scripts;
 4. keep all smoke outputs labeled as wiring checks, not scientific results;

@@ -129,6 +129,21 @@ This reads the tiny processed-output dry-run artifact and writes only:
 
 The artifact is labeled `split_dry_run_not_benchmark`, `benchmark_result: false`, `hardware: cpu_only`, `training_executed: false`, `raw_data_modified: false`, `processed_data_modified: false`, and `full_split_written: false`. With the default three-molecule processed dry-run it is non-degenerate; if the tiny input contains fewer than three molecules, the split is explicitly marked `degenerate_tiny_split: true`.
 
+Current micro-pilot processed-output and split dry-run:
+
+```bash
+python scripts/prepare_geom.py --dry-run --write-micro-pilot-output
+python scripts/make_geom_tiny_split.py --micro-pilot
+```
+
+This writes only:
+- `data/processed/geom_drugs_subset/micro_pilot/molecules.json`
+- `data/processed/geom_drugs_subset/micro_pilot/manifest.json`
+- `data/splits/geom_drugs_micro_pilot/random_seed0/split.json`
+- `data/splits/geom_drugs_micro_pilot/random_seed0/manifest.json`
+
+The micro-pilot processed artifact is still labeled `processed_output_dry_run_not_benchmark` and `benchmark_result: false`, with `subset_scope: micro_pilot_processed_dry_run`, `max_molecules: 6`, `hard_max_molecules: 6`, and one conformer per molecule by default. The split dry-run is labeled `split_dry_run_not_benchmark`; with six molecules it writes four train IDs, one validation ID, and one test ID. This is not a real processed training subset or benchmark split.
+
 Current tiny real-data RDKit baseline dry-run:
 
 ```bash
@@ -243,6 +258,22 @@ This reads the same three-molecule tiny processed artifact and tiny split dry-ru
 - `experiments/logs/geom_tiny_real_pilot_stiffness_steps6_seed0.log`
 
 The outputs are labeled `tiny_real_data_bounded_pilot_not_benchmark`, `benchmark_result: false`, `hardware: cpu_only`, `gpu_used: false`, `pilot_run: true`, `bounded_pilot: true`, `training_executed: true`, `training_loop_executed: true`, `bounded_real_training_loop_executed: true`, `larger_real_training_run_started: false`, `max_steps: 6`, `hard_max_steps: 8`, `checkpoint_written: false`, `sampling_executed: false`, and `slurm_account: null`. This is the first bounded pilot training loop on the tiny real artifact, not a benchmark result or evidence of model quality.
+
+Current bounded micro-pilot run:
+
+```bash
+python scripts/run_tiny_real_pilot.py --micro-pilot
+```
+
+This reads the six-molecule micro-pilot processed artifact and split dry-run, then runs the same bounded CPU-only pilot loop for isotropic and stiffness-structured source configurations. It writes:
+- `experiments/manifests/geom_micro_pilot_isotropic_mols6_steps6_seed0.json`
+- `experiments/results/geom_micro_pilot_isotropic_mols6_steps6_seed0.json`
+- `experiments/logs/geom_micro_pilot_isotropic_mols6_steps6_seed0.log`
+- `experiments/manifests/geom_micro_pilot_stiffness_mols6_steps6_seed0.json`
+- `experiments/results/geom_micro_pilot_stiffness_mols6_steps6_seed0.json`
+- `experiments/logs/geom_micro_pilot_stiffness_mols6_steps6_seed0.log`
+
+The outputs remain labeled `tiny_real_data_bounded_pilot_not_benchmark`, `benchmark_result: false`, `hardware: cpu_only`, `gpu_used: false`, `micro_pilot_run: true`, `bounded_pilot: true`, `larger_real_training_run_started: false`, `checkpoint_written: false`, `sampling_executed: false`, and `slurm_account: null`. This is a bounded micro-pilot only, not a larger real training run or benchmark result.
 
 Current bounded tiny real-data pilot comparison report:
 

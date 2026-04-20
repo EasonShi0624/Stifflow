@@ -1,0 +1,44 @@
+{
+  "benchmark_result": false,
+  "bounds": {
+    "hard_max_molecules": 6,
+    "input_molecule_count": 6,
+    "max_molecules": 6,
+    "written_molecule_count": 6
+  },
+  "counts": {
+    "test": 1,
+    "train": 4,
+    "val": 1
+  },
+  "dataset_kind": "geom_drugs_tiny_processed_dry_run",
+  "dataset_name": "geom_drugs",
+  "execution_mode": "local_cpu_tiny_split_dry_run",
+  "full_split_written": false,
+  "hardware": "cpu_only",
+  "molecule_ids": [
+    "BrC(=C\\c1ccccc1)_C=N_N1CCN(Cc2ccccc2)CC1",
+    "BrC(=C\\c1ccccc1)_C=N_N1CCN(c2ccccc2)CC1",
+    "BrC(=C\\c1ccccc1)_C=N_N1CCN(c2ccccn2)CC1",
+    "BrC(=C\\c1ccccc1)_C=N_Nc1ccc2nncn2n1",
+    "BrC(=C\\c1ccccc1)_C=N_Nc1nc(N2CCOCC2)nc(N2CCOCC2)n1",
+    "BrC(=C\\c1ccccc1)_C=N_Nc1nc2ccccc2[nH]1"
+  ],
+  "notes": [
+    "This split validates the split-file interface on a tiny real-data dry-run artifact.",
+    "It is not a real train/validation/test split and must not be used for benchmarking."
+  ],
+  "processed_artifact_path": "data/processed/geom_drugs_subset/micro_pilot/molecules.json",
+  "processed_data_modified": false,
+  "raw_data_modified": false,
+  "result_kind": "split_dry_run_not_benchmark",
+  "run_name": "geom_tiny_random_split_seed0",
+  "scheduler": null,
+  "seed": 0,
+  "slurm_account": null,
+  "split_dry_run_written": true,
+  "split_path": "data/splits/geom_drugs_micro_pilot/random_seed0/split.json",
+  "split_scope": "micro_pilot_processed_dry_run",
+  "split_type": "random",
+  "training_executed": false
+}

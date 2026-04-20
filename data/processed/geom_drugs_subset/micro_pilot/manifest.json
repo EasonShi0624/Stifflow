@@ -1,0 +1,98 @@
+{
+  "artifact_path": "data/processed/geom_drugs_subset/micro_pilot/molecules.json",
+  "benchmark_result": false,
+  "bounds": {
+    "hard_max_molecules": 6,
+    "max_atoms": 128,
+    "max_conformers_per_mol": 1,
+    "max_molecules": 6,
+    "max_pickle_bytes": 1000000,
+    "max_pickle_files_considered": 120
+  },
+  "conformer_count": 6,
+  "dataset_kind": "geom_drugs_tiny_processed_dry_run",
+  "dataset_name": "geom_drugs",
+  "execution_mode": "local_cpu_tiny_processed_output_dry_run",
+  "field_contract": {
+    "conformer_fields": [
+      "conformer_id",
+      "coords",
+      "source_metadata"
+    ],
+    "molecule_fields": [
+      "atom_symbols",
+      "atomic_numbers",
+      "bonds",
+      "conformers",
+      "dataset_kind",
+      "formal_charges",
+      "molecule_id",
+      "ring_atom_indices",
+      "rotatable_bond_count",
+      "smiles",
+      "source_file",
+      "source_metadata"
+    ]
+  },
+  "full_processed_data_written": false,
+  "hardware": "cpu_only",
+  "molecule_count": 6,
+  "notes": [
+    "This file is intentionally tiny and exists only to validate real GEOM extraction wiring.",
+    "Subset scope: micro_pilot_processed_dry_run.",
+    "It must not be used as a benchmark dataset or training corpus."
+  ],
+  "processed_data_written": true,
+  "raw_data_modified": false,
+  "result_kind": "processed_output_dry_run_not_benchmark",
+  "run_name": "micro_pilot",
+  "scheduler": null,
+  "slurm_account": null,
+  "source_files": [
+    {
+      "atom_count": 46,
+      "conformers_written": 1,
+      "molecule_id": "BrC(=C\\c1ccccc1)_C=N_N1CCN(Cc2ccccc2)CC1",
+      "size_bytes": 198726,
+      "source_file": "rdkit_folder/drugs/BrC(=C\\c1ccccc1)_C=N_N1CCN(Cc2ccccc2)CC1.pickle"
+    },
+    {
+      "atom_count": 43,
+      "conformers_written": 1,
+      "molecule_id": "BrC(=C\\c1ccccc1)_C=N_N1CCN(c2ccccc2)CC1",
+      "size_bytes": 31826,
+      "source_file": "rdkit_folder/drugs/BrC(=C\\c1ccccc1)_C=N_N1CCN(c2ccccc2)CC1.pickle"
+    },
+    {
+      "atom_count": 42,
+      "conformers_written": 1,
+      "molecule_id": "BrC(=C\\c1ccccc1)_C=N_N1CCN(c2ccccn2)CC1",
+      "size_bytes": 87167,
+      "source_file": "rdkit_folder/drugs/BrC(=C\\c1ccccc1)_C=N_N1CCN(c2ccccn2)CC1.pickle"
+    },
+    {
+      "atom_count": 32,
+      "conformers_written": 1,
+      "molecule_id": "BrC(=C\\c1ccccc1)_C=N_Nc1ccc2nncn2n1",
+      "size_bytes": 8019,
+      "source_file": "rdkit_folder/drugs/BrC(=C\\c1ccccc1)_C=N_Nc1ccc2nncn2n1.pickle"
+    },
+    {
+      "atom_count": 54,
+      "conformers_written": 1,
+      "molecule_id": "BrC(=C\\c1ccccc1)_C=N_Nc1nc(N2CCOCC2)nc(N2CCOCC2)n1",
+      "size_bytes": 45527,
+      "source_file": "rdkit_folder/drugs/BrC(=C\\c1ccccc1)_C=N_Nc1nc(N2CCOCC2)nc(N2CCOCC2)n1.pickle"
+    },
+    {
+      "atom_count": 34,
+      "conformers_written": 1,
+      "molecule_id": "BrC(=C\\c1ccccc1)_C=N_Nc1nc2ccccc2[nH]1",
+      "size_bytes": 2746,
+      "source_file": "rdkit_folder/drugs/BrC(=C\\c1ccccc1)_C=N_Nc1nc2ccccc2[nH]1.pickle"
+    }
+  ],
+  "split_files_written": false,
+  "subset_scope": "micro_pilot_processed_dry_run",
+  "training_executed": false
+}

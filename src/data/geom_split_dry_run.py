@@ -12,6 +12,7 @@ from src.data.splits import SplitError, load_split
 
 EXPECTED_DATASET_KIND = "geom_drugs_tiny_processed_dry_run"
 RESULT_KIND = "split_dry_run_not_benchmark"
+MICRO_PILOT_HARD_MAX_MOLECULES = 6
 
 
 def run_geom_tiny_split_dry_run(
@@ -20,7 +21,10 @@ def run_geom_tiny_split_dry_run(
     split_type: str = "random",
     seed: int = 0,
     max_molecules: int = 3,
+    split_scope: str | None = None,
 ) -> dict[str, Path]:
+    if max_molecules > MICRO_PILOT_HARD_MAX_MOLECULES:
+        raise SplitError(f"Tiny GEOM split dry-run is capped at {MICRO_PILOT_HARD_MAX_MOLECULES} molecules")
     processed_artifact_path = Path(processed_artifact_path)
     split_root = Path(split_root)
     output_dir = split_root / f"{split_type}_seed{seed}"
@@ -29,7 +33,11 @@ def run_geom_tiny_split_dry_run(
 
     payload = _load_tiny_processed_artifact(processed_artifact_path)
     records = payload["molecules"][:max_molecules]
-    split = make_tiny_split(records, split_type=split_type, seed=seed)
+    if split_scope is None:
+        split_scope = payload.get("subset_scope") or (
+            "micro_pilot_dry_run" if len(records) > 3 else "tiny_real_data_dry_run"
+        )
+    split = make_tiny_split(records, split_type=split_type, seed=seed, split_scope=split_scope)
     _validate_tiny_split(split, records)
 
     manifest = {
@@ -50,9 +58,11 @@ def run_geom_tiny_split_dry_run(
         "processed_artifact_path": str(processed_artifact_path),
         "split_path": str(split_path),
         "split_type": split_type,
+        "split_scope": split_scope,
         "seed": seed,
         "bounds": {
             "max_molecules": max_molecules,
+            "hard_max_molecules": MICRO_PILOT_HARD_MAX_MOLECULES,
             "input_molecule_count": len(payload["molecules"]),
             "written_molecule_count": len(records),
         },
@@ -71,7 +81,12 @@ def run_geom_tiny_split_dry_run(
     return {"split": split_path, "manifest": manifest_path}
 
 
-def make_tiny_split(records: list[dict[str, Any]], split_type: str, seed: int) -> dict[str, Any]:
+def make_tiny_split(
+    records: list[dict[str, Any]],
+    split_type: str,
+    seed: int,
+    split_scope: str = "tiny_real_data_dry_run",
+) -> dict[str, Any]:
     if split_type != "random":
         raise SplitError("Tiny GEOM split dry-run currently supports only split_type='random'")
     if not records:
@@ -94,7 +109,7 @@ def make_tiny_split(records: list[dict[str, Any]], split_type: str, seed: int) -
         "benchmark_result": False,
         "split_type": split_type,
         "seed": seed,
-        "split_scope": "tiny_real_data_dry_run",
+        "split_scope": split_scope,
         "degenerate_tiny_split": len(molecule_ids) < 3,
         "train": sorted(train),
         "val": sorted(val),

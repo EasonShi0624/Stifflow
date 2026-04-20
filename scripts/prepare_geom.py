@@ -65,6 +65,14 @@ def main() -> None:
         help="Opt in to writing a tiny non-benchmark processed-output dry-run artifact.",
     )
     parser.add_argument(
+        "--write-micro-pilot-output",
+        action="store_true",
+        help=(
+            "Opt in to writing a strictly bounded six-molecule micro-pilot processed "
+            "dry-run artifact under the processed root."
+        ),
+    )
+    parser.add_argument(
         "--tiny-processed-tag",
         default="tiny_real_dry_run",
         help="Subdirectory name under processed root for the tiny processed-output dry-run.",
@@ -95,6 +103,15 @@ def main() -> None:
             "Run with --dry-run for the read-only raw-data preflight."
         )
 
+    write_tiny_processed_output = args.write_tiny_processed_output or args.write_micro_pilot_output
+    tiny_processed_tag = args.tiny_processed_tag
+    max_processed_molecules = args.max_processed_molecules
+    if args.write_micro_pilot_output:
+        if tiny_processed_tag == "tiny_real_dry_run":
+            tiny_processed_tag = "micro_pilot"
+        if max_processed_molecules == 3:
+            max_processed_molecules = 6
+
     paths = run_geom_preflight(
         raw_root=args.raw_root,
         processed_root=args.processed_root,
@@ -104,9 +121,10 @@ def main() -> None:
         max_dry_run_molecules=args.max_dry_run_molecules,
         max_dry_run_conformers_per_mol=args.max_dry_run_conformers_per_mol,
         max_pickle_bytes=args.max_pickle_bytes,
-        write_tiny_processed_output=args.write_tiny_processed_output,
-        tiny_processed_tag=args.tiny_processed_tag,
-        max_processed_molecules=args.max_processed_molecules,
+        write_tiny_processed_output=write_tiny_processed_output,
+        write_micro_pilot_output=args.write_micro_pilot_output,
+        tiny_processed_tag=tiny_processed_tag,
+        max_processed_molecules=max_processed_molecules,
         max_processed_conformers_per_mol=args.max_processed_conformers_per_mol,
         max_processed_atoms=args.max_processed_atoms,
     )

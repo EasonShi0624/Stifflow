@@ -36,7 +36,9 @@ This file tracks the current prioritized work queue.
    - `scripts/prepare_geom.py --dry-run` inspects `data/raw/geom_drugs` read-only.
    - Preflight writes a manifest/report and runs a tiny bounded metadata-only dry-run over `rdkit_folder/drugs/*.pickle` when present.
    - `scripts/prepare_geom.py --dry-run --write-tiny-processed-output` writes an opt-in, tiny, non-benchmark processed-output dry-run artifact capped at three molecules by default.
+   - `scripts/prepare_geom.py --dry-run --write-micro-pilot-output` writes an opt-in, six-molecule, non-benchmark micro-pilot processed-output dry-run artifact.
    - `scripts/make_geom_tiny_split.py` writes an opt-in, tiny, non-benchmark split-interface dry-run artifact from that processed dry-run.
+   - `scripts/make_geom_tiny_split.py --micro-pilot` writes a non-benchmark micro-pilot split dry-run from the six-molecule artifact.
    - It still does not write a real processed training subset, real benchmark split files, checkpoints, or training outputs.
 
 8. **Add tiny training / sampling entry points**
@@ -48,6 +50,7 @@ This file tracks the current prioritized work queue.
    - `scripts/run_tiny_real_multi_step_smoke.py` runs a hard-capped CPU-only three-step training smoke for isotropic and stiffness-structured tiny real configurations, records per-step metadata, and does not write checkpoints or start larger training.
    - `scripts/run_tiny_real_checkpoint_sampling_smoke.py` runs a bounded CPU-only train/save/reload/sample smoke for isotropic and stiffness-structured tiny real configurations, writing disposable smoke checkpoints only.
    - `scripts/run_tiny_real_pilot.py` runs a bounded CPU-only tiny real-data pilot training loop for isotropic and stiffness-structured configurations on the existing three-molecule artifact, without checkpoints, sampling, jobs, GPUs, or benchmark claims.
+   - `scripts/run_tiny_real_pilot.py --micro-pilot` runs the same bounded CPU-only pilot loop on the six-molecule micro-pilot artifact and split.
    - Larger real training and real sampling are still not implemented.
 
 9. **Add evaluation scaffolding**

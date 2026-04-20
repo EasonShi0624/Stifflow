@@ -1,0 +1,26 @@
+{
+  "benchmark_result": false,
+  "dataset_kind": "geom_drugs_tiny_processed_dry_run",
+  "dataset_name": "geom_drugs",
+  "degenerate_tiny_split": false,
+  "notes": [
+    "All conformers for each molecule remain grouped by molecule_id.",
+    "Empty validation/test partitions are allowed only because this is a tiny split dry-run."
+  ],
+  "result_kind": "split_dry_run_not_benchmark",
+  "seed": 0,
+  "split_scope": "micro_pilot_processed_dry_run",
+  "split_type": "random",
+  "test": [
+    "BrC(=C\\c1ccccc1)_C=N_Nc1ccc2nncn2n1"
+  ],
+  "train": [
+    "BrC(=C\\c1ccccc1)_C=N_N1CCN(Cc2ccccc2)CC1",
+    "BrC(=C\\c1ccccc1)_C=N_N1CCN(c2ccccc2)CC1",
+    "BrC(=C\\c1ccccc1)_C=N_N1CCN(c2ccccn2)CC1",
+    "BrC(=C\\c1ccccc1)_C=N_Nc1nc(N2CCOCC2)nc(N2CCOCC2)n1"
+  ],
+  "val": [
+    "BrC(=C\\c1ccccc1)_C=N_Nc1nc2ccccc2[nH]1"
+  ]
+}
