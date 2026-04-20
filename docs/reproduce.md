@@ -210,6 +210,24 @@ This reads the same three-molecule tiny processed artifact and tiny split dry-ru
 
 The outputs are labeled `tiny_real_data_bounded_multistep_training_smoke_not_benchmark`, `benchmark_result: false`, `hardware: cpu_only`, `gpu_used: false`, `training_executed: true`, `bounded_training_smoke_executed: true`, `larger_real_training_run_started: false`, `max_steps: 3`, `hard_max_steps: 5`, `optimizer_step_count: 3`, `backward_pass_count: 3`, `checkpoint_written: false`, `sampling_executed: false`, and `slurm_account: null`. They include per-step loss and gradient metadata only; this is not a benchmark result or larger real training run.
 
+Current tiny real-data checkpoint-and-sampling smoke:
+
+```bash
+python scripts/run_tiny_real_checkpoint_sampling_smoke.py
+```
+
+This reads the same three-molecule tiny processed artifact and tiny split dry-run, runs a bounded CPU-only mini training smoke for both isotropic and stiffness-structured source configurations, writes disposable smoke checkpoints, reloads them, and runs one bounded sampling update per molecule. It writes:
+- `experiments/manifests/geom_tiny_real_ckpt_sample_isotropic_steps3_seed0.json`
+- `experiments/results/geom_tiny_real_ckpt_sample_isotropic_steps3_seed0.json`
+- `experiments/logs/geom_tiny_real_ckpt_sample_isotropic_steps3_seed0.log`
+- `experiments/checkpoints/geom_tiny_real_ckpt_sample_isotropic_steps3_seed0.pt`
+- `experiments/manifests/geom_tiny_real_ckpt_sample_stiffness_steps3_seed0.json`
+- `experiments/results/geom_tiny_real_ckpt_sample_stiffness_steps3_seed0.json`
+- `experiments/logs/geom_tiny_real_ckpt_sample_stiffness_steps3_seed0.log`
+- `experiments/checkpoints/geom_tiny_real_ckpt_sample_stiffness_steps3_seed0.pt`
+
+The outputs are labeled `tiny_real_data_checkpoint_sampling_smoke_not_benchmark`, `benchmark_result: false`, `hardware: cpu_only`, `gpu_used: false`, `bounded_training_smoke_executed: true`, `larger_real_training_run_started: false`, `checkpoint_written: true`, `checkpoint_reloaded: true`, `checkpoint_scope: disposable_smoke_only`, `sampling_executed: true`, `sample_step_count: 1`, and `slurm_account: null`. The checkpoints are disposable smoke artifacts, not reusable research checkpoints, and the sampled coordinates are plumbing diagnostics only, not benchmark samples.
+
 Current tiny real-data dry-run comparison report:
 
 ```bash
