@@ -23,6 +23,7 @@ MICRO_PILOT_CONFIG_PATHS = (
     Path("configs/train/micro_pilot_isotropic.yaml"),
     Path("configs/train/micro_pilot_stiffness.yaml"),
 )
+DEFAULT_MULTI_SEED_SET = (0, 1)
 DEFAULT_MODES = tiny_real_data.DEFAULT_MODES
 RESULT_KIND = "tiny_real_data_bounded_pilot_not_benchmark"
 EXECUTION_MODE = "local_cpu_tiny_real_bounded_pilot"
@@ -30,6 +31,7 @@ DEFAULT_MAX_STEPS = 6
 HARD_MAX_STEPS = 8
 MIN_PILOT_MOLECULES = 3
 HARD_MAX_PILOT_MOLECULES = 6
+HARD_MAX_MULTI_SEEDS = 3
 
 
 def run_tiny_real_pilot_configs(
@@ -47,6 +49,32 @@ def run_tiny_real_pilot_configs(
             "results": paths["results"],
             "log": paths["log"],
         }
+    return outputs
+
+
+def run_micro_pilot_multiseed(
+    seed_set: tuple[int, ...] = DEFAULT_MULTI_SEED_SET,
+    config_paths: tuple[str | Path, ...] = MICRO_PILOT_CONFIG_PATHS,
+    output_root: str | Path | None = None,
+) -> dict[str, dict[int, dict[str, Path]]]:
+    _validate_seed_set(seed_set)
+    outputs: dict[str, dict[int, dict[str, Path]]] = {}
+    for seed in seed_set:
+        for config_path in config_paths:
+            config = load_config(config_path)
+            if output_root is not None:
+                config["experiment"]["output_root"] = str(output_root)
+            config["experiment"]["seed"] = int(seed)
+            corruption_mode = config["corruption"]["mode"]
+            max_molecules = int(config["data"]["subset"]["max_molecules"])
+            max_steps = int(config["train"]["max_steps"])
+            config["experiment"]["name"] = _micro_run_name(corruption_mode, seed, max_molecules, max_steps)
+            paths = run_tiny_real_pilot(config=config, config_path=Path(config_path))
+            outputs.setdefault(paths["mode"], {})[int(seed)] = {
+                "manifest": paths["manifest"],
+                "results": paths["results"],
+                "log": paths["log"],
+            }
     return outputs
 
 
@@ -236,13 +264,32 @@ def _validate_pilot_config(config: dict[str, Any]) -> None:
 
 
 def _run_name(corruption_mode: str, seed: int, max_steps: int) -> str:
-    if corruption_mode == "isotropic":
-        label = "isotropic"
-    elif corruption_mode == "stiffness_structured":
-        label = "stiffness"
-    else:
-        raise ValueError(f"Unsupported tiny real pilot corruption mode: {corruption_mode}")
+    label = _mode_label(corruption_mode)
     return f"geom_tiny_real_pilot_{label}_steps{int(max_steps)}_seed{seed}"
+
+
+def _micro_run_name(corruption_mode: str, seed: int, max_molecules: int, max_steps: int) -> str:
+    label = _mode_label(corruption_mode)
+    return f"geom_micro_pilot_{label}_mols{int(max_molecules)}_steps{int(max_steps)}_seed{seed}"
+
+
+def _mode_label(corruption_mode: str) -> str:
+    if corruption_mode == "isotropic":
+        return "isotropic"
+    elif corruption_mode == "stiffness_structured":
+        return "stiffness"
+    raise ValueError(f"Unsupported tiny real pilot corruption mode: {corruption_mode}")
+
+
+def _validate_seed_set(seed_set: tuple[int, ...]) -> None:
+    if not seed_set:
+        raise ValueError("Micro-pilot multi-seed run requires at least one seed")
+    if len(seed_set) > HARD_MAX_MULTI_SEEDS:
+        raise ValueError(f"Micro-pilot multi-seed run is capped at {HARD_MAX_MULTI_SEEDS} seeds")
+    if len(set(seed_set)) != len(seed_set):
+        raise ValueError("Micro-pilot multi-seed run requires unique seeds")
+    if any(int(seed) < 0 for seed in seed_set):
+        raise ValueError("Micro-pilot seeds must be non-negative integers")
 
 
 def _git_commit() -> str | None:

@@ -18,14 +18,14 @@ from src.data.geom_split_dry_run import run_geom_tiny_split_dry_run
 from src.eval.smoke_compare import write_smoke_comparison
 from src.eval.tiny_real_compare import write_tiny_real_comparison
 from src.eval.tiny_real_lifecycle import write_tiny_real_lifecycle_summary
-from src.eval.tiny_real_pilot_compare import write_tiny_real_pilot_comparison
+from src.eval.tiny_real_pilot_compare import write_micro_pilot_multiseed_summary, write_tiny_real_pilot_comparison
 from src.train.pipeline import run_smoke_pipeline
 from src.train.smoke import run_smoke
 from src.train.tiny_real import run_tiny_real_model_dry_runs
 from src.train.tiny_real_checkpoint_sampling import run_tiny_real_checkpoint_sampling_smoke_tests
 from src.train.tiny_real_execution import run_tiny_real_execution_smoke_tests
 from src.train.tiny_real_multi_step import run_tiny_real_multi_step_smoke_tests
-from src.train.tiny_real_pilot import run_tiny_real_pilot_configs
+from src.train.tiny_real_pilot import run_micro_pilot_multiseed, run_tiny_real_pilot_configs
 from src.train.tiny_real_single_step import run_tiny_real_single_step_smoke_tests
 from src.utils.config import load_config
 
@@ -1144,6 +1144,174 @@ logging:
             self.assertFalse(results["checkpoint_written"])
             self.assertFalse(results["sampling_executed"])
 
+    def test_micro_pilot_multiseed_runs_bounded_seed_set(self) -> None:
+        try:
+            import torch  # noqa: F401
+        except ImportError:
+            self.skipTest("PyTorch is not importable in this interpreter")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            processed = root / "processed" / "micro_pilot" / "molecules.json"
+            split_path = root / "splits" / "random_seed0" / "split.json"
+            processed.parent.mkdir(parents=True)
+            split_path.parent.mkdir(parents=True)
+            molecules = [
+                {
+                    "molecule_id": f"geom_micro_{index}",
+                    "smiles": "CO",
+                    "atom_symbols": ["C", "O", "H"],
+                    "bonds": [[0, 1, 1], [0, 2, 1]],
+                    "conformers": [
+                        {
+                            "conformer_id": str(index),
+                            "coords": [
+                                [0.0, 0.0, 0.0],
+                                [1.2 + 0.1 * index, 0.0, 0.0],
+                                [0.0, 1.0, 0.0],
+                            ],
+                        }
+                    ],
+                    "ring_atom_indices": [],
+                    "rotatable_bond_count": 0,
+                }
+                for index in range(6)
+            ]
+            processed.write_text(
+                json.dumps(
+                    {
+                        "dataset_kind": "geom_drugs_tiny_processed_dry_run",
+                        "subset_scope": "micro_pilot_processed_dry_run",
+                        "result_kind": "processed_output_dry_run_not_benchmark",
+                        "benchmark_result": False,
+                        "molecules": molecules,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            split_path.write_text(
+                json.dumps(
+                    {
+                        "dataset_kind": "geom_drugs_tiny_processed_dry_run",
+                        "result_kind": "split_dry_run_not_benchmark",
+                        "benchmark_result": False,
+                        "split_type": "random",
+                        "split_scope": "micro_pilot_processed_dry_run",
+                        "degenerate_tiny_split": False,
+                        "train": [f"geom_micro_{index}" for index in range(4)],
+                        "val": ["geom_micro_4"],
+                        "test": ["geom_micro_5"],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            config_paths = []
+            for mode, label in [("isotropic", "isotropic"), ("stiffness_structured", "stiffness")]:
+                config_path = root / f"{label}.yaml"
+                config_path.write_text(
+                    f"""
+experiment:
+  name: geom_micro_pilot_{label}_mols6_steps2_seed0
+  seed: 0
+  output_root: {root / "experiments"}
+
+data:
+  dataset_name: geom_drugs
+  dataset_kind: geom_drugs_tiny_processed_dry_run
+  raw_root: data/raw/geom_drugs
+  processed_root: {processed.parent}
+  split_root: {split_path.parent}
+  processed_artifact_path: {processed}
+  split_path: {split_path}
+  split_type: random
+  subset:
+    max_molecules: 6
+    max_conformers_per_mol: 1
+    tag: micro_pilot_processed_dry_run
+
+model:
+  backbone: minimal_linear_velocity_pilot
+  pilot_model: single_linear_velocity_pilot
+  hidden_dim: 0
+  num_layers: 1
+  time_embedding_dim: 1
+
+flow_matching:
+  objective: cartesian_linear
+  interpolation: linear
+
+corruption:
+  mode: {mode}
+  stiffness_table: heuristic_v1
+  protect_rings: true
+  protect_amides: true
+  isotropic_sigma: 0.25
+  bond_sigma: 0.02
+  angle_sigma: 0.08
+  torsion_sigma: 0.30
+
+train:
+  enabled: true
+  pilot_only: true
+  batch_scope: micro_pilot_train_split
+  max_steps: 2
+  hard_max_steps: 8
+  learning_rate: 1.0e-2
+  num_workers: 0
+  checkpointing_enabled: false
+
+sample:
+  enabled: false
+  num_samples_per_mol: 0
+  num_steps: 0
+
+eval:
+  enabled: true
+  eval_subset_size: 6
+  compute_train_val_test_losses: true
+  compute_cov_mat: false
+  compute_validity: false
+  compute_energy_checks: false
+
+logging:
+  save_manifest: true
+  save_results_json: true
+  save_log: true
+""",
+                    encoding="utf-8",
+                )
+                config_paths.append(config_path)
+
+            outputs = run_micro_pilot_multiseed(seed_set=(0, 1), config_paths=tuple(config_paths))
+            self.assertEqual(set(outputs), {"isotropic", "stiffness_structured"})
+            result_paths = []
+            for mode in outputs:
+                self.assertEqual(set(outputs[mode]), {0, 1})
+                for seed, paths in outputs[mode].items():
+                    results = json.loads(paths["results"].read_text(encoding="utf-8"))
+                    result_paths.append(paths["results"])
+                    self.assertEqual(results["random_seed"], seed)
+                    self.assertTrue(results["micro_pilot_run"])
+                    self.assertEqual(results["sample_count"], 6)
+                    self.assertEqual(results["dataset"]["split_counts"], {"train": 4, "val": 1, "test": 1})
+                    self.assertFalse(results["checkpoint_written"])
+                    self.assertFalse(results["sampling_executed"])
+
+            summary_paths = write_micro_pilot_multiseed_summary(
+                result_paths=result_paths,
+                summary_path=root / "summary.json",
+                report_path=root / "summary.md",
+                expected_seeds=(0, 1),
+            )
+            summary = json.loads(summary_paths["summary"].read_text(encoding="utf-8"))
+            self.assertEqual(
+                summary["result_kind"],
+                "tiny_real_data_bounded_micro_pilot_multiseed_summary_not_benchmark",
+            )
+            self.assertEqual(summary["seed_set"], [0, 1])
+            self.assertEqual(summary["row_count"], 4)
+            self.assertEqual(summary["mode_statistics"]["isotropic"]["seed_count"], 2)
+
     def test_smoke_comparison_writes_summary_and_report(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             output_root = Path(tmp)
@@ -1635,6 +1803,101 @@ logging:
                 self.assertFalse(row["safety_labels"]["sampling_executed"])
             self.assertIn("Tiny Real-Data Bounded Micro-Pilot Summary", report)
             self.assertIn("micro_pilot", report)
+            self.assertIn("not a benchmark result", report)
+
+    def test_micro_pilot_multiseed_summary_writes_seed_statistics(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            output_root = Path(tmp)
+            result_paths = []
+            for mode, base_loss in [("isotropic", 0.43), ("stiffness_structured", 0.39)]:
+                for seed in [0, 1]:
+                    path = output_root / f"{mode}_{seed}.json"
+                    final_train = base_loss + 0.01 * seed
+                    payload = {
+                        "run_name": f"micro_{mode}_seed{seed}",
+                        "result_kind": "tiny_real_data_bounded_pilot_not_benchmark",
+                        "benchmark_result": False,
+                        "hardware": "cpu_only",
+                        "gpu_used": False,
+                        "scheduler": None,
+                        "slurm_account": None,
+                        "pilot_run": True,
+                        "bounded_pilot": True,
+                        "micro_pilot_run": True,
+                        "random_seed": seed,
+                        "training_executed": True,
+                        "training_loop_executed": True,
+                        "bounded_real_training_loop_executed": True,
+                        "larger_real_training_run_started": False,
+                        "checkpoint_written": False,
+                        "sampling_executed": False,
+                        "max_steps": 2,
+                        "hard_max_steps": 8,
+                        "optimizer_step_count": 2,
+                        "backward_pass_count": 2,
+                        "sample_count": 6,
+                        "corruption_mode": mode,
+                        "dataset": {
+                            "kind": "geom_drugs_tiny_processed_dry_run",
+                            "subset_scope": "micro_pilot_processed_dry_run",
+                            "molecule_count": 6,
+                            "split_type": "random",
+                            "split_counts": {"train": 4, "val": 1, "test": 1},
+                        },
+                        "metrics": {
+                            "metric_scope": "geom_drugs_tiny_real_bounded_pilot_training",
+                            "sample_count": 6,
+                            "split_sample_counts": {"train": 4, "val": 1, "test": 1},
+                            "trainable_parameter_count": 15,
+                            "optimizer_name": "SGD",
+                            "learning_rate": 0.01,
+                            "max_steps": 2,
+                            "optimizer_step_count": 2,
+                            "backward_pass_count": 2,
+                            "initial_split_losses": {"train": 0.7, "val": 0.6, "test": 0.5},
+                            "final_split_losses": {"train": final_train, "val": 0.42, "test": 0.33},
+                            "step_records": [
+                                {
+                                    "optimizer_step": 1,
+                                    "train_loss_before_step": 0.7,
+                                    "gradient_l2_norm": 1.1,
+                                    "split_losses_after_step": {"train": 0.55, "val": 0.5, "test": 0.4},
+                                },
+                                {
+                                    "optimizer_step": 2,
+                                    "train_loss_before_step": 0.55,
+                                    "gradient_l2_norm": 0.9,
+                                    "split_losses_after_step": {
+                                        "train": final_train,
+                                        "val": 0.42,
+                                        "test": 0.33,
+                                    },
+                                },
+                            ],
+                        },
+                    }
+                    path.write_text(json.dumps(payload), encoding="utf-8")
+                    result_paths.append(path)
+
+            paths = write_micro_pilot_multiseed_summary(
+                result_paths=result_paths,
+                summary_path=output_root / "summary.json",
+                report_path=output_root / "summary.md",
+                expected_seeds=(0, 1),
+            )
+            summary = json.loads(paths["summary"].read_text(encoding="utf-8"))
+            report = paths["report"].read_text(encoding="utf-8")
+            self.assertEqual(
+                summary["result_kind"],
+                "tiny_real_data_bounded_micro_pilot_multiseed_summary_not_benchmark",
+            )
+            self.assertFalse(summary["benchmark_result"])
+            self.assertFalse(summary["training_executed_by_summary"])
+            self.assertEqual(summary["seed_set"], [0, 1])
+            self.assertEqual(summary["row_count"], 4)
+            self.assertEqual(summary["mode_statistics"]["isotropic"]["seed_count"], 2)
+            self.assertEqual(summary["mode_statistics"]["stiffness_structured"]["seed_count"], 2)
+            self.assertIn("Tiny Real-Data Bounded Micro-Pilot Multi-Seed Summary", report)
             self.assertIn("not a benchmark result", report)
 
     def test_geom_preflight_reports_missing_raw_root(self) -> None:

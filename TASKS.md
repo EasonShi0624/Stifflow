@@ -51,6 +51,7 @@ This file tracks the current prioritized work queue.
    - `scripts/run_tiny_real_checkpoint_sampling_smoke.py` runs a bounded CPU-only train/save/reload/sample smoke for isotropic and stiffness-structured tiny real configurations, writing disposable smoke checkpoints only.
    - `scripts/run_tiny_real_pilot.py` runs a bounded CPU-only tiny real-data pilot training loop for isotropic and stiffness-structured configurations on the existing three-molecule artifact, without checkpoints, sampling, jobs, GPUs, or benchmark claims.
    - `scripts/run_tiny_real_pilot.py --micro-pilot` runs the same bounded CPU-only pilot loop on the six-molecule micro-pilot artifact and split.
+   - `scripts/run_micro_pilot_multiseed.py` runs a fixed tiny seed set for both micro-pilot modes on CPU and writes a non-benchmark multi-seed summary.
    - Larger real training and real sampling are still not implemented.
 
 9. **Add evaluation scaffolding**
@@ -70,6 +71,7 @@ This file tracks the current prioritized work queue.
    - Tiny real-data lifecycle summary aggregates all current tiny real stages into one non-benchmark JSON and markdown report.
    - Tiny real-data bounded pilot comparison report aggregates the two current pilot outputs into JSON and markdown without running training.
    - Bounded micro-pilot comparison report aggregates the two current six-molecule pilot outputs into JSON and markdown without running training.
+   - Bounded micro-pilot multi-seed summary aggregates the fixed tiny seed set for both modes into JSON and markdown.
 
 10. **Draft one smoke-test config**
    - Baseline backbone
