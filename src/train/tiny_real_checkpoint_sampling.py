@@ -32,6 +32,8 @@ MICRO_PILOT_MAX_MOLECULES = 6
 DEFAULT_MICRO_PILOT_MAX_STEPS = HARD_MAX_STEPS
 MICRO_PILOT_CHECKPOINT_SCOPE = "disposable_micro_pilot_checkpoint_sampling_only"
 MICRO_PILOT_RUNTIME_SCOPE = "checkpoint_train_save_reload_sample_after_full_cpu_checkpoint_sampling_warmup"
+DEFAULT_MICRO_PILOT_CHECKPOINT_SEED_SET = (0, 1, 2)
+HARD_MAX_MICRO_PILOT_CHECKPOINT_SEEDS = 3
 
 
 def run_tiny_real_checkpoint_sampling_smoke_tests(
@@ -260,6 +262,28 @@ def run_micro_pilot_checkpoint_sampling_configs(
             "log": paths["log"],
             "checkpoint": paths["checkpoint"],
         }
+    return outputs
+
+
+def run_micro_pilot_checkpoint_sampling_multiseed(
+    seed_set: tuple[int, ...] = DEFAULT_MICRO_PILOT_CHECKPOINT_SEED_SET,
+    config_paths: tuple[str | Path, ...] = MICRO_PILOT_CONFIG_PATHS,
+    output_root: str | Path | None = None,
+    max_steps: int = DEFAULT_MICRO_PILOT_MAX_STEPS,
+    sample_step_size: float = DEFAULT_SAMPLE_STEP_SIZE,
+) -> dict[str, dict[int, dict[str, Path]]]:
+    _validate_micro_pilot_checkpoint_seed_set(seed_set)
+    outputs: dict[str, dict[int, dict[str, Path]]] = {}
+    for seed in seed_set:
+        seed_outputs = run_micro_pilot_checkpoint_sampling_configs(
+            config_paths=config_paths,
+            output_root=output_root,
+            seed=int(seed),
+            max_steps=max_steps,
+            sample_step_size=sample_step_size,
+        )
+        for mode, paths in seed_outputs.items():
+            outputs.setdefault(mode, {})[int(seed)] = paths
     return outputs
 
 
@@ -500,6 +524,19 @@ def _validate_micro_pilot_checkpoint_sampling_config(
         raise ValueError("Micro-pilot checkpoint/sampling sample_step_size must be in (0, 1]")
     if int(config["eval"].get("eval_subset_size", 0)) != MICRO_PILOT_MAX_MOLECULES:
         raise ValueError("Micro-pilot checkpoint/sampling eval_subset_size must be six")
+
+
+def _validate_micro_pilot_checkpoint_seed_set(seed_set: tuple[int, ...]) -> None:
+    if not seed_set:
+        raise ValueError("Micro-pilot checkpoint/sampling multi-seed run requires at least one seed")
+    if len(seed_set) > HARD_MAX_MICRO_PILOT_CHECKPOINT_SEEDS:
+        raise ValueError(
+            f"Micro-pilot checkpoint/sampling multi-seed run is capped at {HARD_MAX_MICRO_PILOT_CHECKPOINT_SEEDS} seeds"
+        )
+    if len(set(seed_set)) != len(seed_set):
+        raise ValueError("Micro-pilot checkpoint/sampling seed set must contain unique seeds")
+    if any(int(seed) < 0 for seed in seed_set):
+        raise ValueError("Micro-pilot checkpoint/sampling seeds must be non-negative integers")
 
 
 def _run_name(corruption_mode: str, seed: int, max_steps: int) -> str:

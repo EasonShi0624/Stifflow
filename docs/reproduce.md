@@ -338,6 +338,24 @@ This reads the current isotropic and stiffness-structured bounded micro-pilot ch
 
 The summary is labeled `tiny_real_data_bounded_micro_pilot_checkpoint_sampling_comparison_not_benchmark`, `benchmark_result: false`, `hardware: cpu_only`, `gpu_used: false`, `training_executed_by_summary: false`, `sampling_executed_by_summary: false`, `larger_real_training_run_started: false`, and `slurm_account: null`. It compares `reloaded_loss`, overall and split-wise `sampled_rmsd_to_target`, per-molecule sampled RMSD, and runtime fields. Older checkpoint/sampling outputs that measured one-time PyTorch import/runtime warm-up in only the first mode are flagged as runtime-inconsistent until regenerated with the fixed `runtime_scope`.
 
+Current bounded micro-pilot checkpoint-and-sampling multi-seed run:
+
+```bash
+python scripts/run_micro_pilot_checkpoint_sampling_multiseed.py
+```
+
+This runs the same bounded six-molecule checkpoint/sampling pilot for isotropic and stiffness-structured source configurations over seeds `0,1,2`. It does not change the artifact, split, molecule count, model, optimizer, five-step cap, or one-step sampling settings. It writes per-mode/per-seed manifest, result, log, and disposable checkpoint files named like:
+- `experiments/results/geom_micro_pilot_ckpt_sample_isotropic_mols6_steps5_seed0.json`
+- `experiments/results/geom_micro_pilot_ckpt_sample_isotropic_mols6_steps5_seed1.json`
+- `experiments/results/geom_micro_pilot_ckpt_sample_isotropic_mols6_steps5_seed2.json`
+- matching `stiffness` files for seeds `0`, `1`, and `2`
+
+It also writes:
+- `experiments/results/geom_micro_pilot_ckpt_sample_multiseed_summary.json`
+- `reports/tables/geom_micro_pilot_ckpt_sample_multiseed_summary.md`
+
+The per-run outputs are labeled `tiny_real_data_bounded_micro_pilot_checkpoint_sampling_not_benchmark`, `benchmark_result: false`, `hardware: cpu_only`, `gpu_used: false`, `pilot_run: true`, `bounded_pilot: true`, `micro_pilot_run: true`, `checkpoint_scope: disposable_micro_pilot_checkpoint_sampling_only`, `sampling_executed: true`, and `slurm_account: null`. The multi-seed summary is labeled `tiny_real_data_bounded_micro_pilot_checkpoint_sampling_multiseed_summary_not_benchmark` and reports per-seed winners, aggregate means, stiffness consistency, and runtime metadata for accounting only.
+
 Current bounded tiny real-data pilot comparison report:
 
 ```bash

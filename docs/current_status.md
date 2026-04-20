@@ -35,6 +35,7 @@ Current status:
 - `scripts/run_micro_pilot_multiseed.py` runs the bounded six-molecule micro-pilot for isotropic and stiffness-structured modes over a fixed tiny seed set and writes a multi-seed JSON/markdown summary.
 - `scripts/run_micro_pilot_checkpoint_sampling.py` runs a single-seed bounded six-molecule CPU-only micro-pilot checkpoint-and-sampling run for both modes, writing disposable pilot-only checkpoints plus manifest/result/log outputs.
 - `scripts/compare_micro_pilot_checkpoint_sampling.py` writes a reporting-only JSON/markdown comparison of the two current bounded micro-pilot checkpoint-and-sampling outputs and flags suspicious runtime inconsistencies.
+- `scripts/run_micro_pilot_checkpoint_sampling_multiseed.py` runs the bounded six-molecule CPU-only checkpoint-and-sampling pilot for both modes over the fixed tiny seed set `0,1,2` and writes a deterministic multi-seed JSON/markdown summary.
 - `scripts/evaluate.py` currently re-runs the same smoke evaluation path.
 
 This file is the canonical place to record **what is actually present today**, as opposed to the intended target design.
@@ -70,6 +71,7 @@ The repo contains:
 - a bounded CPU-only multi-seed micro-pilot runner and summary over a fixed tiny seed set for both source modes;
 - a bounded CPU-only single-seed micro-pilot checkpoint-and-sampling runner that trains only the six-molecule split's train subset, writes disposable pilot-only checkpoints, reloads them, and runs one bounded sampling step;
 - a reporting-only bounded micro-pilot checkpoint/sampling comparison that compares reloaded loss, sampled RMSD diagnostics, per-molecule sampled RMSD, and runtime accounting reliability;
+- a bounded CPU-only micro-pilot checkpoint/sampling multi-seed runner and deterministic summary/report over seeds `0,1,2`;
 - honest placeholders for GEOM preprocessing, model sampling, and ablation orchestration.
 
 Still missing or intentionally incomplete:

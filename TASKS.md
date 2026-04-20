@@ -53,6 +53,7 @@ This file tracks the current prioritized work queue.
    - `scripts/run_tiny_real_pilot.py --micro-pilot` runs the same bounded CPU-only pilot loop on the six-molecule micro-pilot artifact and split.
    - `scripts/run_micro_pilot_multiseed.py` runs a fixed tiny seed set for both micro-pilot modes on CPU and writes a non-benchmark multi-seed summary.
    - `scripts/run_micro_pilot_checkpoint_sampling.py` runs a single-seed, bounded CPU-only six-molecule micro-pilot checkpoint-and-sampling pilot for both modes, writing disposable pilot-only checkpoints plus manifest/result/log outputs.
+   - `scripts/run_micro_pilot_checkpoint_sampling_multiseed.py` runs the bounded CPU-only six-molecule checkpoint-and-sampling pilot across the fixed tiny seed set `0,1,2` for both modes and writes a non-benchmark multi-seed summary.
    - Micro-pilot checkpoint/sampling runtime accounting now excludes one-time PyTorch CPU backend warm-up from comparable per-mode `runtime_seconds`.
    - Larger real training and real sampling are still not implemented.
 
@@ -76,6 +77,7 @@ This file tracks the current prioritized work queue.
    - Bounded micro-pilot comparison report aggregates the two current six-molecule pilot outputs into JSON and markdown without running training.
    - Bounded micro-pilot multi-seed summary aggregates the fixed tiny seed set for both modes into JSON and markdown.
    - Bounded micro-pilot checkpoint-and-sampling comparison report aggregates the two current checkpoint/sampling outputs into JSON and markdown, including runtime-consistency warnings for legacy outputs.
+   - Bounded micro-pilot checkpoint-and-sampling multi-seed summary aggregates the fixed tiny seed set for both modes into JSON and markdown, reporting per-seed winners and aggregate means.
 
 10. **Draft one smoke-test config**
    - Baseline backbone
