@@ -162,6 +162,22 @@ It runs the isotropic and stiffness-structured source-corruption paths locally o
 
 The outputs are labeled `tiny_real_data_model_dry_run_not_benchmark`, `benchmark_result: false`, `hardware: cpu_only`, `training_executed: false`, `model_training_started: false`, `sampling_executed: false`, and `slurm_account: null`. They are model-side plumbing checks only, not model training, model sampling, or benchmark results.
 
+Current tiny real-data model execution smoke:
+
+```bash
+python scripts/run_tiny_real_execution_smoke.py
+```
+
+This reads the same three-molecule tiny processed artifact and tiny split dry-run, then runs one parameter-free CPU forward/loss-style execution pass for both isotropic and stiffness-structured source configurations. It writes:
+- `experiments/manifests/geom_tiny_real_execution_isotropic_seed0.json`
+- `experiments/results/geom_tiny_real_execution_isotropic_seed0.json`
+- `experiments/logs/geom_tiny_real_execution_isotropic_seed0.log`
+- `experiments/manifests/geom_tiny_real_execution_stiffness_seed0.json`
+- `experiments/results/geom_tiny_real_execution_stiffness_seed0.json`
+- `experiments/logs/geom_tiny_real_execution_stiffness_seed0.log`
+
+The outputs are labeled `tiny_real_data_model_execution_smoke_not_benchmark`, `benchmark_result: false`, `hardware: cpu_only`, `gpu_used: false`, `training_executed: false`, `model_training_started: false`, `training_loop_executed: false`, `optimizer_created: false`, `backward_executed: false`, `checkpoint_written: false`, `sampling_executed: false`, and `slurm_account: null`. This validates forward/loss plumbing only and is not model training, model sampling, or a benchmark result.
+
 Current tiny real-data dry-run comparison report:
 
 ```bash
