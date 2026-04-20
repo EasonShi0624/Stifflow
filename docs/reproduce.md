@@ -194,6 +194,22 @@ This reads the same three-molecule tiny processed artifact and tiny split dry-ru
 
 The outputs are labeled `tiny_real_data_single_step_training_smoke_not_benchmark`, `benchmark_result: false`, `hardware: cpu_only`, `gpu_used: false`, `training_executed: true`, `model_training_started: true`, `training_loop_executed: false`, `single_step_training_smoke_executed: true`, `max_steps: 1`, `optimizer_created: true`, `optimizer_step_count: 1`, `backward_executed: true`, `backward_pass_count: 1`, `checkpoint_written: false`, `sampling_executed: false`, and `slurm_account: null`. This validates one bounded training step only and is not a real training run or benchmark result.
 
+Current tiny real-data bounded multi-step training smoke:
+
+```bash
+python scripts/run_tiny_real_multi_step_smoke.py
+```
+
+This reads the same three-molecule tiny processed artifact and tiny split dry-run, then runs a very short CPU-only training sequence for both isotropic and stiffness-structured source configurations. The default is three optimizer steps, with a hard cap of five steps. It writes:
+- `experiments/manifests/geom_tiny_real_multistep_isotropic_steps3_seed0.json`
+- `experiments/results/geom_tiny_real_multistep_isotropic_steps3_seed0.json`
+- `experiments/logs/geom_tiny_real_multistep_isotropic_steps3_seed0.log`
+- `experiments/manifests/geom_tiny_real_multistep_stiffness_steps3_seed0.json`
+- `experiments/results/geom_tiny_real_multistep_stiffness_steps3_seed0.json`
+- `experiments/logs/geom_tiny_real_multistep_stiffness_steps3_seed0.log`
+
+The outputs are labeled `tiny_real_data_bounded_multistep_training_smoke_not_benchmark`, `benchmark_result: false`, `hardware: cpu_only`, `gpu_used: false`, `training_executed: true`, `bounded_training_smoke_executed: true`, `larger_real_training_run_started: false`, `max_steps: 3`, `hard_max_steps: 5`, `optimizer_step_count: 3`, `backward_pass_count: 3`, `checkpoint_written: false`, `sampling_executed: false`, and `slurm_account: null`. They include per-step loss and gradient metadata only; this is not a benchmark result or larger real training run.
+
 Current tiny real-data dry-run comparison report:
 
 ```bash
