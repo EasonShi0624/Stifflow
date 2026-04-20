@@ -228,6 +228,22 @@ This reads the same three-molecule tiny processed artifact and tiny split dry-ru
 
 The outputs are labeled `tiny_real_data_checkpoint_sampling_smoke_not_benchmark`, `benchmark_result: false`, `hardware: cpu_only`, `gpu_used: false`, `bounded_training_smoke_executed: true`, `larger_real_training_run_started: false`, `checkpoint_written: true`, `checkpoint_reloaded: true`, `checkpoint_scope: disposable_smoke_only`, `sampling_executed: true`, `sample_step_count: 1`, and `slurm_account: null`. The checkpoints are disposable smoke artifacts, not reusable research checkpoints, and the sampled coordinates are plumbing diagnostics only, not benchmark samples.
 
+Current bounded tiny real-data pilot:
+
+```bash
+python scripts/run_tiny_real_pilot.py
+```
+
+This reads the same three-molecule tiny processed artifact and tiny split dry-run, then runs a strictly bounded CPU-only pilot training loop for both isotropic and stiffness-structured source configurations. Each pilot trains only the one train-split molecule, records validation/test losses on the one-molecule validation/test splits as interface diagnostics, and writes no checkpoints or samples. It writes:
+- `experiments/manifests/geom_tiny_real_pilot_isotropic_steps6_seed0.json`
+- `experiments/results/geom_tiny_real_pilot_isotropic_steps6_seed0.json`
+- `experiments/logs/geom_tiny_real_pilot_isotropic_steps6_seed0.log`
+- `experiments/manifests/geom_tiny_real_pilot_stiffness_steps6_seed0.json`
+- `experiments/results/geom_tiny_real_pilot_stiffness_steps6_seed0.json`
+- `experiments/logs/geom_tiny_real_pilot_stiffness_steps6_seed0.log`
+
+The outputs are labeled `tiny_real_data_bounded_pilot_not_benchmark`, `benchmark_result: false`, `hardware: cpu_only`, `gpu_used: false`, `pilot_run: true`, `bounded_pilot: true`, `training_executed: true`, `training_loop_executed: true`, `bounded_real_training_loop_executed: true`, `larger_real_training_run_started: false`, `max_steps: 6`, `hard_max_steps: 8`, `checkpoint_written: false`, `sampling_executed: false`, and `slurm_account: null`. This is the first bounded pilot training loop on the tiny real artifact, not a benchmark result or evidence of model quality.
+
 Current tiny real-data end-to-end smoke lifecycle summary:
 
 ```bash
