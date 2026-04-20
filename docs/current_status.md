@@ -18,6 +18,7 @@ Current status:
 - `scripts/run_tiny_real_model_dry_runs.py` runs tiny real-data model-side dry-runs for isotropic and stiffness-structured source configurations on the existing three-molecule processed artifact and tiny split, without neural training.
 - `scripts/run_tiny_real_execution_smoke.py` runs one parameter-free CPU forward/loss-style execution smoke pass for isotropic and stiffness-structured tiny real configurations, without optimizers, backward passes, checkpoints, sampling, or training loops.
 - `scripts/run_tiny_real_single_step_smoke.py` runs one CPU-only forward/loss/backward/optimizer-step training smoke for isotropic and stiffness-structured tiny real configurations, without a real training loop, checkpoints, sampling, GPUs, or benchmark claims.
+- `scripts/run_tiny_real_multi_step_smoke.py` runs a bounded CPU-only three-step training smoke for isotropic and stiffness-structured tiny real configurations, records per-step loss metadata, and remains non-benchmark with no checkpoints or larger training run.
 - `scripts/compare_tiny_real_results.py` writes a tiny real-data dry-run JSON summary and markdown table across the RDKit, isotropic, and stiffness-structured tiny real dry-run outputs.
 - `scripts/compare_smoke_results.py` writes a smoke-only JSON summary and markdown table across isotropic, stiffness, and RDKit smoke outputs.
 - `scripts/prepare_geom.py --dry-run` runs a read-only GEOM-Drugs raw-data preflight plus a tiny metadata-only preprocessing dry-run over bounded `rdkit_folder/drugs/*.pickle` samples.
@@ -42,6 +43,7 @@ The repo contains:
 - CPU-only tiny real-data model-side dry-runs that validate isotropic and stiffness-structured source construction against the bounded GEOM artifact and tiny split;
 - CPU-only tiny real-data model execution smoke tests that run one parameter-free forward/loss-style pass for isotropic and stiffness-structured configurations;
 - CPU-only tiny real-data single-step training smoke tests that run exactly one optimizer step for isotropic and stiffness-structured configurations;
+- CPU-only tiny real-data bounded multi-step training smoke tests that run a hard-capped tiny optimizer sequence for isotropic and stiffness-structured configurations;
 - a tiny real-data dry-run comparison summary/report over the current RDKit, isotropic, and stiffness-structured tiny real outputs;
 - a CPU-only smoke comparison summary/report over current synthetic fixture outputs;
 - a read-only GEOM-Drugs preflight that reports raw-data availability and samples bounded raw pickle metadata;
@@ -57,7 +59,7 @@ Still missing or intentionally incomplete:
 - real GEOM-scale RDKit ETKDG/MMFF baseline runner beyond the three-molecule dry-run;
 - neural backbone implementation and model training;
 - real model training on the tiny real artifact or any larger GEOM subset;
-- real trainable model loops beyond a one-step smoke check;
+- real trainable model loops beyond bounded tiny smoke checks;
 - model sampling;
 - real COV/MAT over generated conformer ensembles;
 - PoseBusters/MMFF/UFF/xTB integrations;

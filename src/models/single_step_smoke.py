@@ -71,6 +71,79 @@ def run_single_step_velocity_training_smoke(
     }
 
 
+def run_bounded_multistep_velocity_training_smoke(
+    samples: list[dict[str, Any]],
+    seed: int,
+    max_steps: int = 3,
+    learning_rate: float = 1.0e-2,
+) -> dict[str, Any]:
+    """Run a very short CPU-only optimizer sequence for smoke validation."""
+
+    if not samples:
+        raise ValueError("Cannot run multi-step training smoke on an empty sample list")
+    if max_steps <= 0:
+        raise ValueError("max_steps must be positive for multi-step training smoke")
+    if max_steps > 5:
+        raise ValueError("multi-step training smoke is capped at five optimizer steps")
+
+    torch = _load_torch()
+    torch.manual_seed(int(seed))
+    torch.set_num_threads(1)
+
+    features, targets, per_sample_slices = _batch_tensors(torch, samples)
+    model = torch.nn.Linear(4, 3)
+    model.to("cpu")
+    optimizer = torch.optim.SGD(model.parameters(), lr=float(learning_rate))
+    loss_fn = torch.nn.MSELoss()
+    step_records = []
+
+    for step_index in range(int(max_steps)):
+        optimizer.zero_grad(set_to_none=True)
+        prediction = model(features)
+        loss = loss_fn(prediction, targets)
+        loss.backward()
+        grad_norm = _grad_norm(model.parameters())
+        optimizer.step()
+        step_records.append(
+            {
+                "step_index": step_index,
+                "optimizer_step": step_index + 1,
+                "loss_before_step": float(loss.detach().cpu().item()),
+                "gradient_l2_norm": grad_norm,
+                "learning_rate": float(learning_rate),
+            }
+        )
+
+    with torch.no_grad():
+        prediction_after = model(features)
+        loss_after = loss_fn(prediction_after, targets)
+        absolute_error_after = torch.abs(prediction_after - targets)
+
+    return {
+        "model_name": "single_linear_velocity_smoke",
+        "backend": "torch_cpu",
+        "torch_version": getattr(torch, "__version__", "unknown"),
+        "device": "cpu",
+        "cuda_available": bool(torch.cuda.is_available()),
+        "trainable_parameter_count": sum(parameter.numel() for parameter in model.parameters()),
+        "forward_pass_count": int(max_steps) + 1,
+        "backward_pass_count": int(max_steps),
+        "optimizer_step_count": int(max_steps),
+        "optimizer_name": "SGD",
+        "learning_rate": float(learning_rate),
+        "sample_count": len(samples),
+        "atom_count": int(features.shape[0]),
+        "component_count": int(targets.numel()),
+        "initial_loss": step_records[0]["loss_before_step"],
+        "final_loss": float(loss_after.detach().cpu().item()),
+        "mean_velocity_mae_after_final_step": float(absolute_error_after.mean().detach().cpu().item()),
+        "max_velocity_abs_error_after_final_step": float(absolute_error_after.max().detach().cpu().item()),
+        "step_records": step_records,
+        "per_sample": _per_sample_metrics(torch, prediction_after, targets, per_sample_slices),
+        "note": "Bounded CPU multi-step smoke metrics only; not a benchmark or larger training run.",
+    }
+
+
 def _load_torch() -> Any:
     try:
         import torch  # type: ignore
