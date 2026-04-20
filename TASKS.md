@@ -43,6 +43,7 @@ This file tracks the current prioritized work queue.
    - `scripts/train.py --dry-run` validates config and file wiring.
    - `scripts/run_smoke_pipeline.py` runs both tiny smoke configs as one local CPU-only pipeline.
    - `scripts/run_tiny_real_model_dry_runs.py` validates isotropic and stiffness-structured model-side source construction on the bounded three-molecule real GEOM dry-run artifact without training.
+   - `scripts/run_tiny_real_execution_smoke.py` runs one parameter-free CPU forward/loss-style execution smoke pass for isotropic and stiffness-structured tiny real configurations without optimizers, backward passes, checkpoints, sampling, or training loops.
    - Real training and sampling are still not implemented.
 
 9. **Add evaluation scaffolding**
@@ -51,6 +52,7 @@ This file tracks the current prioritized work queue.
    - RDKit smoke baseline emits local fixture RMSD, bond-delta, MMFF-energy, and success-rate diagnostics.
    - Tiny real-data RDKit dry-run emits bounded ETKDG/MMFF diagnostics labeled as non-benchmark.
    - Tiny real-data model dry-runs emit bounded source-vs-target wiring diagnostics for isotropic and stiffness-structured configurations labeled as non-benchmark.
+   - Tiny real-data execution smoke outputs emit bounded forward/loss diagnostics labeled as non-benchmark and not training.
    - RDKit smoke outputs record Python/RDKit versions and distinguish import, fixture, ETKDG, MMFF, alignment, and runtime failures.
    - Smoke comparison report aggregates isotropic, stiffness, and RDKit smoke outputs into JSON and markdown.
    - Tiny real-data dry-run comparison report aggregates the current RDKit, isotropic, and stiffness-structured tiny real outputs into JSON and markdown.
