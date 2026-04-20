@@ -53,6 +53,7 @@ This file tracks the current prioritized work queue.
    - Tiny real-data model dry-runs emit bounded source-vs-target wiring diagnostics for isotropic and stiffness-structured configurations labeled as non-benchmark.
    - RDKit smoke outputs record Python/RDKit versions and distinguish import, fixture, ETKDG, MMFF, alignment, and runtime failures.
    - Smoke comparison report aggregates isotropic, stiffness, and RDKit smoke outputs into JSON and markdown.
+   - Tiny real-data dry-run comparison report aggregates the current RDKit, isotropic, and stiffness-structured tiny real outputs into JSON and markdown.
 
 10. **Draft one smoke-test config**
    - Baseline backbone

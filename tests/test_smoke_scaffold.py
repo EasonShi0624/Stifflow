@@ -16,6 +16,7 @@ from src.data.splits import make_random_split
 from src.data.geom_preflight import run_geom_preflight
 from src.data.geom_split_dry_run import run_geom_tiny_split_dry_run
 from src.eval.smoke_compare import write_smoke_comparison
+from src.eval.tiny_real_compare import write_tiny_real_comparison
 from src.train.pipeline import run_smoke_pipeline
 from src.train.smoke import run_smoke
 from src.train.tiny_real import run_tiny_real_model_dry_runs
@@ -481,6 +482,77 @@ logging:
             self.assertFalse(summary["benchmark_result"])
             self.assertEqual(summary["row_count"], 3)
             self.assertIn("Smoke Comparison Summary", report)
+            self.assertIn("not a benchmark result", report)
+
+    def test_tiny_real_comparison_writes_summary_and_report(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            output_root = Path(tmp)
+            rdkit = output_root / "rdkit.json"
+            iso = output_root / "iso.json"
+            stiff = output_root / "stiff.json"
+            common = {
+                "benchmark_result": False,
+                "hardware": "cpu_only",
+                "scheduler": None,
+                "slurm_account": None,
+                "training_executed": False,
+                "sampling_executed": False,
+                "dataset": {
+                    "kind": "geom_drugs_tiny_processed_dry_run",
+                    "split_counts": {"train": 1, "val": 1, "test": 1},
+                },
+            }
+            rdkit.write_text(json.dumps({
+                **common,
+                "run_name": "rdkit",
+                "result_kind": "tiny_real_data_dry_run_not_benchmark",
+                "baseline_name": "rdkit_etkdg_v3_mmff",
+                "execution_status": "completed",
+                "rdkit_version": "test",
+                "metrics": {
+                    "attempted_molecule_count": 3,
+                    "success_rate": 1.0,
+                    "mean_aligned_rmsd_to_tiny_real_conformer": 0.5,
+                    "mean_abs_bond_length_delta": 0.02,
+                    "mean_mmff_energy": -1.0,
+                },
+            }), encoding="utf-8")
+            for path, mode, mat, bond_delta in [
+                (iso, "isotropic", 0.4, 0.2),
+                (stiff, "stiffness_structured", 0.3, 0.1),
+            ]:
+                path.write_text(json.dumps({
+                    **common,
+                    "run_name": mode,
+                    "result_kind": "tiny_real_data_model_dry_run_not_benchmark",
+                    "corruption_mode": mode,
+                    "sample_count": 3,
+                    "metrics": {
+                        "cov_mat": {"cov_r_smoke": 1.0, "mat_r_smoke": mat},
+                        "validity": {
+                            "finite_coordinate_rate": 1.0,
+                            "mean_abs_bond_length_delta": bond_delta,
+                        },
+                    },
+                }), encoding="utf-8")
+
+            paths = write_tiny_real_comparison(
+                result_paths=[rdkit, iso, stiff],
+                summary_path=output_root / "summary.json",
+                report_path=output_root / "summary.md",
+            )
+            summary = json.loads(paths["summary"].read_text(encoding="utf-8"))
+            report = paths["report"].read_text(encoding="utf-8")
+            self.assertEqual(summary["result_kind"], "tiny_real_data_comparison_dry_run_not_benchmark")
+            self.assertFalse(summary["benchmark_result"])
+            self.assertFalse(summary["training_executed"])
+            self.assertFalse(summary["sampling_executed"])
+            self.assertEqual(summary["row_count"], 3)
+            self.assertEqual(
+                {row["method"] for row in summary["rows"]},
+                {"rdkit_etkdg_v3_mmff", "isotropic", "stiffness_structured"},
+            )
+            self.assertIn("Tiny Real-Data Dry-Run Summary", report)
             self.assertIn("not a benchmark result", report)
 
     def test_geom_preflight_reports_missing_raw_root(self) -> None:

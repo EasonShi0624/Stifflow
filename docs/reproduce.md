@@ -162,6 +162,18 @@ It runs the isotropic and stiffness-structured source-corruption paths locally o
 
 The outputs are labeled `tiny_real_data_model_dry_run_not_benchmark`, `benchmark_result: false`, `hardware: cpu_only`, `training_executed: false`, `model_training_started: false`, `sampling_executed: false`, and `slurm_account: null`. They are model-side plumbing checks only, not model training, model sampling, or benchmark results.
 
+Current tiny real-data dry-run comparison report:
+
+```bash
+python scripts/compare_tiny_real_results.py
+```
+
+This reads the current tiny real-data RDKit baseline result plus the isotropic and stiffness-structured model-side dry-run results, then writes:
+- `experiments/results/geom_tiny_real_dry_run_summary.json`
+- `reports/tables/geom_tiny_real_dry_run_summary.md`
+
+The summary is labeled `tiny_real_data_comparison_dry_run_not_benchmark`, `benchmark_result: false`, `hardware: cpu_only`, `training_executed: false`, `model_training_started: false`, `sampling_executed: false`, and `slurm_account: null`. It is a reporting-only aggregation of dry-run artifacts, not a benchmark comparison.
+
 ---
 
 ## Run naming
