@@ -142,6 +142,26 @@ This reads only the three-molecule tiny processed artifact and tiny split dry-ru
 
 The outputs are labeled `tiny_real_data_dry_run_not_benchmark`, `benchmark_result: false`, `hardware: cpu_only`, `training_executed: false`, and `slurm_account: null`. This is not the real GEOM-scale RDKit baseline.
 
+Current tiny real-data model-side dry-runs:
+
+```bash
+python scripts/run_tiny_real_model_dry_runs.py
+```
+
+This reads only:
+- `data/processed/geom_drugs_subset/tiny_real_dry_run/molecules.json`
+- `data/splits/geom_drugs_tiny_real_dry_run/random_seed0/split.json`
+
+It runs the isotropic and stiffness-structured source-corruption paths locally on CPU for the bounded three-molecule artifact, constructs flow-matching sample tensors, and writes:
+- `experiments/manifests/geom_tiny_real_model_isotropic_seed0.json`
+- `experiments/results/geom_tiny_real_model_isotropic_seed0.json`
+- `experiments/logs/geom_tiny_real_model_isotropic_seed0.log`
+- `experiments/manifests/geom_tiny_real_model_stiffness_seed0.json`
+- `experiments/results/geom_tiny_real_model_stiffness_seed0.json`
+- `experiments/logs/geom_tiny_real_model_stiffness_seed0.log`
+
+The outputs are labeled `tiny_real_data_model_dry_run_not_benchmark`, `benchmark_result: false`, `hardware: cpu_only`, `training_executed: false`, `model_training_started: false`, `sampling_executed: false`, and `slurm_account: null`. They are model-side plumbing checks only, not model training, model sampling, or benchmark results.
+
 ---
 
 ## Run naming
