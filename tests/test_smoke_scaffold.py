@@ -16,7 +16,10 @@ from src.data.splits import make_random_split
 from src.data.geom_preflight import run_geom_preflight
 from src.data.geom_split_dry_run import run_geom_tiny_split_dry_run
 from src.eval.smoke_compare import write_smoke_comparison
-from src.eval.micro_pilot_checkpoint_sampling_compare import write_micro_pilot_checkpoint_sampling_comparison
+from src.eval.micro_pilot_checkpoint_sampling_compare import (
+    write_micro_pilot_checkpoint_sampling_comparison,
+    write_micro_pilot_checkpoint_sampling_multiseed_summary,
+)
 from src.eval.tiny_real_compare import write_tiny_real_comparison
 from src.eval.tiny_real_lifecycle import write_tiny_real_lifecycle_summary
 from src.eval.tiny_real_pilot_compare import write_micro_pilot_multiseed_summary, write_tiny_real_pilot_comparison
@@ -25,6 +28,7 @@ from src.train.smoke import run_smoke
 from src.train.tiny_real import run_tiny_real_model_dry_runs
 from src.train.tiny_real_checkpoint_sampling import (
     run_micro_pilot_checkpoint_sampling_configs,
+    run_micro_pilot_checkpoint_sampling_multiseed,
     run_tiny_real_checkpoint_sampling_smoke_tests,
 )
 from src.train.tiny_real_execution import run_tiny_real_execution_smoke_tests
@@ -1623,6 +1627,134 @@ logging:
             self.assertIn("Bounded Micro-Pilot Checkpoint/Sampling Comparison", report)
             self.assertIn("suspicious_timing_inconsistency", report)
             self.assertIn("Per-Molecule Sampled RMSD", report)
+
+    def test_micro_pilot_checkpoint_sampling_multiseed_summary_is_deterministic(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            result_paths = []
+            molecule_ids = [f"geom_micro_{index}" for index in range(6)]
+            split_by_index = ["train", "train", "train", "test", "train", "val"]
+            for seed in [0, 1, 2]:
+                for mode, label, offset in [
+                    ("isotropic", "isotropic", 0.20),
+                    ("stiffness_structured", "stiffness", 0.10),
+                ]:
+                    path = root / f"{label}_seed{seed}.json"
+                    sampled = [
+                        offset + 0.01 * seed + 0.01 * index
+                        for index in range(6)
+                    ]
+                    payload = {
+                        "run_name": f"geom_micro_pilot_ckpt_sample_{label}_mols6_steps5_seed{seed}",
+                        "dataset_name": "geom_drugs",
+                        "dataset_kind": "geom_drugs_tiny_processed_dry_run",
+                        "dataset_subset_scope": "micro_pilot_processed_dry_run",
+                        "processed_artifact_path": "data/processed/geom_drugs_subset/micro_pilot/molecules.json",
+                        "split_path": "data/splits/geom_drugs_micro_pilot/random_seed0/split.json",
+                        "random_seed": seed,
+                        "corruption_mode": mode,
+                        "model_name": "single_linear_velocity_smoke",
+                        "backbone": "minimal_linear_velocity_pilot",
+                        "execution_mode": "local_cpu_tiny_real_micro_pilot_checkpoint_sampling",
+                        "result_kind": "tiny_real_data_bounded_micro_pilot_checkpoint_sampling_not_benchmark",
+                        "benchmark_result": False,
+                        "hardware": "cpu_only",
+                        "gpu_used": False,
+                        "scheduler": None,
+                        "slurm_account": None,
+                        "pilot_run": True,
+                        "bounded_pilot": True,
+                        "micro_pilot_run": True,
+                        "dry_run": False,
+                        "training_executed": True,
+                        "model_training_started": True,
+                        "training_loop_executed": True,
+                        "bounded_real_training_loop_executed": True,
+                        "larger_real_training_run_started": False,
+                        "max_steps": 5,
+                        "hard_max_steps": 5,
+                        "optimizer_created": True,
+                        "optimizer_step_count": 5,
+                        "backward_executed": True,
+                        "backward_pass_count": 5,
+                        "checkpoint_path": f"experiments/checkpoints/{label}_seed{seed}.pt",
+                        "checkpoint_written": True,
+                        "checkpoint_reloaded": True,
+                        "checkpoint_scope": "disposable_micro_pilot_checkpoint_sampling_only",
+                        "sampling_executed": True,
+                        "sample_step_count": 1,
+                        "sample_step_size": 0.1,
+                        "forward_executed": True,
+                        "loss_computed": True,
+                        "training_sample_count": 4,
+                        "sample_count": 6,
+                        "runtime_scope": "checkpoint_train_save_reload_sample_after_full_cpu_checkpoint_sampling_warmup",
+                        "runtime_seconds_reliable": True,
+                        "dataset": {
+                            "name": "geom_drugs",
+                            "kind": "geom_drugs_tiny_processed_dry_run",
+                            "subset_scope": "micro_pilot_processed_dry_run",
+                            "molecule_count": 6,
+                            "split_type": "random",
+                            "split_scope": "micro_pilot_processed_dry_run",
+                            "split_counts": {"train": 4, "val": 1, "test": 1},
+                            "degenerate_tiny_split": False,
+                        },
+                        "flow_matching": {"objective": "cartesian_linear", "interpolation": "linear"},
+                        "metrics": {
+                            "metric_scope": "geom_drugs_micro_pilot_checkpoint_sampling",
+                            "model_name": "single_linear_velocity_smoke",
+                            "reloaded_loss": 0.50 + 0.01 * seed if mode == "isotropic" else 0.40 + 0.01 * seed,
+                            "train_steps": [{"optimizer_step": index + 1} for index in range(5)],
+                            "sampled_molecules": [
+                                {
+                                    "molecule_id": molecule_id,
+                                    "split": split,
+                                    "atom_count": 3,
+                                    "sample_step_count": 1,
+                                    "sample_step_size": 0.1,
+                                    "sampled_rmsd_to_target": rmsd,
+                                    "predicted_velocity_norm": 1.0,
+                                }
+                                for molecule_id, split, rmsd in zip(molecule_ids, split_by_index, sampled)
+                            ],
+                        },
+                        "runtime_seconds": 0.03 + 0.001 * seed,
+                        "notes": ["Bounded pilot only, not benchmark results."],
+                    }
+                    path.write_text(json.dumps(payload), encoding="utf-8")
+                    result_paths.append(path)
+
+            first = write_micro_pilot_checkpoint_sampling_multiseed_summary(
+                result_paths=result_paths,
+                summary_path=root / "summary.json",
+                report_path=root / "summary.md",
+                expected_seeds=(0, 1, 2),
+            )
+            first_summary_text = first["summary"].read_text(encoding="utf-8")
+            second = write_micro_pilot_checkpoint_sampling_multiseed_summary(
+                result_paths=result_paths,
+                summary_path=root / "summary2.json",
+                report_path=root / "summary2.md",
+                expected_seeds=(0, 1, 2),
+            )
+            self.assertEqual(first_summary_text, second["summary"].read_text(encoding="utf-8"))
+
+            summary = json.loads(first_summary_text)
+            report = first["report"].read_text(encoding="utf-8")
+            self.assertEqual(
+                summary["result_kind"],
+                "tiny_real_data_bounded_micro_pilot_checkpoint_sampling_multiseed_summary_not_benchmark",
+            )
+            self.assertEqual(summary["seed_set"], [0, 1, 2])
+            self.assertEqual(summary["row_count"], 6)
+            self.assertEqual(summary["stiffness_consistency"]["verdict"], "stiffness_wins_consistently")
+            self.assertTrue(summary["runtime_summary"]["all_runtime_seconds_reliable"])
+            aggregate = {row["metric"]: row for row in summary["aggregate_metric_comparisons"]}
+            self.assertEqual(aggregate["reloaded_loss"]["stiffness_win_count"], 3)
+            self.assertEqual(aggregate["sampled_rmsd_to_target_overall_mean"]["stiffness_win_count"], 3)
+            self.assertIn("Bounded Micro-Pilot Checkpoint/Sampling Multi-Seed Summary", report)
+            self.assertIn("stiffness_wins_consistently", report)
 
     def test_smoke_comparison_writes_summary_and_report(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
