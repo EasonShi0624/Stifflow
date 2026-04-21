@@ -58,6 +58,8 @@ This file tracks the current prioritized work queue.
    - `scripts/run_data_scale_check_checkpoint_sampling_multiseed.py` runs the existing bounded 30-molecule checkpoint-and-sampling setup across the fixed tiny seed set `0,1,2` for both modes and writes a non-benchmark multi-seed summary.
    - `scripts/run_data_scale_check_500_checkpoint_sampling.py` writes a bounded 500-molecule processed dry-run and nondegenerate 450/25/25 split, then runs the same CPU-only checkpoint-and-sampling pilot settings for both modes at seed `0`.
    - `scripts/run_data_scale_check_500_checkpoint_sampling_multiseed.py` runs the existing bounded 500-molecule checkpoint-and-sampling setup across the fixed tiny seed set `0,1,2` for both modes and writes a non-benchmark multi-seed summary.
+   - `scripts/run_data_scale_check_10000_checkpoint_sampling.py` runs the bounded 10000-molecule processed dry-run, 9000/500/500 split, and the same CPU-only checkpoint-and-sampling pilot settings for both modes at seed `0`; use the prepared SLURM script rather than launching it from the login node.
+   - `scripts/run_data_scale_check_10000_checkpoint_sampling_multiseed.py` is prepared to rerun the existing bounded 10000-molecule checkpoint-and-sampling setup across the fixed tiny seed set `0,1,2` for both modes and write a non-benchmark multi-seed summary; use the prepared SLURM script rather than launching it from the login node.
    - Micro-pilot checkpoint/sampling runtime accounting now excludes one-time PyTorch CPU backend warm-up from comparable per-mode `runtime_seconds`.
    - Larger real training and real sampling are still not implemented.
 
@@ -86,6 +88,7 @@ This file tracks the current prioritized work queue.
    - Bounded 30-molecule data-scale-check checkpoint-and-sampling multi-seed summary aggregates seeds `0,1,2` for both modes into JSON and markdown, reporting per-seed winners, aggregate means, and runtime metadata for accounting only.
    - Bounded 500-molecule data-scale-check checkpoint-and-sampling comparison emits a compact non-benchmark JSON/log summary of whether the seed-0 directional signal is preserved.
    - Bounded 500-molecule data-scale-check checkpoint-and-sampling multi-seed summary aggregates seeds `0,1,2` for both modes into JSON and markdown, reporting per-seed winners, aggregate means, and runtime metadata for accounting only.
+   - Bounded 10000-molecule data-scale-check checkpoint-and-sampling single-seed comparison is complete, and a bounded multi-seed repeat path is prepared but should be submitted through SLURM only after explicit approval.
 
 10. **Draft one smoke-test config**
    - Baseline backbone

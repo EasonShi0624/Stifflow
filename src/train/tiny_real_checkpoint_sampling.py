@@ -34,6 +34,10 @@ DATA_SCALE_CHECK_500_CONFIG_PATHS = (
     Path("configs/train/data_scale_check_500_isotropic.yaml"),
     Path("configs/train/data_scale_check_500_stiffness.yaml"),
 )
+DATA_SCALE_CHECK_10000_CONFIG_PATHS = (
+    Path("configs/train/data_scale_check_10000_isotropic.yaml"),
+    Path("configs/train/data_scale_check_10000_stiffness.yaml"),
+)
 MICRO_PILOT_RESULT_KIND = "tiny_real_data_bounded_micro_pilot_checkpoint_sampling_not_benchmark"
 DATA_SCALE_CHECK_RESULT_KIND = "tiny_real_data_bounded_data_scale_check_checkpoint_sampling_not_benchmark"
 DATA_SCALE_CHECK_COMPARISON_RESULT_KIND = (
@@ -47,10 +51,12 @@ DATA_SCALE_CHECK_EXECUTION_MODE = "local_cpu_tiny_real_data_scale_check_checkpoi
 MICRO_PILOT_MAX_MOLECULES = 6
 DATA_SCALE_CHECK_MAX_MOLECULES = 30
 DATA_SCALE_CHECK_500_MAX_MOLECULES = 500
+DATA_SCALE_CHECK_10000_MAX_MOLECULES = 10_000
 DEFAULT_MICRO_PILOT_MAX_STEPS = HARD_MAX_STEPS
 MICRO_PILOT_CHECKPOINT_SCOPE = "disposable_micro_pilot_checkpoint_sampling_only"
 DATA_SCALE_CHECK_CHECKPOINT_SCOPE = "disposable_data_scale_check_checkpoint_sampling_only"
 DATA_SCALE_CHECK_500_CHECKPOINT_SCOPE = "disposable_data_scale_check_500_checkpoint_sampling_only"
+DATA_SCALE_CHECK_10000_CHECKPOINT_SCOPE = "disposable_data_scale_check_10000_checkpoint_sampling_only"
 MICRO_PILOT_RUNTIME_SCOPE = "checkpoint_train_save_reload_sample_after_full_cpu_checkpoint_sampling_warmup"
 DEFAULT_MICRO_PILOT_CHECKPOINT_SEED_SET = (0, 1, 2)
 HARD_MAX_MICRO_PILOT_CHECKPOINT_SEEDS = 3
@@ -67,6 +73,12 @@ DEFAULT_DATA_SCALE_CHECK_500_MULTI_SEED_SUMMARY_PATH = Path(
 )
 DEFAULT_DATA_SCALE_CHECK_500_MULTI_SEED_REPORT_PATH = Path(
     "reports/tables/geom_data_scale_check_ckpt_sample_multiseed_summary_mols500.md"
+)
+DEFAULT_DATA_SCALE_CHECK_10000_MULTI_SEED_SUMMARY_PATH = Path(
+    "experiments/results/geom_data_scale_check_ckpt_sample_multiseed_summary_mols10000.json"
+)
+DEFAULT_DATA_SCALE_CHECK_10000_MULTI_SEED_REPORT_PATH = Path(
+    "reports/tables/geom_data_scale_check_ckpt_sample_multiseed_summary_mols10000.md"
 )
 DATA_SCALE_CHECK_COMPARABLE_METRICS = (
     "reloaded_loss",
@@ -360,6 +372,22 @@ def run_data_scale_check_500_checkpoint_sampling_configs(
     )
 
 
+def run_data_scale_check_10000_checkpoint_sampling_configs(
+    config_paths: tuple[str | Path, ...] = DATA_SCALE_CHECK_10000_CONFIG_PATHS,
+    output_root: str | Path | None = None,
+    seed: int = 0,
+    max_steps: int = DEFAULT_MICRO_PILOT_MAX_STEPS,
+    sample_step_size: float = DEFAULT_SAMPLE_STEP_SIZE,
+) -> dict[str, dict[str, Path]]:
+    return run_micro_pilot_checkpoint_sampling_configs(
+        config_paths=config_paths,
+        output_root=output_root,
+        seed=seed,
+        max_steps=max_steps,
+        sample_step_size=sample_step_size,
+    )
+
+
 def run_data_scale_check_checkpoint_sampling_multiseed(
     seed_set: tuple[int, ...] = DEFAULT_DATA_SCALE_CHECK_CHECKPOINT_SEED_SET,
     config_paths: tuple[str | Path, ...] = DATA_SCALE_CHECK_CONFIG_PATHS,
@@ -385,6 +413,22 @@ def run_data_scale_check_checkpoint_sampling_multiseed(
 def run_data_scale_check_500_checkpoint_sampling_multiseed(
     seed_set: tuple[int, ...] = DEFAULT_DATA_SCALE_CHECK_CHECKPOINT_SEED_SET,
     config_paths: tuple[str | Path, ...] = DATA_SCALE_CHECK_500_CONFIG_PATHS,
+    output_root: str | Path | None = None,
+    max_steps: int = DEFAULT_MICRO_PILOT_MAX_STEPS,
+    sample_step_size: float = DEFAULT_SAMPLE_STEP_SIZE,
+) -> dict[str, dict[int, dict[str, Path]]]:
+    return run_data_scale_check_checkpoint_sampling_multiseed(
+        seed_set=seed_set,
+        config_paths=config_paths,
+        output_root=output_root,
+        max_steps=max_steps,
+        sample_step_size=sample_step_size,
+    )
+
+
+def run_data_scale_check_10000_checkpoint_sampling_multiseed(
+    seed_set: tuple[int, ...] = DEFAULT_DATA_SCALE_CHECK_CHECKPOINT_SEED_SET,
+    config_paths: tuple[str | Path, ...] = DATA_SCALE_CHECK_10000_CONFIG_PATHS,
     output_root: str | Path | None = None,
     max_steps: int = DEFAULT_MICRO_PILOT_MAX_STEPS,
     sample_step_size: float = DEFAULT_SAMPLE_STEP_SIZE,
@@ -443,6 +487,7 @@ def write_data_scale_check_checkpoint_sampling_multiseed_summary(
         "micro_pilot_run": False,
         "data_scale_check_run": True,
         "data_scale_check_500_run": max_molecules == DATA_SCALE_CHECK_500_MAX_MOLECULES,
+        "data_scale_check_10000_run": max_molecules == DATA_SCALE_CHECK_10000_MAX_MOLECULES,
         "raw_data_modified": False,
         "environment_modified": False,
         "training_executed_by_summary": False,
@@ -518,6 +563,7 @@ def write_data_scale_check_checkpoint_sampling_comparison(
         "micro_pilot_run": False,
         "data_scale_check_run": True,
         "data_scale_check_500_run": scope["max_molecules"] == DATA_SCALE_CHECK_500_MAX_MOLECULES,
+        "data_scale_check_10000_run": scope["max_molecules"] == DATA_SCALE_CHECK_10000_MAX_MOLECULES,
         "training_executed_by_comparison": False,
         "sampling_executed_by_comparison": False,
         "larger_real_training_run_started": False,
@@ -661,6 +707,7 @@ def run_micro_pilot_checkpoint_sampling(
         "micro_pilot_run": scope["micro_pilot_run"],
         "data_scale_check_run": scope["data_scale_check_run"],
         "data_scale_check_500_run": scope["data_scale_check_500_run"],
+        "data_scale_check_10000_run": scope["data_scale_check_10000_run"],
         "dry_run": False,
         "training_executed": True,
         "model_training_started": True,
@@ -891,6 +938,7 @@ def _checkpoint_sampling_scope_settings(max_molecules: int, subset_tag: str) -> 
             "micro_pilot_run": True,
             "data_scale_check_run": False,
             "data_scale_check_500_run": False,
+            "data_scale_check_10000_run": False,
         }
     if max_molecules == DATA_SCALE_CHECK_MAX_MOLECULES and subset_tag == "data_scale_check_processed_dry_run":
         return {
@@ -909,6 +957,7 @@ def _checkpoint_sampling_scope_settings(max_molecules: int, subset_tag: str) -> 
             "micro_pilot_run": False,
             "data_scale_check_run": True,
             "data_scale_check_500_run": False,
+            "data_scale_check_10000_run": False,
         }
     if (
         max_molecules == DATA_SCALE_CHECK_500_MAX_MOLECULES
@@ -930,6 +979,29 @@ def _checkpoint_sampling_scope_settings(max_molecules: int, subset_tag: str) -> 
             "micro_pilot_run": False,
             "data_scale_check_run": True,
             "data_scale_check_500_run": True,
+            "data_scale_check_10000_run": False,
+        }
+    if (
+        max_molecules == DATA_SCALE_CHECK_10000_MAX_MOLECULES
+        and subset_tag == "data_scale_check_10000_processed_dry_run"
+    ):
+        return {
+            "scope_label": "data-scale-check-10000",
+            "subset_tag": "data_scale_check_10000_processed_dry_run",
+            "run_prefix": "geom_data_scale_check_ckpt_sample",
+            "description": "Bounded 10000-molecule data-scale-check",
+            "result_kind": DATA_SCALE_CHECK_RESULT_KIND,
+            "execution_mode": DATA_SCALE_CHECK_EXECUTION_MODE,
+            "checkpoint_scope": DATA_SCALE_CHECK_10000_CHECKPOINT_SCOPE,
+            "batch_scope": "data_scale_check_train_split",
+            "sample_scope": "all_10000_data_scale_check_molecules",
+            "metric_scope": "geom_drugs_data_scale_check_checkpoint_sampling",
+            "hard_max_molecules": DATA_SCALE_CHECK_10000_MAX_MOLECULES,
+            "max_molecules": DATA_SCALE_CHECK_10000_MAX_MOLECULES,
+            "micro_pilot_run": False,
+            "data_scale_check_run": True,
+            "data_scale_check_500_run": False,
+            "data_scale_check_10000_run": True,
         }
     raise ValueError(
         "Unsupported bounded checkpoint/sampling scope: "
@@ -953,6 +1025,14 @@ def _data_scale_check_output_scope(max_molecules: int) -> dict[str, Any]:
             "hard_max_molecules": DATA_SCALE_CHECK_500_MAX_MOLECULES,
             "checkpoint_scope": DATA_SCALE_CHECK_500_CHECKPOINT_SCOPE,
             "expected_split_counts": {"train": 450, "val": 25, "test": 25},
+        }
+    if max_molecules == DATA_SCALE_CHECK_10000_MAX_MOLECULES:
+        return {
+            "subset_scope": "data_scale_check_10000_processed_dry_run",
+            "max_molecules": DATA_SCALE_CHECK_10000_MAX_MOLECULES,
+            "hard_max_molecules": DATA_SCALE_CHECK_10000_MAX_MOLECULES,
+            "checkpoint_scope": DATA_SCALE_CHECK_10000_CHECKPOINT_SCOPE,
+            "expected_split_counts": {"train": 9000, "val": 500, "test": 500},
         }
     raise ValueError(f"Unsupported data-scale-check comparison molecule count: {max_molecules}")
 
@@ -1000,6 +1080,7 @@ def _data_scale_check_comparison_row(path: Path) -> dict[str, Any]:
             "bounded_pilot": payload["bounded_pilot"],
             "data_scale_check_run": payload["data_scale_check_run"],
             "data_scale_check_500_run": payload.get("data_scale_check_500_run", False),
+            "data_scale_check_10000_run": payload.get("data_scale_check_10000_run", False),
             "larger_real_training_run_started": payload["larger_real_training_run_started"],
             "checkpoint_scope": payload["checkpoint_scope"],
             "sampling_executed": payload["sampling_executed"],
@@ -1387,6 +1468,7 @@ def _micro_log_text(results: dict[str, Any], manifest_path: Path, results_path: 
         f"micro_pilot_run={str(results['micro_pilot_run']).lower()}\n"
         f"data_scale_check_run={str(results['data_scale_check_run']).lower()}\n"
         f"data_scale_check_500_run={str(results.get('data_scale_check_500_run', False)).lower()}\n"
+        f"data_scale_check_10000_run={str(results.get('data_scale_check_10000_run', False)).lower()}\n"
         "training_executed=true\n"
         "model_training_started=true\n"
         "training_loop_executed=true\n"

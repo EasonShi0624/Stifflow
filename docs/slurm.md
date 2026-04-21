@@ -102,6 +102,13 @@ conda activate stifflow
 python <entrypoint>.py --config <config_path>
 ```
 
+## Prepared CPU pilot scripts
+
+- `scripts/slurm_data_scale_check_10000_checkpoint_sampling.sbatch` prepares the bounded 10000-molecule GEOM-Drugs data-scale checkpoint/sampling pilot. It is CPU-only, uses `torch_pr_872_general`, and runs `python scripts/run_data_scale_check_10000_checkpoint_sampling.py`.
+- `scripts/slurm_data_scale_check_10000_checkpoint_sampling_multiseed.sbatch` prepares the bounded 10000-molecule GEOM-Drugs data-scale checkpoint/sampling multi-seed repeat. It is CPU-only, uses `torch_pr_872_general`, and runs `python scripts/run_data_scale_check_10000_checkpoint_sampling_multiseed.py`.
+
+Do not submit these scripts without explicit approval. The single-seed script reads a bounded subset of real GEOM-Drugs raw pickle files, writes a bounded one-conformer-per-molecule processed dry-run artifact and split, and runs the same non-benchmark checkpoint/sampling pilot settings for isotropic and stiffness-structured modes. The multi-seed script reuses that bounded artifact and split, then repeats the same non-benchmark checkpoint/sampling pilot settings over the fixed seed set `0,1,2`.
+
 ---
 
 ## Notes

@@ -24,6 +24,7 @@ EXPECTED_LAYOUT_HINTS = [
 TINY_PROCESSED_HARD_MAX_MOLECULES = 6
 DATA_SCALE_CHECK_HARD_MAX_MOLECULES = 30
 DATA_SCALE_CHECK_500_HARD_MAX_MOLECULES = 500
+DATA_SCALE_CHECK_10000_HARD_MAX_MOLECULES = 10_000
 
 
 def run_geom_preflight(
@@ -39,6 +40,7 @@ def run_geom_preflight(
     write_micro_pilot_output: bool = False,
     write_data_scale_check_output: bool = False,
     write_data_scale_check_500_output: bool = False,
+    write_data_scale_check_10000_output: bool = False,
     tiny_processed_tag: str = "tiny_real_dry_run",
     max_processed_molecules: int = 3,
     max_processed_conformers_per_mol: int = 1,
@@ -55,7 +57,13 @@ def run_geom_preflight(
             tiny_processed_tag = "micro_pilot"
         if max_processed_molecules == 3:
             max_processed_molecules = TINY_PROCESSED_HARD_MAX_MOLECULES
-    if write_data_scale_check_500_output:
+    if write_data_scale_check_10000_output:
+        write_tiny_processed_output = True
+        if tiny_processed_tag == "tiny_real_dry_run":
+            tiny_processed_tag = "data_scale_check_10000"
+        if max_processed_molecules == 3:
+            max_processed_molecules = DATA_SCALE_CHECK_10000_HARD_MAX_MOLECULES
+    elif write_data_scale_check_500_output:
         write_tiny_processed_output = True
         if tiny_processed_tag == "tiny_real_dry_run":
             tiny_processed_tag = "data_scale_check_500"
@@ -67,7 +75,10 @@ def run_geom_preflight(
             tiny_processed_tag = "data_scale_check"
         if max_processed_molecules == 3:
             max_processed_molecules = DATA_SCALE_CHECK_HARD_MAX_MOLECULES
-    if write_data_scale_check_500_output:
+    if write_data_scale_check_10000_output:
+        output_scope = "data_scale_check_10000_processed_dry_run"
+        hard_max_molecules = DATA_SCALE_CHECK_10000_HARD_MAX_MOLECULES
+    elif write_data_scale_check_500_output:
         output_scope = "data_scale_check_500_processed_dry_run"
         hard_max_molecules = DATA_SCALE_CHECK_500_HARD_MAX_MOLECULES
     elif write_data_scale_check_output:
@@ -131,6 +142,7 @@ def run_geom_preflight(
             "would_write_micro_pilot_processed_dry_run": write_micro_pilot_output,
             "would_write_data_scale_check_processed_dry_run": write_data_scale_check_output,
             "would_write_data_scale_check_500_processed_dry_run": write_data_scale_check_500_output,
+            "would_write_data_scale_check_10000_processed_dry_run": write_data_scale_check_10000_output,
             "next_real_step": "Define and review the processed GEOM record schema before writing full processed data.",
         },
         "runtime_seconds": time.time() - start,

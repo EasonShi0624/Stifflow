@@ -422,6 +422,51 @@ It also writes:
 
 The per-run outputs remain labeled `tiny_real_data_bounded_data_scale_check_checkpoint_sampling_not_benchmark`, `benchmark_result: false`, `hardware: cpu_only`, `gpu_used: false`, `pilot_run: true`, `bounded_pilot: true`, `data_scale_check_run: true`, `data_scale_check_500_run: true`, `checkpoint_scope: disposable_data_scale_check_500_checkpoint_sampling_only`, `sampling_executed: true`, and `slurm_account: null`. The multi-seed summary is labeled `tiny_real_data_bounded_data_scale_check_checkpoint_sampling_multiseed_summary_not_benchmark` and reports per-seed winners, aggregate means, stiffness consistency, and runtime metadata for accounting only. This is a bounded non-benchmark 500-molecule data-scale check, not a larger real training run.
 
+Current bounded 10000-molecule data-scale checkpoint-and-sampling check:
+
+```bash
+python scripts/run_data_scale_check_10000_checkpoint_sampling.py
+```
+
+For cluster execution, use the prepared SLURM script:
+
+```bash
+sbatch scripts/slurm_data_scale_check_10000_checkpoint_sampling.sbatch
+```
+
+This bounded non-benchmark path writes a bounded 10000-molecule processed dry-run artifact and 9000/500/500 random split, then runs the same CPU-only checkpoint/sampling pilot settings used by the 500-molecule check for isotropic and stiffness-structured source configurations at seed `0`. It preserves the processed-output schema, one-conformer-per-molecule policy, model, optimizer, five-step cap, checkpoint/reload path, and one-step sampling settings. For cluster execution, use the prepared SLURM script and ask before submission. Outputs include:
+- `data/processed/geom_drugs_subset/data_scale_check_10000/molecules.json`
+- `data/splits/geom_drugs_data_scale_check_10000/random_seed0/split.json`
+- `experiments/results/geom_data_scale_check_ckpt_sample_isotropic_mols10000_steps5_seed0.json`
+- `experiments/results/geom_data_scale_check_ckpt_sample_stiffness_mols10000_steps5_seed0.json`
+- `experiments/results/geom_data_scale_check_ckpt_sample_comparison_mols10000_steps5_seed0.json`
+
+The per-run outputs are labeled `tiny_real_data_bounded_data_scale_check_checkpoint_sampling_not_benchmark`, `benchmark_result: false`, `hardware: cpu_only`, `gpu_used: false`, `pilot_run: true`, `bounded_pilot: true`, `data_scale_check_run: true`, `data_scale_check_10000_run: true`, `checkpoint_scope: disposable_data_scale_check_10000_checkpoint_sampling_only`, and `sampling_executed: true`. This is a bounded non-benchmark 10000-molecule data-scale pilot, not a benchmark result or larger real training run.
+
+Prepared bounded 10000-molecule data-scale checkpoint-and-sampling multi-seed repeat:
+
+```bash
+python scripts/run_data_scale_check_10000_checkpoint_sampling_multiseed.py
+```
+
+For cluster execution, use the prepared SLURM script:
+
+```bash
+sbatch scripts/slurm_data_scale_check_10000_checkpoint_sampling_multiseed.sbatch
+```
+
+This path reuses the existing bounded 10000-molecule processed artifact and fixed 9000/500/500 split, then reruns the same CPU-only checkpoint/sampling pilot settings for isotropic and stiffness-structured source configurations over seeds `0,1,2`. It does not rebuild the processed artifact or split, and it does not change the molecule count, processed-output schema, model, optimizer, five-step cap, checkpoint/reload path, or one-step sampling settings. It writes per-mode/per-seed manifest, result, log, and disposable checkpoint files named like:
+- `experiments/results/geom_data_scale_check_ckpt_sample_isotropic_mols10000_steps5_seed0.json`
+- `experiments/results/geom_data_scale_check_ckpt_sample_isotropic_mols10000_steps5_seed1.json`
+- `experiments/results/geom_data_scale_check_ckpt_sample_isotropic_mols10000_steps5_seed2.json`
+- matching `stiffness` files for seeds `0`, `1`, and `2`
+
+It also writes:
+- `experiments/results/geom_data_scale_check_ckpt_sample_multiseed_summary_mols10000.json`
+- `reports/tables/geom_data_scale_check_ckpt_sample_multiseed_summary_mols10000.md`
+
+The per-run outputs remain labeled `tiny_real_data_bounded_data_scale_check_checkpoint_sampling_not_benchmark`, `benchmark_result: false`, `hardware: cpu_only`, `gpu_used: false`, `pilot_run: true`, `bounded_pilot: true`, `data_scale_check_run: true`, `data_scale_check_10000_run: true`, `checkpoint_scope: disposable_data_scale_check_10000_checkpoint_sampling_only`, `sampling_executed: true`, and `slurm_account: null`. The multi-seed summary is labeled `tiny_real_data_bounded_data_scale_check_checkpoint_sampling_multiseed_summary_not_benchmark` and reports per-seed winners, aggregate means, stiffness consistency, and runtime metadata for accounting only. This is a bounded non-benchmark 10000-molecule data-scale repeat, not a benchmark result or larger real training run, and it should not be submitted without explicit approval.
+
 Current bounded tiny real-data pilot comparison report:
 
 ```bash
