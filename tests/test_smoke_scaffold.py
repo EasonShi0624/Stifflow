@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import copy
 import pickle
 import tempfile
 import unittest
@@ -13,6 +14,11 @@ from src.baselines import rdkit_etkdg
 from src.baselines.rdkit_etkdg import RdkitSmokeError, run_rdkit_smoke, run_rdkit_tiny_real_dry_run
 from src.data.records import load_records
 from src.data.splits import make_random_split
+from src.data.geom_full_database import (
+    FULL_DATABASE_SCOPE,
+    prepare_geom_full_database_artifact,
+    prepare_geom_full_database_split,
+)
 from src.data.geom_preflight import run_geom_preflight
 from src.data.geom_split_dry_run import make_tiny_split, run_geom_tiny_split_dry_run
 from src.eval.smoke_compare import write_smoke_comparison
@@ -20,9 +26,35 @@ from src.eval.micro_pilot_checkpoint_sampling_compare import (
     write_micro_pilot_checkpoint_sampling_comparison,
     write_micro_pilot_checkpoint_sampling_multiseed_summary,
 )
+from src.eval.data_scale_convergence_diagnostics import write_data_scale_check_convergence_diagnostics
+from src.eval.formal_full_database_compare import (
+    MULTI_SEED_SUMMARY_RESULT_KIND as FORMAL_FULL_DATABASE_MULTI_SEED_SUMMARY_RESULT_KIND,
+    SUMMARY_RESULT_KIND as FORMAL_FULL_DATABASE_SUMMARY_RESULT_KIND,
+    write_formal_full_database_multiseed_summary,
+    write_formal_full_database_seed0_comparison,
+)
 from src.eval.tiny_real_compare import write_tiny_real_comparison
 from src.eval.tiny_real_lifecycle import write_tiny_real_lifecycle_summary
 from src.eval.tiny_real_pilot_compare import write_micro_pilot_multiseed_summary, write_tiny_real_pilot_comparison
+from src.models.checkpoint_sampling_smoke import (
+    run_bounded_checkpoint_sampling_pilot,
+    run_validation_checkpoint_training,
+)
+from src.train.formal_10000_training import (
+    FORMAL_10000_CHECKPOINT_SCOPE,
+    FORMAL_10000_MAX_STEPS,
+    FORMAL_10000_RESULT_KIND,
+    FORMAL_10000_SEED_SET,
+    FORMAL_10000_SPLIT_COUNTS,
+    _validate_formal_10000_config,
+    write_formal_10000_training_multiseed_summary,
+)
+from src.train.formal_full_database_training import (
+    FORMAL_FULL_DATABASE_CHECKPOINT_SCOPE,
+    FORMAL_FULL_DATABASE_SEED,
+    FORMAL_FULL_DATABASE_SEED_SET,
+    validate_formal_full_database_config,
+)
 from src.train.pipeline import run_smoke_pipeline
 from src.train.smoke import run_smoke
 from src.train.tiny_real import run_tiny_real_model_dry_runs
@@ -2313,6 +2345,883 @@ logging:
             self.assertEqual(aggregate["sampled_rmsd_to_target_val_mean"]["stiffness_win_count"], 3)
             self.assertIn("Bounded 10000-Molecule Checkpoint/Sampling Multi-Seed Summary", report)
             self.assertIn("stiffness_wins_consistently", report)
+
+    def test_bounded_checkpoint_sampling_pilot_records_early_stop(self) -> None:
+        try:
+            import torch  # noqa: F401
+        except ImportError:
+            self.skipTest("PyTorch is not importable in this interpreter")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            samples = [
+                {
+                    "molecule_id": "geom_early_stop_0",
+                    "split": "train",
+                    "t": 0.5,
+                    "xt": [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]],
+                    "x1": [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]],
+                    "target_velocity": [[0.0, 0.0, 0.0], [0.0, 0.0, 0.0]],
+                }
+            ]
+            metrics = run_bounded_checkpoint_sampling_pilot(
+                samples=samples,
+                sampling_samples=samples,
+                checkpoint_path=Path(tmp) / "early_stop.pt",
+                seed=0,
+                max_steps=20,
+                hard_max_steps=20,
+                learning_rate=1.0e-2,
+                sample_step_size=0.1,
+                early_stop={
+                    "enabled": True,
+                    "monitor": "train_loss_before_step",
+                    "patience": 2,
+                    "min_delta": 100.0,
+                },
+            )
+            self.assertTrue(metrics["early_stop_enabled"])
+            self.assertTrue(metrics["stopped_early"])
+            self.assertEqual(metrics["stop_reason"], "patience_exhausted")
+            self.assertEqual(metrics["configured_max_steps"], 20)
+            self.assertLess(metrics["executed_train_steps"], 20)
+            self.assertEqual(metrics["optimizer_step_count"], metrics["executed_train_steps"])
+            self.assertEqual(metrics["backward_pass_count"], metrics["executed_train_steps"])
+            self.assertEqual(metrics["early_stop_patience"], 2)
+            self.assertEqual(metrics["early_stop_monitor"], "train_loss_before_step")
+            self.assertEqual(len(metrics["sampled_molecules"]), 1)
+
+    def test_validation_checkpoint_training_writes_reusable_best_and_latest(self) -> None:
+        try:
+            import torch  # noqa: F401
+        except ImportError:
+            self.skipTest("PyTorch is not importable in this interpreter")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            train_samples = [
+                {
+                    "molecule_id": "formal_train_0",
+                    "split": "train",
+                    "t": 0.5,
+                    "xt": [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]],
+                    "x1": [[0.0, 0.0, 0.0], [1.1, 0.0, 0.0]],
+                    "target_velocity": [[0.0, 0.0, 0.0], [0.2, 0.0, 0.0]],
+                }
+            ]
+            validation_samples = [
+                {
+                    "molecule_id": "formal_val_0",
+                    "split": "val",
+                    "t": 0.5,
+                    "xt": [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]],
+                    "x1": [[0.0, 0.0, 0.0], [1.0, 0.1, 0.0]],
+                    "target_velocity": [[0.0, 0.0, 0.0], [0.0, 0.2, 0.0]],
+                }
+            ]
+            metrics = run_validation_checkpoint_training(
+                samples=train_samples,
+                validation_samples=validation_samples,
+                sampling_samples=train_samples + validation_samples,
+                checkpoint_path=root / "best.pt",
+                latest_checkpoint_path=root / "latest.pt",
+                seed=0,
+                max_steps=205,
+                hard_max_steps=205,
+                learning_rate=1.0e-2,
+                sample_step_size=0.1,
+                early_stop={
+                    "enabled": True,
+                    "monitor": "validation_loss_after_step",
+                    "patience": 2,
+                    "min_delta": 100.0,
+                },
+                checkpoint_scope="test_reusable_validation_checkpoint",
+            )
+
+            self.assertTrue((root / "best.pt").exists())
+            self.assertTrue((root / "latest.pt").exists())
+            self.assertTrue(metrics["checkpoint_reusable"])
+            self.assertTrue(metrics["checkpoint_selected_by_validation"])
+            self.assertEqual(metrics["checkpoint_selection_metric"], "validation_loss_after_step")
+            self.assertEqual(metrics["checkpoint_reloaded_path"], str(root / "best.pt"))
+            self.assertTrue(metrics["stopped_early"])
+            self.assertEqual(metrics["stop_reason"], "validation_patience_exhausted")
+            self.assertLess(metrics["executed_train_steps"], 205)
+            self.assertEqual(metrics["validation_sample_count"], 1)
+            self.assertEqual(len(metrics["sampled_molecules"]), 2)
+
+    def test_formal_10000_configs_freeze_scope_and_selection_settings(self) -> None:
+        for path, mode in [
+            ("configs/train/data_scale_check_10000_formal_isotropic.yaml", "isotropic"),
+            ("configs/train/data_scale_check_10000_formal_stiffness.yaml", "stiffness_structured"),
+        ]:
+            config = load_config(path)
+            _validate_formal_10000_config(config)
+            self.assertEqual(config["corruption"]["mode"], mode)
+            self.assertEqual(config["data"]["subset"]["max_molecules"], 10_000)
+            self.assertEqual(config["data"]["subset"]["max_conformers_per_mol"], 1)
+            self.assertEqual(config["model"]["backbone"], "minimal_linear_velocity_pilot")
+            self.assertEqual(config["model"]["pilot_model"], "single_linear_velocity_pilot")
+            self.assertEqual(config["train"]["optimizer"], "SGD")
+            self.assertEqual(config["train"]["max_steps"], FORMAL_10000_MAX_STEPS)
+            self.assertEqual(config["train"]["learning_rate"], 1.0e-2)
+            self.assertEqual(config["train"]["checkpoint_scope"], FORMAL_10000_CHECKPOINT_SCOPE)
+            self.assertEqual(config["train"]["early_stop"]["monitor"], "validation_loss_after_step")
+            self.assertEqual(config["sample"]["sample_step_count"], 1)
+            self.assertEqual(config["sample"]["sample_step_size"], 0.1)
+            self.assertEqual(FORMAL_10000_SEED_SET, (0, 1, 2))
+            self.assertEqual(FORMAL_10000_SPLIT_COUNTS, {"train": 9000, "val": 500, "test": 500})
+
+    def test_geom_full_database_artifact_and_split_preserve_schema(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            raw_drugs = root / "raw" / "rdkit_folder" / "drugs"
+            raw_drugs.mkdir(parents=True)
+            for index in range(20):
+                raw_record = {
+                    "smiles": f"C{index}",
+                    "conformers": [
+                        {
+                            "geom_id": f"conf_{index}",
+                            "rd_mol": _FakeMol(
+                                [
+                                    [float(index), 0.0, 0.0],
+                                    [float(index), 1.0, 0.0],
+                                ]
+                            ),
+                        }
+                    ],
+                }
+                with (raw_drugs / f"mol_{index:03d}.pickle").open("wb") as handle:
+                    pickle.dump(raw_record, handle)
+
+            processed = prepare_geom_full_database_artifact(
+                raw_root=root / "raw",
+                processed_root=root / "processed",
+                max_atoms=8,
+            )
+            artifact = json.loads(Path(processed["artifact"]).read_text(encoding="utf-8"))
+            self.assertEqual(artifact["dataset_kind"], "geom_drugs_tiny_processed_dry_run")
+            self.assertEqual(artifact["result_kind"], "processed_output_dry_run_not_benchmark")
+            self.assertEqual(artifact["subset_scope"], FULL_DATABASE_SCOPE)
+            self.assertFalse(artifact["benchmark_result"])
+            self.assertEqual(artifact["molecule_count"], 20)
+            self.assertEqual(processed["source_pickle_count"], 20)
+            self.assertEqual(processed["skip_reasons"], {})
+            self.assertEqual(artifact["bounds"]["max_molecules"], None)
+            self.assertTrue(artifact["bounds"]["one_conformer_per_molecule"])
+
+            split_paths = prepare_geom_full_database_split(
+                processed_artifact_path=processed["artifact"],
+                split_root=root / "splits",
+                seed=0,
+            )
+            split = json.loads(Path(split_paths["split"]).read_text(encoding="utf-8"))
+            self.assertEqual(split["dataset_kind"], "geom_drugs_tiny_processed_dry_run")
+            self.assertEqual(split["result_kind"], "split_dry_run_not_benchmark")
+            self.assertEqual(split["split_scope"], FULL_DATABASE_SCOPE)
+            self.assertFalse(split["benchmark_result"])
+            self.assertFalse(split["degenerate_tiny_split"])
+            self.assertEqual(split_paths["counts"], {"train": 18, "val": 1, "test": 1})
+            self.assertEqual(len(set(split["train"] + split["val"] + split["test"])), 20)
+
+    def test_formal_full_database_configs_freeze_formal_design(self) -> None:
+        for path, mode in [
+            ("configs/train/geom_full_database_formal_isotropic.yaml", "isotropic"),
+            ("configs/train/geom_full_database_formal_stiffness.yaml", "stiffness_structured"),
+        ]:
+            config = load_config(path)
+            validate_formal_full_database_config(config)
+            self.assertEqual(config["corruption"]["mode"], mode)
+            self.assertEqual(config["data"]["subset"]["max_molecules"], "full_database")
+            self.assertEqual(config["data"]["subset"]["max_conformers_per_mol"], 1)
+            self.assertEqual(config["data"]["subset"]["tag"], FULL_DATABASE_SCOPE)
+            self.assertEqual(config["model"]["backbone"], "minimal_linear_velocity_pilot")
+            self.assertEqual(config["model"]["pilot_model"], "single_linear_velocity_pilot")
+            self.assertEqual(config["train"]["optimizer"], "SGD")
+            self.assertEqual(config["train"]["max_steps"], FORMAL_10000_MAX_STEPS)
+            self.assertEqual(config["train"]["learning_rate"], 1.0e-2)
+            self.assertEqual(config["train"]["checkpoint_scope"], FORMAL_FULL_DATABASE_CHECKPOINT_SCOPE)
+            self.assertEqual(config["train"]["early_stop"]["monitor"], "validation_loss_after_step")
+            self.assertEqual(config["sample"]["sample_step_count"], 1)
+            self.assertEqual(config["sample"]["sample_step_size"], 0.1)
+            self.assertEqual(config["eval"]["eval_subset_size"], 0)
+            self.assertEqual(FORMAL_FULL_DATABASE_SEED, 0)
+            self.assertEqual(FORMAL_FULL_DATABASE_SEED_SET, (0, 1, 2))
+
+    def test_formal_full_database_accepts_per_run_gpu_paths_without_changing_settings(self) -> None:
+        config = load_config("configs/train/geom_full_database_formal_isotropic.yaml")
+        config["experiment"]["seed"] = 1
+        config["data"]["processed_root"] = "data/processed/geom_drugs_full_database_runs/isotropic_seed1"
+        config["data"]["split_root"] = "data/splits/geom_drugs_full_database_runs/isotropic_seed1/random_seed0"
+        config["data"][
+            "processed_artifact_path"
+        ] = "data/processed/geom_drugs_full_database_runs/isotropic_seed1/molecules.json"
+        config["data"][
+            "split_path"
+        ] = "data/splits/geom_drugs_full_database_runs/isotropic_seed1/random_seed0/split.json"
+        config["train"]["device"] = "cuda"
+        config["train"]["require_cuda"] = True
+
+        validate_formal_full_database_config(config)
+        self.assertEqual(config["train"]["max_steps"], FORMAL_10000_MAX_STEPS)
+        self.assertEqual(config["train"]["hard_max_steps"], FORMAL_10000_MAX_STEPS)
+        self.assertEqual(config["train"]["optimizer"], "SGD")
+        self.assertEqual(config["train"]["learning_rate"], 1.0e-2)
+        self.assertEqual(config["train"]["early_stop"]["monitor"], "validation_loss_after_step")
+        self.assertEqual(config["sample"]["sample_step_count"], 1)
+        self.assertEqual(config["sample"]["sample_step_size"], 0.1)
+
+        bad_split = copy.deepcopy(config)
+        bad_split["data"][
+            "split_path"
+        ] = "data/splits/geom_drugs_full_database_runs/isotropic_seed1/random_seed1/split.json"
+        with self.assertRaises(ValueError):
+            validate_formal_full_database_config(bad_split)
+
+    def test_formal_full_database_seed0_comparison_is_deterministic(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            result_paths = []
+            for mode, label, best_loss, rmsd_base in [
+                ("isotropic", "isotropic", 0.40, 0.50),
+                ("stiffness_structured", "stiffness", 0.30, 0.40),
+            ]:
+                payload = {
+                    "run_name": f"geom_formal_full_database_train_{label}_steps2000_seed0",
+                    "result_kind": "geom_drugs_full_database_formal_training_not_benchmark",
+                    "benchmark_result": False,
+                    "dataset_subset_scope": FULL_DATABASE_SCOPE,
+                    "processed_artifact_path": "data/processed/geom_drugs_full_database/molecules.json",
+                    "split_path": "data/splits/geom_drugs_full_database/random_seed0/split.json",
+                    "random_seed": 0,
+                    "corruption_mode": mode,
+                    "model_name": "single_linear_velocity_smoke",
+                    "backbone": "minimal_linear_velocity_pilot",
+                    "hardware": "cpu_only",
+                    "gpu_used": False,
+                    "scheduler": "slurm",
+                    "slurm_account": "torch_pr_872_general",
+                    "formal_training_run": True,
+                    "full_database_formal_training_run": True,
+                    "max_steps": 2000,
+                    "hard_max_steps": 2000,
+                    "optimizer_name": "SGD",
+                    "learning_rate": 1.0e-2,
+                    "optimizer_step_count": 2000,
+                    "training_sample_count": 4,
+                    "validation_sample_count": 1,
+                    "sample_count": 6,
+                    "early_stop_monitor": "validation_loss_after_step",
+                    "early_stop_patience": 200,
+                    "early_stop_min_delta": 1.0e-6,
+                    "stopped_early": False,
+                    "early_stop_reason": "hard_cap_reached",
+                    "checkpoint_reusable": True,
+                    "checkpoint_selected_by_validation": True,
+                    "checkpoint_scope": "reusable_formal_full_database_validation_selected_checkpoint",
+                    "sampling_executed": True,
+                    "sample_step_count": 1,
+                    "sample_step_size": 0.1,
+                    "runtime_scope": "formal_full_database_train_validation_select_save_reload_sample_after_cpu_warmup",
+                    "runtime_seconds_reliable": True,
+                    "runtime_seconds": 10.0 if mode == "isotropic" else 11.0,
+                    "dataset": {
+                        "name": "geom_drugs",
+                        "kind": "geom_drugs_tiny_processed_dry_run",
+                        "subset_scope": FULL_DATABASE_SCOPE,
+                        "molecule_count": 6,
+                        "split_type": "random",
+                        "split_scope": FULL_DATABASE_SCOPE,
+                        "split_counts": {"train": 4, "val": 1, "test": 1},
+                        "degenerate_tiny_split": False,
+                    },
+                    "metrics": {
+                        "metric_scope": "geom_drugs_formal_full_database_training_checkpoint_sampling",
+                        "executed_train_steps": 2000,
+                        "best_validation_loss": best_loss,
+                        "best_validation_loss_step": 2000,
+                        "reloaded_validation_loss": best_loss,
+                        "sampled_molecules": [
+                            {
+                                "molecule_id": "train_a",
+                                "split": "train",
+                                "sampled_rmsd_to_target": rmsd_base,
+                            },
+                            {
+                                "molecule_id": "train_b",
+                                "split": "train",
+                                "sampled_rmsd_to_target": rmsd_base + 0.02,
+                            },
+                            {
+                                "molecule_id": "train_c",
+                                "split": "train",
+                                "sampled_rmsd_to_target": rmsd_base + 0.04,
+                            },
+                            {
+                                "molecule_id": "train_d",
+                                "split": "train",
+                                "sampled_rmsd_to_target": rmsd_base + 0.06,
+                            },
+                            {
+                                "molecule_id": "val_a",
+                                "split": "val",
+                                "sampled_rmsd_to_target": rmsd_base + 0.08,
+                            },
+                            {
+                                "molecule_id": "test_a",
+                                "split": "test",
+                                "sampled_rmsd_to_target": rmsd_base + 0.10,
+                            },
+                        ],
+                    },
+                }
+                path = root / f"{label}.json"
+                path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+                result_paths.append(path)
+
+            first = write_formal_full_database_seed0_comparison(
+                result_paths=result_paths,
+                summary_path=root / "summary.json",
+                report_path=root / "summary.md",
+            )
+            first_summary = json.loads(first["summary"].read_text(encoding="utf-8"))
+            first_report = first["report"].read_text(encoding="utf-8")
+            second = write_formal_full_database_seed0_comparison(
+                result_paths=result_paths,
+                summary_path=root / "summary_again.json",
+                report_path=root / "summary_again.md",
+            )
+            second_summary = json.loads(second["summary"].read_text(encoding="utf-8"))
+
+            self.assertEqual(first_summary, second_summary)
+            self.assertEqual(first_summary["result_kind"], FORMAL_FULL_DATABASE_SUMMARY_RESULT_KIND)
+            self.assertFalse(first_summary["benchmark_result"])
+            self.assertFalse(first_summary["training_executed_by_summary"])
+            self.assertFalse(first_summary["sampling_executed_by_summary"])
+            self.assertEqual(first_summary["dataset"]["split_counts"], {"train": 4, "val": 1, "test": 1})
+            self.assertEqual(
+                first_summary["directional_verdict"]["verdict"],
+                "stiffness_better_on_all_tracked_metrics",
+            )
+            self.assertEqual(first_summary["directional_verdict"]["stiffness_win_count"], 6)
+            self.assertIn("Full-Database Formal Seed0 Comparison", first_report)
+            self.assertIn("stiffness_better_on_all_tracked_metrics", first_report)
+
+    def test_formal_full_database_multiseed_summary_is_deterministic(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            result_paths = []
+            for seed in [0, 1, 2]:
+                for mode, label, loss_offset, rmsd_offset in [
+                    ("isotropic", "isotropic", 0.10, 0.20),
+                    ("stiffness_structured", "stiffness", 0.05, 0.10),
+                ]:
+                    best_loss = 0.30 + 0.01 * seed + loss_offset
+                    rmsd_base = 0.40 + 0.02 * seed + rmsd_offset
+                    payload = {
+                        "run_name": f"geom_formal_full_database_train_{label}_steps2000_seed{seed}",
+                        "result_kind": "geom_drugs_full_database_formal_training_not_benchmark",
+                        "benchmark_result": False,
+                        "dataset_subset_scope": FULL_DATABASE_SCOPE,
+                        "processed_artifact_path": f"data/processed/geom_drugs_full_database_runs/{label}_seed{seed}/molecules.json",
+                        "split_path": f"data/splits/geom_drugs_full_database_runs/{label}_seed{seed}/random_seed0/split.json",
+                        "random_seed": seed,
+                        "corruption_mode": mode,
+                        "model_name": "single_linear_velocity_smoke",
+                        "backbone": "minimal_linear_velocity_pilot",
+                        "hardware": "cpu_only" if seed == 0 else "gpu_enabled",
+                        "gpu_used": seed != 0,
+                        "scheduler": "slurm",
+                        "slurm_account": "torch_pr_872_general",
+                        "formal_training_run": True,
+                        "full_database_formal_training_run": True,
+                        "max_steps": 2000,
+                        "hard_max_steps": 2000,
+                        "optimizer_name": "SGD",
+                        "learning_rate": 1.0e-2,
+                        "optimizer_step_count": 2000,
+                        "training_sample_count": 4,
+                        "validation_sample_count": 1,
+                        "sample_count": 6,
+                        "early_stop_monitor": "validation_loss_after_step",
+                        "early_stop_patience": 200,
+                        "early_stop_min_delta": 1.0e-6,
+                        "stopped_early": False,
+                        "early_stop_reason": "hard_cap_reached",
+                        "checkpoint_reusable": True,
+                        "checkpoint_selected_by_validation": True,
+                        "checkpoint_scope": "reusable_formal_full_database_validation_selected_checkpoint",
+                        "sampling_executed": True,
+                        "sample_step_count": 1,
+                        "sample_step_size": 0.1,
+                        "runtime_scope": "formal_full_database_train_validation_select_save_reload_sample_after_cpu_warmup",
+                        "runtime_seconds_reliable": True,
+                        "runtime_seconds": 10.0 + seed,
+                        "dataset": {
+                            "name": "geom_drugs",
+                            "kind": "geom_drugs_tiny_processed_dry_run",
+                            "subset_scope": FULL_DATABASE_SCOPE,
+                            "molecule_count": 6,
+                            "split_type": "random",
+                            "split_scope": FULL_DATABASE_SCOPE,
+                            "split_counts": {"train": 4, "val": 1, "test": 1},
+                            "degenerate_tiny_split": False,
+                        },
+                        "metrics": {
+                            "metric_scope": "geom_drugs_formal_full_database_training_checkpoint_sampling",
+                            "executed_train_steps": 2000,
+                            "best_validation_loss": best_loss,
+                            "best_validation_loss_step": 2000,
+                            "reloaded_validation_loss": best_loss,
+                            "sampled_molecules": [
+                                {
+                                    "molecule_id": "train_a",
+                                    "split": "train",
+                                    "sampled_rmsd_to_target": rmsd_base,
+                                },
+                                {
+                                    "molecule_id": "train_b",
+                                    "split": "train",
+                                    "sampled_rmsd_to_target": rmsd_base + 0.02,
+                                },
+                                {
+                                    "molecule_id": "train_c",
+                                    "split": "train",
+                                    "sampled_rmsd_to_target": rmsd_base + 0.04,
+                                },
+                                {
+                                    "molecule_id": "train_d",
+                                    "split": "train",
+                                    "sampled_rmsd_to_target": rmsd_base + 0.06,
+                                },
+                                {
+                                    "molecule_id": "val_a",
+                                    "split": "val",
+                                    "sampled_rmsd_to_target": rmsd_base + 0.08,
+                                },
+                                {
+                                    "molecule_id": "test_a",
+                                    "split": "test",
+                                    "sampled_rmsd_to_target": rmsd_base + 0.10,
+                                },
+                            ],
+                        },
+                    }
+                    path = root / f"{label}_seed{seed}.json"
+                    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+                    result_paths.append(path)
+
+            first = write_formal_full_database_multiseed_summary(
+                result_paths=result_paths,
+                summary_path=root / "multiseed_summary.json",
+                report_path=root / "multiseed_summary.md",
+            )
+            first_summary = json.loads(first["summary"].read_text(encoding="utf-8"))
+            first_report = first["report"].read_text(encoding="utf-8")
+            second = write_formal_full_database_multiseed_summary(
+                result_paths=result_paths,
+                summary_path=root / "multiseed_summary_again.json",
+                report_path=root / "multiseed_summary_again.md",
+            )
+            second_summary = json.loads(second["summary"].read_text(encoding="utf-8"))
+
+            self.assertEqual(first_summary, second_summary)
+            self.assertEqual(first_summary["result_kind"], FORMAL_FULL_DATABASE_MULTI_SEED_SUMMARY_RESULT_KIND)
+            self.assertFalse(first_summary["benchmark_result"])
+            self.assertFalse(first_summary["training_executed_by_summary"])
+            self.assertFalse(first_summary["sampling_executed_by_summary"])
+            self.assertEqual(first_summary["seed_set"], [0, 1, 2])
+            self.assertEqual(first_summary["dataset"]["split_counts"], {"train": 4, "val": 1, "test": 1})
+            self.assertEqual(
+                first_summary["directional_verdict"]["verdict"],
+                "stiffness_better_on_all_tracked_metrics_all_seeds",
+            )
+            self.assertEqual(first_summary["directional_verdict"]["stiffness_win_count"], 18)
+            self.assertEqual(first_summary["directional_verdict"]["tracked_metric_seed_comparison_count"], 18)
+            self.assertIn("Full-Database Formal Multi-Seed Summary", first_report)
+            self.assertIn("stiffness_better_on_all_tracked_metrics_all_seeds", first_report)
+
+    def test_formal_10000_summary_is_deterministic(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            result_paths = []
+            sampled_template = [
+                ("formal_train", "train", 0),
+                ("formal_val", "val", 1),
+                ("formal_test", "test", 2),
+            ]
+            for seed in [0, 1, 2]:
+                for mode, label, offset in [
+                    ("isotropic", "isotropic", 0.40),
+                    ("stiffness_structured", "stiffness", 0.30),
+                ]:
+                    path = root / f"{label}_seed{seed}.json"
+                    payload = {
+                        "run_name": f"geom_formal_10000_train_{label}_mols10000_steps2000_seed{seed}",
+                        "result_kind": FORMAL_10000_RESULT_KIND,
+                        "benchmark_result": False,
+                        "hardware": "cpu_only",
+                        "gpu_used": False,
+                        "scheduler": None,
+                        "slurm_account": None,
+                        "random_seed": seed,
+                        "corruption_mode": mode,
+                        "sample_count": 10_000,
+                        "training_sample_count": 9000,
+                        "validation_sample_count": 500,
+                        "max_steps": 2000,
+                        "hard_max_steps": 2000,
+                        "optimizer_name": "SGD",
+                        "learning_rate": 1.0e-2,
+                        "optimizer_step_count": 1300 + seed,
+                        "stopped_early": True,
+                        "early_stop_reason": "validation_patience_exhausted",
+                        "checkpoint_reusable": True,
+                        "checkpoint_selected_by_validation": True,
+                        "checkpoint_scope": FORMAL_10000_CHECKPOINT_SCOPE,
+                        "sample_step_count": 1,
+                        "sample_step_size": 0.1,
+                        "dataset": {
+                            "subset_scope": "data_scale_check_10000_processed_dry_run",
+                            "split_counts": {"train": 9000, "val": 500, "test": 500},
+                        },
+                        "metrics": {
+                            "best_validation_loss": 0.70 + 0.01 * seed if mode == "isotropic" else 0.60 + 0.01 * seed,
+                            "best_validation_loss_step": 900 + seed,
+                            "reloaded_validation_loss": 0.71 + 0.01 * seed
+                            if mode == "isotropic"
+                            else 0.61 + 0.01 * seed,
+                            "reloaded_train_loss": 0.72 + 0.01 * seed
+                            if mode == "isotropic"
+                            else 0.62 + 0.01 * seed,
+                            "sampled_molecules": [
+                                {
+                                    "molecule_id": molecule_id,
+                                    "split": split,
+                                    "sampled_rmsd_to_target": offset + 0.01 * split_index + 0.001 * seed,
+                                }
+                                for molecule_id, split, split_index in sampled_template
+                            ],
+                        },
+                    }
+                    path.write_text(json.dumps(payload), encoding="utf-8")
+                    result_paths.append(path)
+
+            first = write_formal_10000_training_multiseed_summary(
+                result_paths=result_paths,
+                summary_path=root / "summary.json",
+                report_path=root / "summary.md",
+            )
+            first_summary_text = first["summary"].read_text(encoding="utf-8")
+            second = write_formal_10000_training_multiseed_summary(
+                result_paths=result_paths,
+                summary_path=root / "summary2.json",
+                report_path=root / "summary2.md",
+            )
+            self.assertEqual(first_summary_text, second["summary"].read_text(encoding="utf-8"))
+            summary = json.loads(first_summary_text)
+            report = first["report"].read_text(encoding="utf-8")
+            self.assertEqual(
+                summary["result_kind"],
+                "tiny_real_data_formal_10000_training_multiseed_summary_not_benchmark",
+            )
+            self.assertFalse(summary["benchmark_result"])
+            self.assertEqual(summary["row_count"], 6)
+            self.assertEqual(summary["seed_set"], [0, 1, 2])
+            self.assertEqual(summary["stiffness_consistency"]["verdict"], "stiffness_wins_consistently")
+            self.assertIn("Formal 10000-Molecule Training Multi-Seed Summary", report)
+
+    def test_data_scale_check_10000_convergence_multiseed_summary_is_deterministic(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            result_paths = []
+            sampled_template = [
+                ("geom_scale10000_train", "train", 0),
+                ("geom_scale10000_val", "val", 1),
+                ("geom_scale10000_test", "test", 2),
+            ]
+            for seed in [0, 1, 2]:
+                for mode, label, offset, steps in [
+                    ("isotropic", "isotropic", 0.40, 52),
+                    ("stiffness_structured", "stiffness", 0.30, 47),
+                ]:
+                    path = root / f"{label}_seed{seed}.json"
+                    payload = {
+                        "run_name": f"geom_data_scale_check_ckpt_sample_{label}_mols10000_steps200_seed{seed}",
+                        "dataset_name": "geom_drugs",
+                        "dataset_kind": "geom_drugs_tiny_processed_dry_run",
+                        "dataset_subset_scope": "data_scale_check_10000_processed_dry_run",
+                        "processed_artifact_path": "data/processed/geom_drugs_subset/data_scale_check_10000/molecules.json",
+                        "split_path": "data/splits/geom_drugs_data_scale_check_10000/random_seed0/split.json",
+                        "random_seed": seed,
+                        "corruption_mode": mode,
+                        "model_name": "single_linear_velocity_smoke",
+                        "backbone": "minimal_linear_velocity_pilot",
+                        "execution_mode": "local_cpu_tiny_real_data_scale_check_checkpoint_sampling_convergence",
+                        "result_kind": "tiny_real_data_bounded_data_scale_check_checkpoint_sampling_not_benchmark",
+                        "benchmark_result": False,
+                        "hardware": "cpu_only",
+                        "gpu_used": False,
+                        "scheduler": None,
+                        "slurm_account": None,
+                        "pilot_run": True,
+                        "bounded_pilot": True,
+                        "micro_pilot_run": False,
+                        "data_scale_check_run": True,
+                        "data_scale_check_10000_run": True,
+                        "data_scale_check_10000_convergence_run": True,
+                        "dry_run": False,
+                        "training_executed": True,
+                        "model_training_started": True,
+                        "training_loop_executed": True,
+                        "bounded_real_training_loop_executed": True,
+                        "larger_real_training_run_started": False,
+                        "max_steps": 200,
+                        "hard_max_steps": 200,
+                        "optimizer_created": True,
+                        "optimizer_step_count": steps + seed,
+                        "backward_executed": True,
+                        "backward_pass_count": steps + seed,
+                        "checkpoint_path": f"experiments/checkpoints/{label}_seed{seed}.pt",
+                        "checkpoint_written": True,
+                        "checkpoint_reloaded": True,
+                        "checkpoint_scope": "disposable_data_scale_check_10000_checkpoint_sampling_only",
+                        "sampling_executed": True,
+                        "sample_step_count": 1,
+                        "sample_step_size": 0.1,
+                        "forward_executed": True,
+                        "loss_computed": True,
+                        "training_sample_count": 9000,
+                        "sample_count": 10_000,
+                        "runtime_scope": "checkpoint_train_save_reload_sample_after_full_cpu_checkpoint_sampling_warmup",
+                        "runtime_seconds_reliable": True,
+                        "configured_max_steps": 200,
+                        "early_stop_enabled": True,
+                        "early_stop_patience": 20,
+                        "early_stop_min_delta": 1.0e-6,
+                        "early_stop_monitor": "train_loss_before_step",
+                        "stopped_early": True,
+                        "early_stop_reason": "patience_exhausted",
+                        "dataset": {
+                            "name": "geom_drugs",
+                            "kind": "geom_drugs_tiny_processed_dry_run",
+                            "subset_scope": "data_scale_check_10000_processed_dry_run",
+                            "molecule_count": 10_000,
+                            "split_type": "random",
+                            "split_scope": "data_scale_check_10000_processed_dry_run",
+                            "split_counts": {"train": 9000, "val": 500, "test": 500},
+                            "degenerate_tiny_split": False,
+                        },
+                        "flow_matching": {"objective": "cartesian_linear", "interpolation": "linear"},
+                        "metrics": {
+                            "metric_scope": "geom_drugs_data_scale_check_checkpoint_sampling",
+                            "model_name": "single_linear_velocity_smoke",
+                            "reloaded_loss": 0.70 + 0.01 * seed if mode == "isotropic" else 0.60 + 0.01 * seed,
+                            "executed_train_steps": steps + seed,
+                            "early_stop_enabled": True,
+                            "stopped_early": True,
+                            "stop_reason": "patience_exhausted",
+                            "best_train_loss": 0.50 if mode == "isotropic" else 0.45,
+                            "best_train_loss_step": 5,
+                            "train_steps": [{"optimizer_step": index + 1} for index in range(steps + seed)],
+                            "sampled_molecules": [
+                                {
+                                    "molecule_id": molecule_id,
+                                    "split": split,
+                                    "atom_count": 3,
+                                    "sample_step_count": 1,
+                                    "sample_step_size": 0.1,
+                                    "sampled_rmsd_to_target": offset + 0.01 * split_index + 0.001 * seed,
+                                    "predicted_velocity_norm": 1.0,
+                                }
+                                for molecule_id, split, split_index in sampled_template
+                            ],
+                        },
+                        "runtime_seconds": 12.0 + 0.1 * seed,
+                        "notes": ["Bounded 10000-molecule convergence data-scale-check pilot only, not benchmark results."],
+                    }
+                    path.write_text(json.dumps(payload), encoding="utf-8")
+                    result_paths.append(path)
+
+            first = write_data_scale_check_checkpoint_sampling_multiseed_summary(
+                result_paths=result_paths,
+                summary_path=root / "summary.json",
+                report_path=root / "summary.md",
+                expected_seeds=(0, 1, 2),
+                max_molecules=10_000,
+                max_steps=200,
+                summary_name="geom_data_scale_check_ckpt_sample_multiseed_summary_mols10000_steps200_convergence",
+                report_title="Bounded 10000-Molecule Checkpoint/Sampling Convergence Multi-Seed Summary",
+            )
+            first_summary_text = first["summary"].read_text(encoding="utf-8")
+            second = write_data_scale_check_checkpoint_sampling_multiseed_summary(
+                result_paths=result_paths,
+                summary_path=root / "summary2.json",
+                report_path=root / "summary2.md",
+                expected_seeds=(0, 1, 2),
+                max_molecules=10_000,
+                max_steps=200,
+                summary_name="geom_data_scale_check_ckpt_sample_multiseed_summary_mols10000_steps200_convergence",
+                report_title="Bounded 10000-Molecule Checkpoint/Sampling Convergence Multi-Seed Summary",
+            )
+            self.assertEqual(first_summary_text, second["summary"].read_text(encoding="utf-8"))
+
+            summary = json.loads(first_summary_text)
+            report = first["report"].read_text(encoding="utf-8")
+            self.assertEqual(
+                summary["summary_name"],
+                "geom_data_scale_check_ckpt_sample_multiseed_summary_mols10000_steps200_convergence",
+            )
+            self.assertTrue(summary["data_scale_check_10000_convergence_run"])
+            self.assertEqual(summary["max_steps"], 200)
+            self.assertEqual(summary["row_count"], 6)
+            self.assertEqual(summary["stiffness_consistency"]["verdict"], "stiffness_wins_consistently")
+            self.assertIsNotNone(summary["early_stop_summary"])
+            self.assertEqual(summary["early_stop_summary"]["early_stop_patience_set"], [20])
+            self.assertEqual(summary["early_stop_summary"]["stopped_early_count_by_mode"]["isotropic"], 3)
+            self.assertEqual(
+                summary["early_stop_summary"]["executed_optimizer_steps_by_mode"]["stiffness_structured"],
+                [47, 48, 49],
+            )
+            self.assertIn("Bounded 10000-Molecule Checkpoint/Sampling Convergence Multi-Seed Summary", report)
+            self.assertIn("Early Stop Accounting", report)
+
+    def test_data_scale_check_10000_convergence_diagnostics_detects_downward_hard_cap(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            result_paths = []
+            for seed in [0, 1, 2]:
+                for mode, label, base_loss in [
+                    ("isotropic", "isotropic", 1.20 + 0.01 * seed),
+                    ("stiffness_structured", "stiffness", 1.00 + 0.01 * seed),
+                ]:
+                    path = root / f"{label}_seed{seed}.json"
+                    train_steps = [
+                        {
+                            "optimizer_step": index + 1,
+                            "loss_before_step": base_loss - 0.001 * index,
+                            "gradient_l2_norm": 0.5 - 0.001 * min(index, 100),
+                        }
+                        for index in range(200)
+                    ]
+                    payload = {
+                        "run_name": f"geom_data_scale_check_ckpt_sample_{label}_mols10000_steps200_seed{seed}",
+                        "dataset_name": "geom_drugs",
+                        "dataset_kind": "geom_drugs_tiny_processed_dry_run",
+                        "dataset_subset_scope": "data_scale_check_10000_processed_dry_run",
+                        "processed_artifact_path": "data/processed/geom_drugs_subset/data_scale_check_10000/molecules.json",
+                        "split_path": "data/splits/geom_drugs_data_scale_check_10000/random_seed0/split.json",
+                        "random_seed": seed,
+                        "corruption_mode": mode,
+                        "model_name": "single_linear_velocity_smoke",
+                        "backbone": "minimal_linear_velocity_pilot",
+                        "execution_mode": "local_cpu_tiny_real_data_scale_check_checkpoint_sampling_convergence",
+                        "result_kind": "tiny_real_data_bounded_data_scale_check_checkpoint_sampling_not_benchmark",
+                        "benchmark_result": False,
+                        "hardware": "cpu_only",
+                        "gpu_used": False,
+                        "scheduler": None,
+                        "slurm_account": None,
+                        "pilot_run": True,
+                        "bounded_pilot": True,
+                        "micro_pilot_run": False,
+                        "data_scale_check_run": True,
+                        "data_scale_check_10000_run": True,
+                        "data_scale_check_10000_convergence_run": True,
+                        "dry_run": False,
+                        "training_executed": True,
+                        "model_training_started": True,
+                        "training_loop_executed": True,
+                        "bounded_real_training_loop_executed": True,
+                        "larger_real_training_run_started": False,
+                        "max_steps": 200,
+                        "hard_max_steps": 200,
+                        "optimizer_created": True,
+                        "optimizer_step_count": 200,
+                        "backward_executed": True,
+                        "backward_pass_count": 200,
+                        "checkpoint_path": f"experiments/checkpoints/{label}_seed{seed}.pt",
+                        "checkpoint_written": True,
+                        "checkpoint_reloaded": True,
+                        "checkpoint_scope": "disposable_data_scale_check_10000_checkpoint_sampling_only",
+                        "sampling_executed": True,
+                        "sample_step_count": 1,
+                        "sample_step_size": 0.1,
+                        "forward_executed": True,
+                        "loss_computed": True,
+                        "training_sample_count": 9000,
+                        "sample_count": 10_000,
+                        "runtime_scope": "checkpoint_train_save_reload_sample_after_full_cpu_checkpoint_sampling_warmup",
+                        "runtime_seconds_reliable": True,
+                        "configured_max_steps": 200,
+                        "early_stop_enabled": True,
+                        "early_stop_patience": 20,
+                        "early_stop_min_delta": 1.0e-6,
+                        "early_stop_monitor": "train_loss_before_step",
+                        "stopped_early": False,
+                        "early_stop_reason": "hard_cap_reached",
+                        "dataset": {
+                            "name": "geom_drugs",
+                            "kind": "geom_drugs_tiny_processed_dry_run",
+                            "subset_scope": "data_scale_check_10000_processed_dry_run",
+                            "molecule_count": 10_000,
+                            "split_type": "random",
+                            "split_scope": "data_scale_check_10000_processed_dry_run",
+                            "split_counts": {"train": 9000, "val": 500, "test": 500},
+                            "degenerate_tiny_split": False,
+                        },
+                        "flow_matching": {"objective": "cartesian_linear", "interpolation": "linear"},
+                        "metrics": {
+                            "metric_scope": "geom_drugs_data_scale_check_checkpoint_sampling",
+                            "model_name": "single_linear_velocity_smoke",
+                            "reloaded_loss": 0.70 + 0.01 * seed if mode == "isotropic" else 0.60 + 0.01 * seed,
+                            "executed_train_steps": 200,
+                            "early_stop_enabled": True,
+                            "stopped_early": False,
+                            "stop_reason": "hard_cap_reached",
+                            "best_train_loss": train_steps[-1]["loss_before_step"],
+                            "best_train_loss_step": 200,
+                            "train_steps": train_steps,
+                            "sampled_molecules": [],
+                        },
+                        "runtime_seconds": 12.0 + 0.1 * seed,
+                        "notes": ["Bounded 10000-molecule convergence data-scale-check pilot only, not benchmark results."],
+                    }
+                    path.write_text(json.dumps(payload), encoding="utf-8")
+                    result_paths.append(path)
+
+            first = write_data_scale_check_convergence_diagnostics(
+                result_paths=result_paths,
+                summary_path=root / "diagnostics.json",
+                report_path=root / "diagnostics.md",
+            )
+            first_summary_text = first["summary"].read_text(encoding="utf-8")
+            second = write_data_scale_check_convergence_diagnostics(
+                result_paths=result_paths,
+                summary_path=root / "diagnostics2.json",
+                report_path=root / "diagnostics2.md",
+            )
+            self.assertEqual(first_summary_text, second["summary"].read_text(encoding="utf-8"))
+
+            summary = json.loads(first_summary_text)
+            report = first["report"].read_text(encoding="utf-8")
+            self.assertEqual(
+                summary["result_kind"],
+                "tiny_real_data_bounded_data_scale_check_convergence_diagnostics_not_benchmark",
+            )
+            self.assertFalse(summary["benchmark_result"])
+            self.assertFalse(summary["training_executed_by_summary"])
+            self.assertFalse(summary["sampling_executed_by_summary"])
+            self.assertEqual(summary["row_count"], 6)
+            self.assertEqual(summary["diagnostic_verdict"]["verdict"], "still_downward_at_hard_cap")
+            self.assertTrue(summary["diagnostic_verdict"]["all_hit_hard_cap"])
+            self.assertTrue(summary["diagnostic_verdict"]["all_best_at_final_step"])
+            self.assertTrue(summary["diagnostic_verdict"]["all_tail_transitions_improve_more_than_min_delta"])
+            self.assertEqual(summary["aggregate_by_mode"]["isotropic"]["hit_hard_cap_count"], 3)
+            self.assertEqual(summary["aggregate_by_mode"]["stiffness_structured"]["best_at_final_step_count"], 3)
+            self.assertIn("Bounded 10000-Molecule Convergence Diagnostics", report)
+            self.assertIn("still_downward_at_hard_cap", report)
 
     def test_micro_pilot_checkpoint_sampling_comparison_flags_legacy_runtime_mismatch(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

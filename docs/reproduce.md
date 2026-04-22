@@ -467,6 +467,142 @@ It also writes:
 
 The per-run outputs remain labeled `tiny_real_data_bounded_data_scale_check_checkpoint_sampling_not_benchmark`, `benchmark_result: false`, `hardware: cpu_only`, `gpu_used: false`, `pilot_run: true`, `bounded_pilot: true`, `data_scale_check_run: true`, `data_scale_check_10000_run: true`, `checkpoint_scope: disposable_data_scale_check_10000_checkpoint_sampling_only`, `sampling_executed: true`, and `slurm_account: null`. The multi-seed summary is labeled `tiny_real_data_bounded_data_scale_check_checkpoint_sampling_multiseed_summary_not_benchmark` and reports per-seed winners, aggregate means, stiffness consistency, and runtime metadata for accounting only. This is a bounded non-benchmark 10000-molecule data-scale repeat, not a benchmark result or larger real training run, and it should not be submitted without explicit approval.
 
+Current bounded 10000-molecule checkpoint-and-sampling convergence repeat:
+
+```bash
+python scripts/run_data_scale_check_10000_checkpoint_sampling_convergence_multiseed.py
+```
+
+For cluster execution, use the prepared SLURM script:
+
+```bash
+sbatch scripts/slurm_data_scale_check_10000_checkpoint_sampling_convergence_multiseed.sbatch
+```
+
+This path reuses the existing bounded 10000-molecule processed artifact and fixed 9000/500/500 split, keeps the same model, optimizer, checkpoint/reload behavior, one-step sampling settings, processed-output schema, molecule count, and seed set `0,1,2`, and extends only the training horizon to a strict 200-step hard cap with patience-based stopping (`patience: 20`, `min_delta: 1.0e-6`, `monitor: train_loss_before_step`). It writes per-mode/per-seed manifest, result, log, and disposable checkpoint files named like:
+- `experiments/results/geom_data_scale_check_ckpt_sample_isotropic_mols10000_steps200_seed0.json`
+- `experiments/results/geom_data_scale_check_ckpt_sample_isotropic_mols10000_steps200_seed1.json`
+- `experiments/results/geom_data_scale_check_ckpt_sample_isotropic_mols10000_steps200_seed2.json`
+- matching `stiffness` files for seeds `0`, `1`, and `2`
+
+It also writes:
+- `experiments/results/geom_data_scale_check_ckpt_sample_multiseed_summary_mols10000_steps200_convergence.json`
+- `reports/tables/geom_data_scale_check_ckpt_sample_multiseed_summary_mols10000_steps200_convergence.md`
+
+The per-run outputs remain explicitly labeled `tiny_real_data_bounded_data_scale_check_checkpoint_sampling_not_benchmark`, `benchmark_result: false`, `hardware: cpu_only`, `gpu_used: false`, `pilot_run: true`, `bounded_pilot: true`, `data_scale_check_run: true`, `data_scale_check_10000_run: true`, `data_scale_check_10000_convergence_run: true`, `checkpoint_scope: disposable_data_scale_check_10000_checkpoint_sampling_only`, `sampling_executed: true`, and `slurm_account: null`. The summary adds early-stop accounting, including executed optimizer steps and stop reasons, and remains bounded pilot-only, not a benchmark result or larger real training run. Reruns should not be submitted without explicit approval.
+
+Current bounded 10000-molecule convergence diagnostics:
+
+```bash
+python scripts/summarize_data_scale_check_10000_convergence_diagnostics.py
+```
+
+This reads the six existing bounded steps200 checkpoint/sampling result JSON files for isotropic and stiffness-structured modes over seeds `0,1,2`. It does not run training, sampling, preprocessing, checkpoint loading, SLURM jobs, GPUs, or environment changes. It writes:
+- `experiments/results/geom_data_scale_check_ckpt_sample_convergence_diagnostics_mols10000_steps200.json`
+- `reports/tables/geom_data_scale_check_ckpt_sample_convergence_diagnostics_mols10000_steps200.md`
+
+The summary is labeled `tiny_real_data_bounded_data_scale_check_convergence_diagnostics_not_benchmark`, `benchmark_result: false`, `hardware: cpu_only`, `training_executed_by_summary: false`, `sampling_executed_by_summary: false`, and `larger_real_training_run_started: false`. It reports hard-cap hits, best-loss step, tail-window loss deltas, tail slopes, and whether the recorded traces are still trending downward near the 200-step hard cap.
+
+Prepared first formal bounded 10000-molecule training phase:
+
+```bash
+python scripts/run_data_scale_check_10000_formal_training_multiseed.py
+```
+
+For cluster execution, use the prepared SLURM script only after explicit approval:
+
+```bash
+sbatch --account=torch_pr_872_general scripts/slurm_data_scale_check_10000_formal_training_multiseed.sbatch
+```
+
+This path reuses the existing bounded 10000-molecule processed artifact and fixed 9000/500/500 split, keeps the same seed set `0,1,2`, model (`minimal_linear_velocity_pilot` / `single_linear_velocity_pilot`), optimizer (`SGD`, `learning_rate: 1.0e-2`), checkpoint save/reload pattern, and one-step sampling settings (`sample_step_count: 1`, `sample_step_size: 0.1`). It extends only the training horizon to `max_steps: 2000` with a strict hard cap and validation-driven checkpoint selection/stopping (`monitor: validation_loss_after_step`, `patience: 200`, `min_delta: 1.0e-6`).
+
+Per mode/seed it writes manifest/result/log files plus reusable best/latest checkpoints named like:
+- `experiments/results/geom_formal_10000_train_isotropic_mols10000_steps2000_seed0.json`
+- `experiments/checkpoints/geom_formal_10000_train_isotropic_mols10000_steps2000_seed0_best.pt`
+- `experiments/checkpoints/geom_formal_10000_train_isotropic_mols10000_steps2000_seed0_latest.pt`
+- matching `stiffness` files for seeds `0`, `1`, and `2`
+
+It also writes:
+- `experiments/results/geom_formal_10000_training_multiseed_summary.json`
+- `reports/tables/geom_formal_10000_training_multiseed_summary.md`
+
+The per-run outputs are labeled `tiny_real_data_formal_10000_training_not_benchmark`, `benchmark_result: false`, `hardware: cpu_only`, `gpu_used: false`, `formal_training_run: true`, `bounded_formal_training_run: true`, `checkpoint_reusable: true`, `checkpoint_selected_by_validation: true`, and `checkpoint_selection_metric: validation_loss_after_step`. The aggregate summary is reporting-only and not a benchmark result. This path does not modify raw data or the environment and should not be submitted without explicit approval.
+
+Prepared first full-database formal training path:
+
+```bash
+python scripts/run_geom_full_database_formal_training_seed0.py
+```
+
+For cluster execution, use the prepared SLURM script only after explicit approval:
+
+```bash
+sbatch --account=torch_pr_872_general scripts/slurm_geom_full_database_formal_training_seed0.sbatch
+```
+
+This path first scans the available GEOM-Drugs `rdkit_folder/drugs` raw tree read-only, writes one processed record and one conformer per extractable molecule, writes a 90/5/5 random split at seed `0`, and then runs the same formal training design for isotropic and stiffness-structured modes at seed `0`. It preserves the formal 10000-molecule model (`minimal_linear_velocity_pilot` / `single_linear_velocity_pilot`), optimizer (`SGD`, `learning_rate: 1.0e-2`), checkpoint/reload behavior, one-step sampling diagnostic (`sample_step_count: 1`, `sample_step_size: 0.1`), validation-selected checkpoint selection, and early-stop rule (`monitor: validation_loss_after_step`, `patience: 200`, `min_delta: 1.0e-6`, `max_steps: 2000`, `hard_max_steps: 2000`).
+
+It prepares:
+- `data/processed/geom_drugs_full_database/molecules.json`
+- `data/processed/geom_drugs_full_database/manifest.json`
+- `data/splits/geom_drugs_full_database/random_seed0/split.json`
+- `data/splits/geom_drugs_full_database/random_seed0/manifest.json`
+
+Per mode it writes manifest/result/log files plus reusable best/latest checkpoints named like:
+- `experiments/results/geom_formal_full_database_train_isotropic_steps2000_seed0.json`
+- `experiments/checkpoints/geom_formal_full_database_train_isotropic_steps2000_seed0_best.pt`
+- `experiments/checkpoints/geom_formal_full_database_train_isotropic_steps2000_seed0_latest.pt`
+- matching `stiffness` files for seed `0`
+
+The per-run outputs are labeled `geom_drugs_full_database_formal_training_not_benchmark`, `benchmark_result: false`, `hardware: cpu_only`, `gpu_used: false`, `formal_training_run: true`, `full_database_formal_training_run: true`, `checkpoint_reusable: true`, `checkpoint_selected_by_validation: true`, and `checkpoint_selection_metric: validation_loss_after_step`. This is a first formal full-database training path, not a benchmark result; it does not modify raw data or the environment and should not be submitted without explicit approval.
+
+Prepared parallel GPU full-database formal seed1/seed2 path:
+
+```bash
+python scripts/run_geom_full_database_formal_training_single.py --mode isotropic --seed 1 --device cuda --require-cuda
+```
+
+The single-job entry point runs one source mode and one training seed. It preserves the current full-database formal design and keeps the policy that each job regenerates its own processed artifact plus split by writing to run-specific paths such as:
+- `data/processed/geom_drugs_full_database_runs/isotropic_seed1/molecules.json`
+- `data/splits/geom_drugs_full_database_runs/isotropic_seed1/random_seed0/split.json`
+
+The split construction remains the same 90/5/5 random split with split seed `0`; the training seed is the only seed varied. Prepared GPU SLURM wrappers:
+- `scripts/slurm_geom_full_database_formal_training_isotropic_seed1_gpu.sbatch`
+- `scripts/slurm_geom_full_database_formal_training_stiffness_seed1_gpu.sbatch`
+- `scripts/slurm_geom_full_database_formal_training_isotropic_seed2_gpu.sbatch`
+- `scripts/slurm_geom_full_database_formal_training_stiffness_seed2_gpu.sbatch`
+
+Submit only after explicit approval, one job per mode/seed combination. The recommended account is `torch_pr_872_general`: these jobs request one standard GPU and a substantial CPU-side raw-tree preprocessing step, so faster queue turnaround is likely more valuable than A100-class hardware. `torch_pr_226_chemistry` may provide stronger GPUs such as A100, but queue time may be longer and the current minimal linear formal model is unlikely to benefit enough to justify that account by default.
+
+Current full-database formal seed0 comparison:
+
+```bash
+python scripts/compare_geom_full_database_formal_seed0.py
+```
+
+This reads the existing full-database formal seed0 result JSONs:
+- `experiments/results/geom_formal_full_database_train_isotropic_steps2000_seed0.json`
+- `experiments/results/geom_formal_full_database_train_stiffness_steps2000_seed0.json`
+
+It validates that both inputs use the same full-database one-conformer scope, random split, seed, model-side formal settings, optimizer, learning rate, validation-selected checkpoint rule, one-step sampling diagnostic, and `2000`-step hard cap. It writes:
+- `experiments/results/geom_formal_full_database_seed0_summary.json`
+- `reports/tables/geom_formal_full_database_seed0_summary.md`
+
+The summary is labeled `geom_drugs_full_database_formal_seed0_comparison_not_benchmark`, `benchmark_result: false`, `training_executed_by_summary: false`, `sampling_executed_by_summary: false`, `raw_data_modified: false`, `environment_modified: false`, and `gpu_used: false`. It reports split counts, stop reasons, best/reloaded validation losses, sampled RMSD means overall and by split, safety labels, and a lower-is-better directional verdict for stiffness vs isotropic.
+
+Current full-database formal multiseed summary:
+
+```bash
+python scripts/compare_geom_full_database_formal_multiseed.py
+```
+
+This reads the completed full-database formal result JSONs for isotropic and stiffness-structured modes over seeds `0`, `1`, and `2`. It validates that all inputs use the same full-database one-conformer scope, split counts, model-side formal settings, optimizer, learning rate, validation-selected checkpoint rule, one-step sampling diagnostic, and `2000`-step hard cap. It writes:
+- `experiments/results/geom_formal_full_database_multiseed_summary.json`
+- `reports/tables/geom_formal_full_database_multiseed_summary.md`
+
+The summary is labeled `geom_drugs_full_database_formal_multiseed_summary_not_benchmark`, `benchmark_result: false`, `training_executed_by_summary: false`, `sampling_executed_by_summary: false`, `raw_data_modified: false`, `environment_modified: false`, and `gpu_used_by_summary: false`. It reports split counts, stop reasons, best/reloaded validation losses, sampled RMSD means overall/train/val/test, per-seed outcomes, aggregate means, and a lower-is-better multiseed directional verdict for stiffness vs isotropic.
+
 Current bounded tiny real-data pilot comparison report:
 
 ```bash

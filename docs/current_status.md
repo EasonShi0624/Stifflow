@@ -41,7 +41,11 @@ Current status:
 - `scripts/run_data_scale_check_500_checkpoint_sampling.py` writes a bounded 500-molecule processed dry-run artifact and nondegenerate 450/25/25 split, then runs the same CPU-only checkpoint-and-sampling pilot settings for isotropic and stiffness-structured modes at seed `0`.
 - `scripts/run_data_scale_check_500_checkpoint_sampling_multiseed.py` runs the existing bounded 500-molecule checkpoint-and-sampling setup for both modes over seeds `0,1,2` and writes a deterministic non-benchmark multi-seed JSON/markdown summary.
 - `scripts/run_data_scale_check_10000_checkpoint_sampling.py` runs the bounded 10000-molecule CPU-only checkpoint-and-sampling pilot for isotropic and stiffness-structured modes at seed `0`.
-- `scripts/run_data_scale_check_10000_checkpoint_sampling_multiseed.py` and `scripts/slurm_data_scale_check_10000_checkpoint_sampling_multiseed.sbatch` are prepared for the bounded 10000-molecule CPU-only checkpoint-and-sampling multi-seed repeat over seeds `0,1,2`, but the SLURM job should still be submitted only after explicit approval.
+- `scripts/run_data_scale_check_10000_checkpoint_sampling_multiseed.py` runs the bounded 10000-molecule CPU-only checkpoint-and-sampling multi-seed repeat over seeds `0,1,2` and writes a deterministic non-benchmark multi-seed JSON/markdown summary.
+- `scripts/run_data_scale_check_10000_checkpoint_sampling_convergence_multiseed.py` and `scripts/slurm_data_scale_check_10000_checkpoint_sampling_convergence_multiseed.sbatch` cover the bounded 10000-molecule CPU-only checkpoint-and-sampling convergence repeat over the same fixed seed set, with max_steps `200`, patience `20`, and a strict hard cap; any rerun should still be submitted only after explicit approval.
+- `scripts/summarize_data_scale_check_10000_convergence_diagnostics.py` reads the existing bounded 10000-molecule steps200 result JSONs and writes a reporting-only convergence diagnostics JSON plus markdown report without running training or sampling.
+- `scripts/run_data_scale_check_10000_formal_training_multiseed.py` and `scripts/slurm_data_scale_check_10000_formal_training_multiseed.sbatch` are prepared for the first formal bounded 10000-molecule CPU-only training phase over seeds `0,1,2`, using reusable validation-selected checkpoints and the frozen artifact, split, model, optimizer, checkpoint/reload pattern, and one-step sampling settings; submit only after explicit approval.
+- `scripts/run_geom_full_database_formal_training_seed0.py` and `scripts/slurm_geom_full_database_formal_training_seed0.sbatch` are prepared for the first full-database GEOM-Drugs CPU-only formal training path at seed `0`, preserving the formal training design while changing the data scope to the full available one-conformer raw tree and a 90/5/5 random split; submit only after explicit approval.
 - `scripts/evaluate.py` currently re-runs the same smoke evaluation path.
 
 This file is the canonical place to record **what is actually present today**, as opposed to the intended target design.
@@ -83,20 +87,22 @@ The repo contains:
 - a bounded CPU-only 500-molecule data-scale-check checkpoint/sampling runner with a compact JSON/log comparison of the seed-0 directional signal;
 - a bounded CPU-only 500-molecule data-scale-check checkpoint/sampling multi-seed runner and deterministic summary/report over seeds `0,1,2`;
 - a bounded CPU-only 10000-molecule data-scale-check checkpoint/sampling runner with a compact JSON/log comparison of the seed-0 directional signal;
-- a prepared, not-yet-submitted bounded CPU-only 10000-molecule data-scale-check checkpoint/sampling multi-seed SLURM path;
+- a bounded CPU-only 10000-molecule data-scale-check checkpoint/sampling multi-seed runner and deterministic summary/report over seeds `0,1,2`;
+- bounded CPU-only 10000-molecule data-scale-check checkpoint/sampling convergence multi-seed outputs over seeds `0,1,2` with max_steps `200`;
+- a reporting-only bounded 10000-molecule convergence diagnostics summary/report over the existing steps200 loss traces;
+- a prepared first formal bounded CPU-only 10000-molecule training path with max_steps `2000`, validation-loss checkpoint selection/stopping, reusable best/latest checkpoints, and a fixed non-benchmark aggregation interface;
+- a prepared first full-database CPU-only GEOM-Drugs formal training path that scans the available `rdkit_folder/drugs` raw tree, writes a one-conformer-per-molecule processed artifact and 90/5/5 random split, then runs the frozen formal training design for isotropic and stiffness-structured modes at seed `0` after approved scheduling;
 - honest placeholders for GEOM preprocessing, model sampling, and ablation orchestration.
 
 Still missing or intentionally incomplete:
-- real GEOM-Drugs preprocessing;
-- a real GEOM-Drugs processed training subset;
+- completed full-database GEOM-Drugs processed/split artifacts;
 - real GEOM-Drugs random/scaffold split artifacts;
 - full real GEOM-Drugs raw-data schema/parser beyond bounded metadata inspection;
 - real GEOM-scale RDKit ETKDG/MMFF baseline runner beyond the three-molecule dry-run;
 - real equivariant neural backbone implementation and full model training;
-- any real model training beyond the bounded three-molecule pilot, bounded six-molecule micro-pilot, and bounded 30/500-molecule data-scale checks;
-- completed 10000-molecule data-scale multi-seed outputs;
-- trainable model loops beyond the bounded tiny smoke checks, the bounded three-molecule pilot, bounded six-molecule micro-pilot, and bounded 30/500-molecule data-scale checks;
-- real model sampling beyond bounded tiny smoke checks, the bounded six-molecule micro-pilot checkpoint/sampling pilot, and bounded 30/500-molecule checkpoint/sampling data-scale checks;
+- any benchmark-style model training beyond the prepared bounded 10000-molecule and full-database formal paths;
+- trainable model loops beyond the bounded tiny smoke checks, the bounded three-molecule pilot, bounded six-molecule micro-pilot, and bounded 30/500/10000-molecule data-scale checks;
+- real model sampling beyond bounded tiny smoke checks, the bounded six-molecule micro-pilot checkpoint/sampling pilot, and bounded 30/500/10000-molecule checkpoint/sampling data-scale checks;
 - real COV/MAT over generated conformer ensembles;
 - PoseBusters/MMFF/UFF/xTB integrations;
 - full random-vs-scaffold benchmark runs.
@@ -109,7 +115,7 @@ If any of the above now exist, update this file.
 
 The next implementation pass should aim to turn the smoke scaffold into the first real runnable milestone:
 
-1. grow beyond the bounded 10000-molecule single-seed data-scale check only after the bounded 10000-molecule multi-seed repeat is run and reviewed;
+1. submit the prepared bounded 10000-molecule formal training job only after explicit approval, then review validation-selected checkpoints before making benchmark claims;
 2. add scaffold-split tests using fixture scaffold labels;
 3. add a real training-loop smoke test or separate smoke scripts from future training scripts;
 4. keep all smoke outputs labeled as wiring checks, not scientific results;

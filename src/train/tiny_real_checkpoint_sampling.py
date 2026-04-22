@@ -10,7 +10,11 @@ import time
 from pathlib import Path
 from typing import Any
 
-from src.models.checkpoint_sampling_smoke import run_checkpoint_sampling_smoke, warm_up_checkpoint_sampling_runtime
+from src.models.checkpoint_sampling_smoke import (
+    run_bounded_checkpoint_sampling_pilot,
+    run_checkpoint_sampling_smoke,
+    warm_up_checkpoint_sampling_runtime,
+)
 from src.train import tiny_real as tiny_real_data
 from src.train.tiny_real_multi_step import DEFAULT_MAX_STEPS, HARD_MAX_STEPS
 from src.utils.config import load_config
@@ -38,6 +42,10 @@ DATA_SCALE_CHECK_10000_CONFIG_PATHS = (
     Path("configs/train/data_scale_check_10000_isotropic.yaml"),
     Path("configs/train/data_scale_check_10000_stiffness.yaml"),
 )
+DATA_SCALE_CHECK_10000_CONVERGENCE_CONFIG_PATHS = (
+    Path("configs/train/data_scale_check_10000_convergence_isotropic.yaml"),
+    Path("configs/train/data_scale_check_10000_convergence_stiffness.yaml"),
+)
 MICRO_PILOT_RESULT_KIND = "tiny_real_data_bounded_micro_pilot_checkpoint_sampling_not_benchmark"
 DATA_SCALE_CHECK_RESULT_KIND = "tiny_real_data_bounded_data_scale_check_checkpoint_sampling_not_benchmark"
 DATA_SCALE_CHECK_COMPARISON_RESULT_KIND = (
@@ -48,11 +56,16 @@ DATA_SCALE_CHECK_MULTI_SEED_SUMMARY_RESULT_KIND = (
 )
 MICRO_PILOT_EXECUTION_MODE = "local_cpu_tiny_real_micro_pilot_checkpoint_sampling"
 DATA_SCALE_CHECK_EXECUTION_MODE = "local_cpu_tiny_real_data_scale_check_checkpoint_sampling"
+DATA_SCALE_CHECK_CONVERGENCE_EXECUTION_MODE = "local_cpu_tiny_real_data_scale_check_checkpoint_sampling_convergence"
 MICRO_PILOT_MAX_MOLECULES = 6
 DATA_SCALE_CHECK_MAX_MOLECULES = 30
 DATA_SCALE_CHECK_500_MAX_MOLECULES = 500
 DATA_SCALE_CHECK_10000_MAX_MOLECULES = 10_000
 DEFAULT_MICRO_PILOT_MAX_STEPS = HARD_MAX_STEPS
+DATA_SCALE_CHECK_10000_CONVERGENCE_MAX_STEPS = 200
+DATA_SCALE_CHECK_10000_CONVERGENCE_HARD_MAX_STEPS = 200
+DATA_SCALE_CHECK_10000_CONVERGENCE_PATIENCE = 20
+DATA_SCALE_CHECK_10000_CONVERGENCE_MIN_DELTA = 1.0e-6
 MICRO_PILOT_CHECKPOINT_SCOPE = "disposable_micro_pilot_checkpoint_sampling_only"
 DATA_SCALE_CHECK_CHECKPOINT_SCOPE = "disposable_data_scale_check_checkpoint_sampling_only"
 DATA_SCALE_CHECK_500_CHECKPOINT_SCOPE = "disposable_data_scale_check_500_checkpoint_sampling_only"
@@ -79,6 +92,12 @@ DEFAULT_DATA_SCALE_CHECK_10000_MULTI_SEED_SUMMARY_PATH = Path(
 )
 DEFAULT_DATA_SCALE_CHECK_10000_MULTI_SEED_REPORT_PATH = Path(
     "reports/tables/geom_data_scale_check_ckpt_sample_multiseed_summary_mols10000.md"
+)
+DEFAULT_DATA_SCALE_CHECK_10000_CONVERGENCE_MULTI_SEED_SUMMARY_PATH = Path(
+    "experiments/results/geom_data_scale_check_ckpt_sample_multiseed_summary_mols10000_steps200_convergence.json"
+)
+DEFAULT_DATA_SCALE_CHECK_10000_CONVERGENCE_MULTI_SEED_REPORT_PATH = Path(
+    "reports/tables/geom_data_scale_check_ckpt_sample_multiseed_summary_mols10000_steps200_convergence.md"
 )
 DATA_SCALE_CHECK_COMPARABLE_METRICS = (
     "reloaded_loss",
@@ -442,6 +461,60 @@ def run_data_scale_check_10000_checkpoint_sampling_multiseed(
     )
 
 
+def run_data_scale_check_10000_convergence_checkpoint_sampling_configs(
+    config_paths: tuple[str | Path, ...] = DATA_SCALE_CHECK_10000_CONVERGENCE_CONFIG_PATHS,
+    output_root: str | Path | None = None,
+    seed: int = 0,
+    max_steps: int = DATA_SCALE_CHECK_10000_CONVERGENCE_MAX_STEPS,
+    hard_max_steps: int = DATA_SCALE_CHECK_10000_CONVERGENCE_HARD_MAX_STEPS,
+    sample_step_size: float = DEFAULT_SAMPLE_STEP_SIZE,
+) -> dict[str, dict[str, Path]]:
+    outputs = {}
+    for config_path in config_paths:
+        config = load_config(config_path)
+        if output_root is not None:
+            config["experiment"]["output_root"] = str(output_root)
+        config["experiment"]["seed"] = int(seed)
+        paths = run_data_scale_check_10000_convergence_checkpoint_sampling(
+            config=config,
+            config_path=Path(config_path),
+            max_steps=max_steps,
+            hard_max_steps=hard_max_steps,
+            sample_step_size=sample_step_size,
+        )
+        outputs[paths["mode"]] = {
+            "manifest": paths["manifest"],
+            "results": paths["results"],
+            "log": paths["log"],
+            "checkpoint": paths["checkpoint"],
+        }
+    return outputs
+
+
+def run_data_scale_check_10000_convergence_checkpoint_sampling_multiseed(
+    seed_set: tuple[int, ...] = DEFAULT_DATA_SCALE_CHECK_CHECKPOINT_SEED_SET,
+    config_paths: tuple[str | Path, ...] = DATA_SCALE_CHECK_10000_CONVERGENCE_CONFIG_PATHS,
+    output_root: str | Path | None = None,
+    max_steps: int = DATA_SCALE_CHECK_10000_CONVERGENCE_MAX_STEPS,
+    hard_max_steps: int = DATA_SCALE_CHECK_10000_CONVERGENCE_HARD_MAX_STEPS,
+    sample_step_size: float = DEFAULT_SAMPLE_STEP_SIZE,
+) -> dict[str, dict[int, dict[str, Path]]]:
+    _validate_data_scale_check_checkpoint_seed_set(seed_set)
+    outputs: dict[str, dict[int, dict[str, Path]]] = {}
+    for seed in seed_set:
+        seed_outputs = run_data_scale_check_10000_convergence_checkpoint_sampling_configs(
+            config_paths=config_paths,
+            output_root=output_root,
+            seed=int(seed),
+            max_steps=max_steps,
+            hard_max_steps=hard_max_steps,
+            sample_step_size=sample_step_size,
+        )
+        for mode, paths in seed_outputs.items():
+            outputs.setdefault(mode, {})[int(seed)] = paths
+    return outputs
+
+
 def write_data_scale_check_checkpoint_sampling_multiseed_summary(
     result_paths: list[str | Path],
     summary_path: str | Path = DEFAULT_DATA_SCALE_CHECK_MULTI_SEED_SUMMARY_PATH,
@@ -449,6 +522,8 @@ def write_data_scale_check_checkpoint_sampling_multiseed_summary(
     expected_seeds: tuple[int, ...] = DEFAULT_DATA_SCALE_CHECK_CHECKPOINT_SEED_SET,
     max_molecules: int = DATA_SCALE_CHECK_MAX_MOLECULES,
     max_steps: int = DEFAULT_MICRO_PILOT_MAX_STEPS,
+    summary_name: str | None = None,
+    report_title: str | None = None,
 ) -> dict[str, Path]:
     _validate_data_scale_check_checkpoint_seed_set(expected_seeds)
     scope = _data_scale_check_output_scope(max_molecules)
@@ -470,8 +545,11 @@ def write_data_scale_check_checkpoint_sampling_multiseed_summary(
     aggregate_metric_comparisons = _aggregate_data_scale_check_metric_comparisons(per_seed_comparisons)
     consistency = _data_scale_check_stiffness_consistency(aggregate_metric_comparisons)
     runtime_summary = _data_scale_check_multiseed_runtime_summary(rows)
+    early_stop_summary = _data_scale_check_early_stop_summary(rows)
     summary = {
-        "summary_name": f"geom_data_scale_check_ckpt_sample_multiseed_summary_mols{max_molecules}",
+        "summary_name": summary_name or f"geom_data_scale_check_ckpt_sample_multiseed_summary_mols{max_molecules}",
+        "report_title": report_title
+        or f"Bounded {max_molecules}-Molecule Checkpoint/Sampling Multi-Seed Summary",
         "dataset_name": "geom_drugs",
         "dataset_kind": "geom_drugs_tiny_processed_dry_run",
         "dataset_subset_scope": scope["subset_scope"],
@@ -488,6 +566,8 @@ def write_data_scale_check_checkpoint_sampling_multiseed_summary(
         "data_scale_check_run": True,
         "data_scale_check_500_run": max_molecules == DATA_SCALE_CHECK_500_MAX_MOLECULES,
         "data_scale_check_10000_run": max_molecules == DATA_SCALE_CHECK_10000_MAX_MOLECULES,
+        "data_scale_check_10000_convergence_run": early_stop_summary is not None
+        and max_molecules == DATA_SCALE_CHECK_10000_MAX_MOLECULES,
         "raw_data_modified": False,
         "environment_modified": False,
         "training_executed_by_summary": False,
@@ -507,10 +587,11 @@ def write_data_scale_check_checkpoint_sampling_multiseed_summary(
         "aggregate_metric_comparisons": aggregate_metric_comparisons,
         "stiffness_consistency": consistency,
         "runtime_summary": runtime_summary,
+        "early_stop_summary": early_stop_summary,
         "runtime_seconds": None,
         "notes": [
             f"Reporting-only aggregation of bounded {max_molecules}-molecule data-scale-check checkpoint-and-sampling outputs across a fixed tiny seed set.",
-            "Each input row uses the same bounded artifact, fixed split, model, optimizer, five-step cap, and one-step sampling settings; only the experiment seed changes.",
+            "Each input row uses the same bounded artifact, fixed split, model, optimizer, and one-step sampling settings; only the experiment seed changes, and the configured training cap is held fixed across all rows.",
             "Loss and sampled RMSD values are bounded pilot diagnostics only, not benchmark metrics or evidence of model quality.",
             "Runtime metadata is kept for accounting checks only; tiny runtime differences are not interpreted as performance results.",
             "Summary generation runtime is intentionally omitted so the report is deterministic for identical inputs.",
@@ -811,6 +892,227 @@ def run_micro_pilot_checkpoint_sampling(
     return {"mode": corruption_mode, "manifest": manifest_path, "results": results_path, "log": log_path, "checkpoint": checkpoint_path}
 
 
+def run_data_scale_check_10000_convergence_checkpoint_sampling(
+    config: dict[str, Any],
+    config_path: str | Path | None = None,
+    max_steps: int = DATA_SCALE_CHECK_10000_CONVERGENCE_MAX_STEPS,
+    hard_max_steps: int = DATA_SCALE_CHECK_10000_CONVERGENCE_HARD_MAX_STEPS,
+    sample_step_size: float = DEFAULT_SAMPLE_STEP_SIZE,
+) -> dict[str, Path]:
+    config = copy.deepcopy(config)
+    config_path_obj = Path(config_path) if config_path is not None else None
+    output_root = Path(config["experiment"]["output_root"])
+    seed = int(config["experiment"]["seed"])
+    corruption_mode = config["corruption"]["mode"]
+    max_molecules = int(config["data"]["subset"]["max_molecules"])
+    subset_tag = str(config["data"]["subset"].get("tag"))
+    scope = _checkpoint_sampling_scope_settings(max_molecules=max_molecules, subset_tag=subset_tag)
+    if scope["max_molecules"] != DATA_SCALE_CHECK_10000_MAX_MOLECULES:
+        raise ValueError("bounded convergence checkpoint/sampling is only implemented for the 10000-molecule scope")
+    learning_rate = float(config["train"]["learning_rate"])
+    processed_artifact_path = Path(config["data"]["processed_artifact_path"])
+    split_path = Path(config["data"]["split_path"])
+    run_name = _checkpoint_run_name(scope["run_prefix"], corruption_mode, seed, max_molecules, max_steps)
+    manifest_path = output_root / "manifests" / f"{run_name}.json"
+    results_path = output_root / "results" / f"{run_name}.json"
+    log_path = output_root / "logs" / f"{run_name}.log"
+    checkpoint_path = output_root / "checkpoints" / f"{run_name}.pt"
+
+    config["experiment"]["name"] = run_name
+    config["train"]["max_steps"] = int(max_steps)
+    config["train"]["hard_max_steps"] = int(hard_max_steps)
+    config["train"]["batch_scope"] = scope["batch_scope"]
+    config["train"]["checkpointing_enabled"] = True
+    config["train"]["checkpoint_scope"] = scope["checkpoint_scope"]
+    config["model"]["checkpoint_sampling_smoke_model"] = "single_linear_velocity_smoke"
+    config["sample"] = {
+        "enabled": True,
+        "pilot_only": True,
+        "sample_step_count": 1,
+        "sample_step_size": float(sample_step_size),
+        "sample_scope": scope["sample_scope"],
+    }
+    _validate_data_scale_check_10000_convergence_config(
+        config,
+        max_steps=max_steps,
+        hard_max_steps=hard_max_steps,
+        sample_step_size=sample_step_size,
+        scope=scope,
+    )
+
+    artifact = tiny_real_data._load_tiny_real_artifact(processed_artifact_path)
+    subset_scope = artifact.get("subset_scope") or config["data"].get("subset", {}).get("tag")
+    records = tiny_real_data._select_records(artifact["molecules"], max_molecules)
+    split = tiny_real_data._load_tiny_real_split(split_path)
+    split_membership = tiny_real_data._validate_split_coverage(split, records)
+    all_samples = tiny_real_data._build_flow_matching_samples(
+        config,
+        records,
+        random.Random(seed),
+        split_membership,
+    )
+    train_samples = [sample for sample in all_samples if sample["split"] == "train"]
+    if not train_samples:
+        raise ValueError("bounded convergence checkpoint/sampling requires a non-empty train split")
+    runtime_backend = warm_up_checkpoint_sampling_runtime()
+    start = time.time()
+    metrics = run_bounded_checkpoint_sampling_pilot(
+        samples=train_samples,
+        sampling_samples=all_samples,
+        checkpoint_path=checkpoint_path,
+        seed=seed,
+        max_steps=max_steps,
+        hard_max_steps=hard_max_steps,
+        learning_rate=learning_rate,
+        sample_step_size=sample_step_size,
+        early_stop=copy.deepcopy(config["train"]["early_stop"]),
+    )
+    elapsed = time.time() - start
+    split_counts = {key: len(split[key]) for key in ["train", "val", "test"]}
+    executed_steps = int(metrics["executed_train_steps"])
+
+    common = {
+        "run_name": run_name,
+        "dataset_name": "geom_drugs",
+        "dataset_kind": "geom_drugs_tiny_processed_dry_run",
+        "dataset_subset_scope": subset_scope,
+        "processed_artifact_path": str(processed_artifact_path),
+        "split_path": str(split_path),
+        "random_seed": seed,
+        "corruption_mode": corruption_mode,
+        "model_name": metrics["model_name"],
+        "backbone": config["model"]["backbone"],
+        "execution_mode": DATA_SCALE_CHECK_CONVERGENCE_EXECUTION_MODE,
+        "result_kind": scope["result_kind"],
+        "benchmark_result": False,
+        "hardware": "cpu_only",
+        "gpu_used": False,
+        "scheduler": None,
+        "slurm_account": None,
+        "pilot_run": True,
+        "bounded_pilot": True,
+        "micro_pilot_run": False,
+        "data_scale_check_run": True,
+        "data_scale_check_500_run": False,
+        "data_scale_check_10000_run": True,
+        "data_scale_check_10000_convergence_run": True,
+        "dry_run": False,
+        "training_executed": True,
+        "model_training_started": True,
+        "training_loop_executed": True,
+        "bounded_real_training_loop_executed": True,
+        "larger_real_training_run_started": False,
+        "max_steps": int(max_steps),
+        "hard_max_steps": int(hard_max_steps),
+        "optimizer_created": True,
+        "optimizer_step_count": executed_steps,
+        "backward_executed": True,
+        "backward_pass_count": executed_steps,
+        "checkpoint_path": str(checkpoint_path),
+        "checkpoint_written": True,
+        "checkpoint_reloaded": True,
+        "checkpoint_scope": scope["checkpoint_scope"],
+        "sampling_executed": True,
+        "sample_step_count": 1,
+        "sample_step_size": float(sample_step_size),
+        "forward_executed": True,
+        "loss_computed": True,
+        "training_sample_count": len(train_samples),
+        "sample_count": len(all_samples),
+        "runtime_scope": MICRO_PILOT_RUNTIME_SCOPE,
+        "runtime_seconds_reliable": True,
+        "configured_max_steps": int(max_steps),
+        "early_stop_enabled": True,
+        "early_stop_patience": int(config["train"]["early_stop"]["patience"]),
+        "early_stop_min_delta": float(config["train"]["early_stop"]["min_delta"]),
+        "early_stop_monitor": config["train"]["early_stop"]["monitor"],
+        "stopped_early": bool(metrics["stopped_early"]),
+        "early_stop_reason": metrics["stop_reason"],
+    }
+    manifest = {
+        **common,
+        "git_commit": _git_commit(),
+        "config_path": str(config_path_obj) if config_path_obj is not None else None,
+        "config": config,
+        "metrics_output_path": str(results_path),
+        "bounds": {
+            "max_molecules": max_molecules,
+            "hard_max_molecules": scope["hard_max_molecules"],
+            "input_molecule_count": len(artifact["molecules"]),
+            "processed_record_count_used": len(records),
+            "conformers_per_molecule_used": 1,
+            "train_molecule_count": split_counts["train"],
+            "val_molecule_count": split_counts["val"],
+            "test_molecule_count": split_counts["test"],
+            "training_sample_count": len(train_samples),
+            "sampling_sample_count": len(all_samples),
+            "max_steps": int(max_steps),
+            "hard_max_steps": int(hard_max_steps),
+            "executed_train_steps": executed_steps,
+            "optimizer_step_count": executed_steps,
+            "backward_pass_count": executed_steps,
+            "sample_step_count": 1,
+            "runtime_scope": MICRO_PILOT_RUNTIME_SCOPE,
+            "runtime_backend": runtime_backend,
+            "early_stop": copy.deepcopy(config["train"]["early_stop"]),
+            "stopped_early": bool(metrics["stopped_early"]),
+            "stop_reason": metrics["stop_reason"],
+        },
+        "split": {
+            "split_type": split["split_type"],
+            "split_scope": split.get("split_scope"),
+            "degenerate_tiny_split": split.get("degenerate_tiny_split"),
+            "counts": split_counts,
+        },
+        "notes": [
+            "Bounded 10000-molecule data-scale-check checkpoint/sampling convergence run only, not a benchmark result.",
+            (
+                f"Up to {int(max_steps)} CPU optimizer steps were allowed on the fixed "
+                f"{split_counts['train']}-molecule train split with patience "
+                f"{int(config['train']['early_stop']['patience'])}; this run executed {executed_steps} step(s)."
+            ),
+            "A disposable pilot-only checkpoint was written and reloaded, and a single bounded sampling step was run across the fixed 10000-molecule artifact.",
+            "No raw-data mutation, environment mutation, GPU execution, SLURM job, benchmark evaluation, reusable checkpoint, or larger real training run was used.",
+        ],
+    }
+    results = {
+        **common,
+        "dataset": {
+            "name": "geom_drugs",
+            "kind": "geom_drugs_tiny_processed_dry_run",
+            "subset_scope": subset_scope,
+            "molecule_count": len(records),
+            "split_type": split["split_type"],
+            "split_scope": split.get("split_scope"),
+            "split_counts": split_counts,
+            "degenerate_tiny_split": split.get("degenerate_tiny_split"),
+        },
+        "flow_matching": config["flow_matching"],
+        "metrics": {
+            "metric_scope": scope["metric_scope"],
+            **metrics,
+        },
+        "runtime_seconds": elapsed,
+        "runtime_backend": runtime_backend,
+        "runtime_warmup_scope": "full_cpu_checkpoint_sampling_operation",
+        "notes": [
+            "This is a bounded 10000-molecule GEOM CPU checkpoint/sampling convergence run.",
+            "The training loop uses patience-based early stopping with a strict hard cap and remains a bounded non-benchmark pilot only.",
+            "The checkpoint is disposable pilot-only output, not a reusable research checkpoint.",
+            "Sampled-coordinate values validate checkpoint reload and one-step sampling plumbing only and are not benchmark results.",
+            "runtime_seconds measures only checkpoint train/save/reload/sample after CPU backend warm-up so comparable modes do not include one-time import overhead.",
+            "No raw-data modification, environment mutation, GPU execution, SLURM job, benchmark evaluation, or larger real training run was used.",
+        ],
+    }
+
+    for directory in [manifest_path.parent, results_path.parent, log_path.parent, checkpoint_path.parent]:
+        directory.mkdir(parents=True, exist_ok=True)
+    manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    results_path.write_text(json.dumps(results, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    log_path.write_text(_convergence_log_text(results, manifest_path, results_path), encoding="utf-8")
+    return {"mode": corruption_mode, "manifest": manifest_path, "results": results_path, "log": log_path, "checkpoint": checkpoint_path}
+
+
 def _validate_bounds(max_molecules: int, max_steps: int, sample_step_size: float) -> None:
     if max_molecules != 3:
         raise ValueError("Tiny real checkpoint/sampling smoke must use exactly the existing three-molecule artifact")
@@ -861,6 +1163,76 @@ def _validate_micro_pilot_checkpoint_sampling_config(
         raise ValueError(f"{scope_label} checkpoint/sampling sample_step_size must be in (0, 1]")
     if int(config["eval"].get("eval_subset_size", 0)) != scope["max_molecules"]:
         raise ValueError(f"{scope_label} checkpoint/sampling eval_subset_size must match max_molecules")
+
+
+def _validate_data_scale_check_10000_convergence_config(
+    config: dict[str, Any],
+    max_steps: int,
+    hard_max_steps: int,
+    sample_step_size: float,
+    scope: dict[str, Any],
+) -> None:
+    if scope["max_molecules"] != DATA_SCALE_CHECK_10000_MAX_MOLECULES:
+        raise ValueError("bounded convergence checkpoint/sampling config must target the 10000-molecule scope")
+    if config["data"]["dataset_name"] != "geom_drugs":
+        raise ValueError("bounded convergence checkpoint/sampling config must use dataset_name=geom_drugs")
+    if config["data"].get("dataset_kind") != "geom_drugs_tiny_processed_dry_run":
+        raise ValueError("bounded convergence checkpoint/sampling config must use the bounded tiny processed artifact")
+    if int(config["data"]["subset"]["max_molecules"]) != DATA_SCALE_CHECK_10000_MAX_MOLECULES:
+        raise ValueError("bounded convergence checkpoint/sampling must use exactly 10000 molecules")
+    if config["data"]["subset"].get("tag") != "data_scale_check_10000_processed_dry_run":
+        raise ValueError("bounded convergence checkpoint/sampling requires the 10000-molecule subset tag")
+    if int(config["data"]["subset"].get("max_conformers_per_mol", 0)) != 1:
+        raise ValueError("bounded convergence checkpoint/sampling must use one conformer per molecule")
+    if config["corruption"]["mode"] not in DEFAULT_MODES:
+        raise ValueError(
+            f"Unsupported bounded convergence checkpoint/sampling mode: {config['corruption']['mode']}"
+        )
+    if config["model"].get("pilot_model") != "single_linear_velocity_pilot":
+        raise ValueError(
+            "bounded convergence checkpoint/sampling config must name pilot_model=single_linear_velocity_pilot"
+        )
+    if config["train"].get("enabled") is not True:
+        raise ValueError("bounded convergence checkpoint/sampling config must enable train.enabled")
+    if config["train"].get("pilot_only") is not True:
+        raise ValueError("bounded convergence checkpoint/sampling config must set train.pilot_only=true")
+    if config["train"].get("checkpointing_enabled") is not True:
+        raise ValueError("bounded convergence checkpoint/sampling must enable checkpointing")
+    if max_steps <= 1 or max_steps > hard_max_steps:
+        raise ValueError("bounded convergence checkpoint/sampling max_steps must be between 2 and hard_max_steps")
+    if hard_max_steps != DATA_SCALE_CHECK_10000_CONVERGENCE_HARD_MAX_STEPS:
+        raise ValueError(
+            "bounded convergence checkpoint/sampling hard_max_steps must remain fixed at "
+            f"{DATA_SCALE_CHECK_10000_CONVERGENCE_HARD_MAX_STEPS}"
+        )
+    if max_steps != DATA_SCALE_CHECK_10000_CONVERGENCE_MAX_STEPS:
+        raise ValueError(
+            "bounded convergence checkpoint/sampling max_steps must remain fixed at "
+            f"{DATA_SCALE_CHECK_10000_CONVERGENCE_MAX_STEPS}"
+        )
+    early_stop = config["train"].get("early_stop")
+    if not isinstance(early_stop, dict) or early_stop.get("enabled") is not True:
+        raise ValueError("bounded convergence checkpoint/sampling requires train.early_stop.enabled=true")
+    if int(early_stop.get("patience", 0)) != DATA_SCALE_CHECK_10000_CONVERGENCE_PATIENCE:
+        raise ValueError(
+            "bounded convergence checkpoint/sampling patience must remain fixed at "
+            f"{DATA_SCALE_CHECK_10000_CONVERGENCE_PATIENCE}"
+        )
+    if float(early_stop.get("min_delta", -1.0)) != DATA_SCALE_CHECK_10000_CONVERGENCE_MIN_DELTA:
+        raise ValueError(
+            "bounded convergence checkpoint/sampling min_delta must remain fixed at "
+            f"{DATA_SCALE_CHECK_10000_CONVERGENCE_MIN_DELTA}"
+        )
+    if early_stop.get("monitor") != "train_loss_before_step":
+        raise ValueError("bounded convergence checkpoint/sampling early_stop.monitor must be train_loss_before_step")
+    if config["sample"].get("enabled") is not True:
+        raise ValueError("bounded convergence checkpoint/sampling must enable sampling")
+    if config["sample"].get("sample_step_count") != 1:
+        raise ValueError("bounded convergence checkpoint/sampling must use exactly one sampling step")
+    if sample_step_size <= 0.0 or sample_step_size > 1.0:
+        raise ValueError("bounded convergence checkpoint/sampling sample_step_size must be in (0, 1]")
+    if int(config["eval"].get("eval_subset_size", 0)) != DATA_SCALE_CHECK_10000_MAX_MOLECULES:
+        raise ValueError("bounded convergence checkpoint/sampling eval_subset_size must match the 10000-molecule scope")
 
 
 def _validate_micro_pilot_checkpoint_seed_set(seed_set: tuple[int, ...]) -> None:
@@ -1062,10 +1434,18 @@ def _data_scale_check_comparison_row(path: Path) -> dict[str, Any]:
         "sample_count": int(payload["sample_count"]),
         "training_sample_count": int(payload["training_sample_count"]),
         "max_steps": int(payload["max_steps"]),
+        "hard_max_steps": int(payload.get("hard_max_steps", payload["max_steps"])),
+        "optimizer_step_count": int(payload.get("optimizer_step_count", payload["max_steps"])),
         "runtime_seconds": float(payload["runtime_seconds"]),
         "runtime_scope": payload["runtime_scope"],
         "runtime_seconds_reliable": bool(payload["runtime_seconds_reliable"]),
         "split_counts": payload["dataset"]["split_counts"],
+        "early_stop_enabled": bool(payload.get("early_stop_enabled", False)),
+        "early_stop_patience": payload.get("early_stop_patience"),
+        "early_stop_min_delta": payload.get("early_stop_min_delta"),
+        "early_stop_monitor": payload.get("early_stop_monitor"),
+        "stopped_early": bool(payload.get("stopped_early", False)),
+        "early_stop_reason": payload.get("early_stop_reason"),
         "reloaded_loss": float(metrics["reloaded_loss"]),
         "sampled_rmsd_overall_mean": _mean_sampled_rmsd(sampled),
         "sampled_rmsd_by_split_mean": {
@@ -1081,6 +1461,7 @@ def _data_scale_check_comparison_row(path: Path) -> dict[str, Any]:
             "data_scale_check_run": payload["data_scale_check_run"],
             "data_scale_check_500_run": payload.get("data_scale_check_500_run", False),
             "data_scale_check_10000_run": payload.get("data_scale_check_10000_run", False),
+            "data_scale_check_10000_convergence_run": payload.get("data_scale_check_10000_convergence_run", False),
             "larger_real_training_run_started": payload["larger_real_training_run_started"],
             "checkpoint_scope": payload["checkpoint_scope"],
             "sampling_executed": payload["sampling_executed"],
@@ -1277,6 +1658,39 @@ def _data_scale_check_multiseed_runtime_summary(rows: list[dict[str, Any]]) -> d
     }
 
 
+def _data_scale_check_early_stop_summary(rows: list[dict[str, Any]]) -> dict[str, Any] | None:
+    if not any(row["early_stop_enabled"] for row in rows):
+        return None
+    by_mode: dict[str, list[dict[str, Any]]] = {"isotropic": [], "stiffness_structured": []}
+    for row in rows:
+        by_mode[row["corruption_mode"]].append(row)
+    return {
+        "early_stop_enabled": True,
+        "early_stop_monitor_set": sorted({row["early_stop_monitor"] for row in rows if row["early_stop_enabled"]}),
+        "early_stop_patience_set": sorted({int(row["early_stop_patience"]) for row in rows if row["early_stop_enabled"]}),
+        "early_stop_min_delta_set": sorted(
+            {float(row["early_stop_min_delta"]) for row in rows if row["early_stop_enabled"]}
+        ),
+        "executed_optimizer_steps_by_mode": {
+            mode: [int(row["optimizer_step_count"]) for row in sorted(mode_rows, key=lambda item: item["random_seed"])]
+            for mode, mode_rows in by_mode.items()
+        },
+        "executed_optimizer_steps_mean_by_mode": {
+            mode: _mean_values([int(row["optimizer_step_count"]) for row in mode_rows])
+            for mode, mode_rows in by_mode.items()
+        },
+        "stopped_early_count_by_mode": {
+            mode: sum(1 for row in mode_rows if row["stopped_early"])
+            for mode, mode_rows in by_mode.items()
+        },
+        "early_stop_reason_by_mode": {
+            mode: [row["early_stop_reason"] for row in sorted(mode_rows, key=lambda item: item["random_seed"])]
+            for mode, mode_rows in by_mode.items()
+        },
+        "note": "Executed optimizer steps can be lower than max_steps only when the patience-based stop criterion fires; the hard cap remains fixed.",
+    }
+
+
 def _lower_is_better_comparison(metric: str, isotropic: float, stiffness: float) -> dict[str, Any]:
     delta = stiffness - isotropic
     if abs(delta) <= 1.0e-12:
@@ -1315,7 +1729,7 @@ def _data_scale_check_multiseed_markdown(summary: dict[str, Any]) -> str:
     consistency = summary["stiffness_consistency"]
     max_molecules = summary["max_molecules"]
     lines = [
-        f"# Bounded {max_molecules}-Molecule Checkpoint/Sampling Multi-Seed Summary",
+        f"# {summary.get('report_title') or f'Bounded {max_molecules}-Molecule Checkpoint/Sampling Multi-Seed Summary'}",
         "",
         f"This report aggregates bounded {max_molecules}-molecule data-scale-check checkpoint-and-sampling pilots across a fixed tiny seed set. It is bounded pilot-only and not a benchmark result.",
         "",
@@ -1330,6 +1744,7 @@ def _data_scale_check_multiseed_markdown(summary: dict[str, Any]) -> str:
         f"| max_steps | `{summary['max_steps']}` |",
         f"| hardware | `{summary['hardware']}` |",
         f"| gpu_used | `{summary['gpu_used']}` |",
+        f"| data_scale_check_10000_convergence_run | `{summary.get('data_scale_check_10000_convergence_run', False)}` |",
         f"| training_executed_by_summary | `{summary['training_executed_by_summary']}` |",
         f"| sampling_executed_by_summary | `{summary['sampling_executed_by_summary']}` |",
         f"| larger_real_training_run_started | `{summary['larger_real_training_run_started']}` |",
@@ -1392,6 +1807,40 @@ def _data_scale_check_multiseed_markdown(summary: dict[str, Any]) -> str:
             f"- all_runtime_seconds_reliable: `{runtime['all_runtime_seconds_reliable']}`",
             f"- note: {runtime['note']}",
             "",
+        ]
+    )
+    early_stop = summary.get("early_stop_summary")
+    if early_stop is not None:
+        lines.extend(
+            [
+                "## Early Stop Accounting",
+                "",
+                "| Mode | executed optimizer steps | mean executed steps | stopped early count | stop reasons |",
+                "|---|---|---:|---:|---|",
+                (
+                    "| isotropic | "
+                    f"`{early_stop['executed_optimizer_steps_by_mode']['isotropic']}` | "
+                    f"{_fmt(early_stop['executed_optimizer_steps_mean_by_mode']['isotropic'])} | "
+                    f"{early_stop['stopped_early_count_by_mode']['isotropic']} | "
+                    f"`{early_stop['early_stop_reason_by_mode']['isotropic']}` |"
+                ),
+                (
+                    "| stiffness_structured | "
+                    f"`{early_stop['executed_optimizer_steps_by_mode']['stiffness_structured']}` | "
+                    f"{_fmt(early_stop['executed_optimizer_steps_mean_by_mode']['stiffness_structured'])} | "
+                    f"{early_stop['stopped_early_count_by_mode']['stiffness_structured']} | "
+                    f"`{early_stop['early_stop_reason_by_mode']['stiffness_structured']}` |"
+                ),
+                "",
+                f"- early_stop_monitor_set: `{early_stop['early_stop_monitor_set']}`",
+                f"- early_stop_patience_set: `{early_stop['early_stop_patience_set']}`",
+                f"- early_stop_min_delta_set: `{early_stop['early_stop_min_delta_set']}`",
+                f"- note: {early_stop['note']}",
+                "",
+            ]
+        )
+    lines.extend(
+        [
             "Lower values are marked better for `reloaded_loss` and sampled RMSD diagnostics. These are bounded pilot diagnostics only and are not benchmark results.",
             "",
         ]
@@ -1496,4 +1945,54 @@ def _micro_log_text(results: dict[str, Any], manifest_path: Path, results_path: 
         f"results={results_path}\n"
         f"checkpoint={results['checkpoint_path']}\n"
         "note=Bounded real-data checkpoint/sampling only; disposable pilot checkpoint, no GPU, scheduler job, environment mutation, benchmark, or larger real training run.\n"
+    )
+
+
+def _convergence_log_text(results: dict[str, Any], manifest_path: Path, results_path: Path) -> str:
+    metrics = results["metrics"]
+    return (
+        f"run_name={results['run_name']}\n"
+        f"corruption_mode={results['corruption_mode']}\n"
+        f"execution_mode={results['execution_mode']}\n"
+        "pilot_run=true\n"
+        "bounded_pilot=true\n"
+        "data_scale_check_run=true\n"
+        "data_scale_check_10000_run=true\n"
+        "data_scale_check_10000_convergence_run=true\n"
+        "training_executed=true\n"
+        "model_training_started=true\n"
+        "training_loop_executed=true\n"
+        "bounded_real_training_loop_executed=true\n"
+        "larger_real_training_run_started=false\n"
+        f"max_steps={results['max_steps']}\n"
+        f"hard_max_steps={results['hard_max_steps']}\n"
+        f"optimizer_step_count={results['optimizer_step_count']}\n"
+        f"backward_pass_count={results['backward_pass_count']}\n"
+        f"early_stop_enabled={str(results['early_stop_enabled']).lower()}\n"
+        f"early_stop_patience={results['early_stop_patience']}\n"
+        f"early_stop_min_delta={results['early_stop_min_delta']}\n"
+        f"stopped_early={str(results['stopped_early']).lower()}\n"
+        f"early_stop_reason={results['early_stop_reason']}\n"
+        "checkpoint_written=true\n"
+        "checkpoint_reloaded=true\n"
+        f"checkpoint_scope={results['checkpoint_scope']}\n"
+        "sampling_executed=true\n"
+        f"sample_step_count={results['sample_step_count']}\n"
+        f"training_sample_count={results['training_sample_count']}\n"
+        f"sample_count={results['sample_count']}\n"
+        f"runtime_scope={results['runtime_scope']}\n"
+        f"runtime_seconds_reliable={str(results['runtime_seconds_reliable']).lower()}\n"
+        "hardware=cpu_only\n"
+        "gpu_used=false\n"
+        "scheduler=none\n"
+        f"result_kind={results['result_kind']}\n"
+        f"initial_loss={metrics['initial_loss']}\n"
+        f"best_train_loss={metrics['best_train_loss']}\n"
+        f"best_train_loss_step={metrics['best_train_loss_step']}\n"
+        f"reloaded_loss={metrics['reloaded_loss']}\n"
+        f"sampled_molecule_count={len(metrics['sampled_molecules'])}\n"
+        f"manifest={manifest_path}\n"
+        f"results={results_path}\n"
+        f"checkpoint={results['checkpoint_path']}\n"
+        "note=Bounded 10000-molecule convergence checkpoint/sampling pilot only; disposable checkpoint, no GPU, scheduler job, environment mutation, benchmark, or larger real training run.\n"
     )

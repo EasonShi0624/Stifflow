@@ -1,7 +1,7 @@
 # .codex/config.toml
 
 model = "gpt-5.4"
-model_reasoning_effort = "high"
+model_reasoning_effort = "xhigh"
 personality = "pragmatic"
 
 sandbox_mode = "workspace-write"
