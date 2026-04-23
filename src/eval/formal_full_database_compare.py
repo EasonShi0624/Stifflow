@@ -26,6 +26,10 @@ DEFAULT_RESULT_PATHS = [
     Path("experiments/results/geom_formal_full_database_train_isotropic_steps2000_seed0.json"),
     Path("experiments/results/geom_formal_full_database_train_stiffness_steps2000_seed0.json"),
 ]
+DEFAULT_SCAFFOLD_SEED0_RESULT_PATHS = [
+    Path("experiments/results/geom_formal_full_database_scaffold_train_isotropic_steps2000_seed0.json"),
+    Path("experiments/results/geom_formal_full_database_scaffold_train_stiffness_steps2000_seed0.json"),
+]
 DEFAULT_MULTI_SEED_RESULT_PATHS = [
     Path(f"experiments/results/geom_formal_full_database_train_isotropic_steps2000_seed{seed}.json")
     for seed in [0, 1, 2]
@@ -33,12 +37,35 @@ DEFAULT_MULTI_SEED_RESULT_PATHS = [
     Path(f"experiments/results/geom_formal_full_database_train_stiffness_steps2000_seed{seed}.json")
     for seed in [0, 1, 2]
 ]
+DEFAULT_SCAFFOLD_MULTI_SEED_RESULT_PATHS = [
+    Path(f"experiments/results/geom_formal_full_database_scaffold_train_isotropic_steps2000_seed{seed}.json")
+    for seed in [0, 1, 2]
+] + [
+    Path(f"experiments/results/geom_formal_full_database_scaffold_train_stiffness_steps2000_seed{seed}.json")
+    for seed in [0, 1, 2]
+]
 DEFAULT_SUMMARY_PATH = Path("experiments/results/geom_formal_full_database_seed0_summary.json")
 DEFAULT_REPORT_PATH = Path("reports/tables/geom_formal_full_database_seed0_summary.md")
+DEFAULT_SCAFFOLD_SEED0_SUMMARY_PATH = Path(
+    "experiments/results/geom_formal_full_database_scaffold_seed0_summary.json"
+)
+DEFAULT_SCAFFOLD_SEED0_REPORT_PATH = Path(
+    "reports/tables/geom_formal_full_database_scaffold_seed0_summary.md"
+)
 DEFAULT_MULTI_SEED_SUMMARY_PATH = Path("experiments/results/geom_formal_full_database_multiseed_summary.json")
 DEFAULT_MULTI_SEED_REPORT_PATH = Path("reports/tables/geom_formal_full_database_multiseed_summary.md")
+DEFAULT_SCAFFOLD_MULTI_SEED_SUMMARY_PATH = Path(
+    "experiments/results/geom_formal_full_database_scaffold_multiseed_summary.json"
+)
+DEFAULT_SCAFFOLD_MULTI_SEED_REPORT_PATH = Path(
+    "reports/tables/geom_formal_full_database_scaffold_multiseed_summary.md"
+)
 SUMMARY_RESULT_KIND = "geom_drugs_full_database_formal_seed0_comparison_not_benchmark"
+SCAFFOLD_SEED0_SUMMARY_RESULT_KIND = "geom_drugs_full_database_scaffold_formal_seed0_comparison_not_benchmark"
 MULTI_SEED_SUMMARY_RESULT_KIND = "geom_drugs_full_database_formal_multiseed_summary_not_benchmark"
+SCAFFOLD_MULTI_SEED_SUMMARY_RESULT_KIND = (
+    "geom_drugs_full_database_scaffold_formal_multiseed_summary_not_benchmark"
+)
 COMPARABLE_METRICS = (
     "best_validation_loss",
     "reloaded_validation_loss",
@@ -56,12 +83,12 @@ def write_formal_full_database_seed0_comparison(
     report_path: str | Path = DEFAULT_REPORT_PATH,
 ) -> dict[str, Path]:
     paths = [Path(path) for path in (result_paths or DEFAULT_RESULT_PATHS)]
-    payloads = [_load_result(path) for path in paths]
+    payloads = [_load_result(path, expected_split_type="random") for path in paths]
     rows = [_row_from_result(path, payload) for path, payload in zip(paths, payloads)]
     by_mode = {row["corruption_mode"]: row for row in rows}
     if set(by_mode) != {"isotropic", "stiffness_structured"}:
         raise ValueError(f"Expected isotropic and stiffness_structured results, got {sorted(by_mode)}")
-    _validate_comparable(rows)
+    _validate_comparable(rows, expected_split_type="random", require_cpu_only_inputs=True)
     metric_comparisons = _metric_comparisons(by_mode)
     verdict = _directional_verdict(metric_comparisons)
     summary = {
@@ -126,7 +153,92 @@ def write_formal_full_database_seed0_comparison(
     summary_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.parent.mkdir(parents=True, exist_ok=True)
     summary_path.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    report_path.write_text(_markdown_report(summary), encoding="utf-8")
+    report_path.write_text(_markdown_report(summary, title="Full-Database Formal Seed0 Comparison"), encoding="utf-8")
+    return {"summary": summary_path, "report": report_path}
+
+
+def write_formal_full_database_scaffold_seed0_comparison(
+    result_paths: list[str | Path] | None = None,
+    summary_path: str | Path = DEFAULT_SCAFFOLD_SEED0_SUMMARY_PATH,
+    report_path: str | Path = DEFAULT_SCAFFOLD_SEED0_REPORT_PATH,
+) -> dict[str, Path]:
+    paths = [Path(path) for path in (result_paths or DEFAULT_SCAFFOLD_SEED0_RESULT_PATHS)]
+    payloads = [_load_result(path, expected_split_type="scaffold") for path in paths]
+    rows = [_row_from_result(path, payload) for path, payload in zip(paths, payloads)]
+    by_mode = {row["corruption_mode"]: row for row in rows}
+    if set(by_mode) != {"isotropic", "stiffness_structured"}:
+        raise ValueError(f"Expected isotropic and stiffness_structured results, got {sorted(by_mode)}")
+    _validate_comparable(rows, expected_split_type="scaffold", require_cpu_only_inputs=False)
+    metric_comparisons = _metric_comparisons(by_mode)
+    verdict = _directional_verdict(metric_comparisons)
+    summary = {
+        "summary_name": "geom_formal_full_database_scaffold_seed0_summary",
+        "result_kind": SCAFFOLD_SEED0_SUMMARY_RESULT_KIND,
+        "benchmark_result": False,
+        "execution_mode": "local_cpu_full_database_scaffold_formal_seed0_report",
+        "hardware": "cpu_only",
+        "gpu_used": False,
+        "gpu_used_by_summary": False,
+        "scheduler": None,
+        "slurm_account": None,
+        "raw_data_modified": False,
+        "environment_modified": False,
+        "training_executed_by_summary": False,
+        "sampling_executed_by_summary": False,
+        "input_result_paths": [str(path) for path in paths],
+        "row_count": len(rows),
+        "dataset_scope": FULL_DATABASE_SCOPE,
+        "dataset": {
+            "name": "geom_drugs",
+            "kind": rows[0]["dataset_kind"],
+            "subset_scope": rows[0]["dataset_subset_scope"],
+            "molecule_count": rows[0]["molecule_count"],
+            "split_type": rows[0]["split_type"],
+            "split_scope": rows[0]["split_scope"],
+            "split_counts": rows[0]["split_counts"],
+        },
+        "training_horizon": {
+            "max_steps": FORMAL_10000_MAX_STEPS,
+            "hard_max_steps": FORMAL_10000_HARD_MAX_STEPS,
+            "optimizer": "SGD",
+            "learning_rate": FORMAL_10000_LEARNING_RATE,
+            "early_stop_monitor": "validation_loss_after_step",
+            "early_stop_patience": FORMAL_10000_PATIENCE,
+            "early_stop_min_delta": FORMAL_10000_MIN_DELTA,
+            "sample_step_count": 1,
+            "sample_step_size": FORMAL_10000_SAMPLE_STEP_SIZE,
+        },
+        "rows": rows,
+        "metric_comparisons": metric_comparisons,
+        "directional_verdict": verdict,
+        "safety_labels": {
+            "benchmark_result": False,
+            "non_benchmark": True,
+            "full_database_scaffold_formal_training_comparison": True,
+            "training_executed_by_summary": False,
+            "sampling_executed_by_summary": False,
+            "raw_data_modified": False,
+            "environment_modified": False,
+            "gpu_used_by_summary": False,
+            "result_scope": "full_database_scaffold_seed0_formal_comparison_only",
+        },
+        "notes": [
+            "Reporting-only comparison of completed full-database GEOM-Drugs scaffold-split formal seed0 outputs.",
+            "The summary validates that both inputs use the same full-database one-conformer scope, scaffold split, seed, model, optimizer, learning rate, checkpoint/reload behavior, one-step sampling diagnostic, validation-selected checkpoint rule, and hard step cap.",
+            "The compared inputs were GPU-enabled scheduled training runs; this summary itself does not use GPUs or submit jobs.",
+            "All lower-is-better comparisons are diagnostics from existing result JSONs only.",
+            "This is explicitly not a benchmark result and does not run training, sampling, preprocessing, SLURM jobs, GPUs, or environment changes.",
+        ],
+    }
+    summary_path = Path(summary_path)
+    report_path = Path(report_path)
+    summary_path.parent.mkdir(parents=True, exist_ok=True)
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    summary_path.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    report_path.write_text(
+        _markdown_report(summary, title="Full-Database Scaffold Formal Seed0 Comparison"),
+        encoding="utf-8",
+    )
     return {"summary": summary_path, "report": report_path}
 
 
@@ -137,9 +249,9 @@ def write_formal_full_database_multiseed_summary(
     expected_seeds: tuple[int, ...] = (0, 1, 2),
 ) -> dict[str, Path]:
     paths = [Path(path) for path in (result_paths or DEFAULT_MULTI_SEED_RESULT_PATHS)]
-    payloads = [_load_result(path) for path in paths]
+    payloads = [_load_result(path, expected_split_type="random") for path in paths]
     rows = [_row_from_result(path, payload) for path, payload in zip(paths, payloads)]
-    _validate_multiseed_rows(rows, expected_seeds=expected_seeds)
+    _validate_multiseed_rows(rows, expected_seeds=expected_seeds, expected_split_type="random")
     rows_by_seed = _rows_by_seed(rows)
     per_seed = [
         {
@@ -223,7 +335,114 @@ def write_formal_full_database_multiseed_summary(
     return {"summary": summary_path, "report": report_path}
 
 
-def _load_result(path: Path) -> dict[str, Any]:
+def write_formal_full_database_scaffold_multiseed_summary(
+    result_paths: list[str | Path] | None = None,
+    summary_path: str | Path = DEFAULT_SCAFFOLD_MULTI_SEED_SUMMARY_PATH,
+    report_path: str | Path = DEFAULT_SCAFFOLD_MULTI_SEED_REPORT_PATH,
+    expected_seeds: tuple[int, ...] = (0, 1, 2),
+) -> dict[str, Path]:
+    paths = [Path(path) for path in (result_paths or DEFAULT_SCAFFOLD_MULTI_SEED_RESULT_PATHS)]
+    payloads = [_load_result(path, expected_split_type="scaffold") for path in paths]
+    rows = [_row_from_result(path, payload) for path, payload in zip(paths, payloads)]
+    _validate_multiseed_rows(
+        rows,
+        expected_seeds=expected_seeds,
+        expected_split_type="scaffold",
+        require_shared_data_paths=True,
+    )
+    rows_by_seed = _rows_by_seed(rows)
+    per_seed = [
+        {
+            "seed": seed,
+            "rows": rows_by_seed[seed],
+            "metric_comparisons": _metric_comparisons(rows_by_seed[seed]),
+            "stop_reasons": {
+                mode: rows_by_seed[seed][mode]["stop_reason"]
+                for mode in ["isotropic", "stiffness_structured"]
+            },
+        }
+        for seed in sorted(rows_by_seed)
+    ]
+    aggregate = _aggregate_metric_comparisons(per_seed)
+    summary = {
+        "summary_name": "geom_formal_full_database_scaffold_multiseed_summary",
+        "result_kind": SCAFFOLD_MULTI_SEED_SUMMARY_RESULT_KIND,
+        "benchmark_result": False,
+        "execution_mode": "local_full_database_scaffold_formal_multiseed_report",
+        "hardware": "completed_scaffold_gpu_results",
+        "gpu_used_by_summary": False,
+        "scheduler": None,
+        "slurm_account": None,
+        "raw_data_modified": False,
+        "environment_modified": False,
+        "training_executed_by_summary": False,
+        "sampling_executed_by_summary": False,
+        "input_result_paths": [str(path) for path in paths],
+        "row_count": len(rows),
+        "seed_set": list(expected_seeds),
+        "dataset_scope": FULL_DATABASE_SCOPE,
+        "dataset": {
+            "name": "geom_drugs",
+            "kind": rows[0]["dataset_kind"],
+            "subset_scope": rows[0]["dataset_subset_scope"],
+            "molecule_count": rows[0]["molecule_count"],
+            "processed_artifact_path": rows[0]["processed_artifact_path"],
+            "split_path": rows[0]["split_path"],
+            "split_type": rows[0]["split_type"],
+            "split_scope": rows[0]["split_scope"],
+            "split_counts": rows[0]["split_counts"],
+        },
+        "training_horizon": {
+            "max_steps": FORMAL_10000_MAX_STEPS,
+            "hard_max_steps": FORMAL_10000_HARD_MAX_STEPS,
+            "optimizer": "SGD",
+            "learning_rate": FORMAL_10000_LEARNING_RATE,
+            "early_stop_monitor": "validation_loss_after_step",
+            "early_stop_patience": FORMAL_10000_PATIENCE,
+            "early_stop_min_delta": FORMAL_10000_MIN_DELTA,
+            "sample_step_count": 1,
+            "sample_step_size": FORMAL_10000_SAMPLE_STEP_SIZE,
+        },
+        "rows": rows,
+        "per_seed_comparisons": per_seed,
+        "aggregate_metric_comparisons": aggregate,
+        "directional_verdict": _multiseed_directional_verdict(per_seed, aggregate),
+        "safety_labels": {
+            "benchmark_result": False,
+            "non_benchmark": True,
+            "full_database_scaffold_formal_training_multiseed_summary": True,
+            "training_executed_by_summary": False,
+            "sampling_executed_by_summary": False,
+            "raw_data_modified": False,
+            "environment_modified": False,
+            "gpu_used_by_summary": False,
+            "result_scope": "full_database_scaffold_formal_multiseed_reporting_only",
+        },
+        "notes": [
+            "Reporting-only aggregation of completed full-database GEOM-Drugs scaffold-split formal outputs for seeds 0, 1, and 2.",
+            "The summary validates that all inputs use the same full-database one-conformer scope, cached scaffold split, model, optimizer, learning rate, checkpoint/reload behavior, one-step sampling diagnostic, validation-selected checkpoint rule, and hard step cap.",
+            "All input runs are expected to reuse the cached processed artifact and cached scaffold split; only the training seed varies within each mode.",
+            "Hardware metadata is retained as run metadata only and is not interpreted as a benchmark timing comparison.",
+            "All lower-is-better comparisons are diagnostics from existing result JSONs only.",
+            "This is explicitly not a benchmark result and does not run training, sampling, preprocessing, SLURM jobs, GPUs, or environment changes.",
+        ],
+    }
+    summary_path = Path(summary_path)
+    report_path = Path(report_path)
+    summary_path.parent.mkdir(parents=True, exist_ok=True)
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    summary_path.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    report_path.write_text(
+        _markdown_multiseed_report(
+            summary,
+            title="Full-Database Scaffold Formal Multi-Seed Summary",
+        ),
+        encoding="utf-8",
+    )
+    return {"summary": summary_path, "report": report_path}
+
+
+def _load_result(path: Path, expected_split_type: str = "random") -> dict[str, Any]:
     if not path.exists():
         raise FileNotFoundError(f"Full-database formal result does not exist: {path}")
     payload = json.loads(path.read_text(encoding="utf-8"))
@@ -254,8 +473,8 @@ def _load_result(path: Path) -> dict[str, Any]:
     dataset = payload.get("dataset") or {}
     if dataset.get("subset_scope") != FULL_DATABASE_SCOPE or dataset.get("split_scope") != FULL_DATABASE_SCOPE:
         raise ValueError(f"Result dataset/split scope mismatch: {path}")
-    if dataset.get("split_type") != "random":
-        raise ValueError(f"Result split_type is not random: {path}")
+    if dataset.get("split_type") != expected_split_type:
+        raise ValueError(f"Result split_type is not {expected_split_type}: {path}")
     split_counts = dataset.get("split_counts")
     if not isinstance(split_counts, dict) or min(int(split_counts[key]) for key in ["train", "val", "test"]) <= 0:
         raise ValueError(f"Result split counts are invalid: {path}")
@@ -281,6 +500,8 @@ def _row_from_result(path: Path, payload: dict[str, Any]) -> dict[str, Any]:
     return {
         "run_name": payload["run_name"],
         "source_path": str(path),
+        "processed_artifact_path": payload["processed_artifact_path"],
+        "split_path": payload["split_path"],
         "corruption_mode": payload["corruption_mode"],
         "random_seed": int(payload["random_seed"]),
         "result_kind": payload["result_kind"],
@@ -336,13 +557,19 @@ def _row_from_result(path: Path, payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _validate_comparable(rows: list[dict[str, Any]]) -> None:
+def _validate_comparable(
+    rows: list[dict[str, Any]],
+    expected_split_type: str,
+    require_cpu_only_inputs: bool,
+) -> None:
     baseline = rows[0]
     comparable_fields = [
         "random_seed",
         "dataset_kind",
         "dataset_subset_scope",
         "molecule_count",
+        "processed_artifact_path",
+        "split_path",
         "split_type",
         "split_scope",
         "split_counts",
@@ -369,6 +596,8 @@ def _validate_comparable(rows: list[dict[str, Any]]) -> None:
             raise ValueError("Full-database formal seed0 comparison requires random_seed=0")
         if row["dataset_subset_scope"] != FULL_DATABASE_SCOPE:
             raise ValueError("Full-database formal comparison requires the full-database scope")
+        if row["split_type"] != expected_split_type:
+            raise ValueError(f"Full-database formal comparison requires split_type={expected_split_type}")
         if row["max_steps"] != FORMAL_10000_MAX_STEPS or row["hard_max_steps"] != FORMAL_10000_HARD_MAX_STEPS:
             raise ValueError("Full-database formal comparison requires the frozen 2000-step horizon")
         if row["optimizer_name"] != "SGD" or row["learning_rate"] != FORMAL_10000_LEARNING_RATE:
@@ -381,11 +610,18 @@ def _validate_comparable(rows: list[dict[str, Any]]) -> None:
             raise ValueError("Full-database formal comparison requires the frozen min_delta")
         if row["sample_step_count"] != 1 or row["sample_step_size"] != FORMAL_10000_SAMPLE_STEP_SIZE:
             raise ValueError("Full-database formal comparison requires frozen one-step sampling settings")
-        if row["safety_labels"]["benchmark_result"] is not False or row["safety_labels"]["gpu_used"] is not False:
-            raise ValueError("Full-database formal comparison inputs must be non-benchmark CPU outputs")
+        if row["safety_labels"]["benchmark_result"] is not False:
+            raise ValueError("Full-database formal comparison inputs must be non-benchmark outputs")
+        if require_cpu_only_inputs and row["safety_labels"]["gpu_used"] is not False:
+            raise ValueError("Full-database formal comparison inputs must be CPU outputs")
 
 
-def _validate_multiseed_rows(rows: list[dict[str, Any]], expected_seeds: tuple[int, ...]) -> None:
+def _validate_multiseed_rows(
+    rows: list[dict[str, Any]],
+    expected_seeds: tuple[int, ...],
+    expected_split_type: str,
+    require_shared_data_paths: bool = False,
+) -> None:
     expected_pairs = {
         ("isotropic", int(seed)) for seed in expected_seeds
     } | {
@@ -417,12 +653,16 @@ def _validate_multiseed_rows(rows: list[dict[str, Any]], expected_seeds: tuple[i
         "model_name",
         "backbone",
     ]
+    if require_shared_data_paths:
+        comparable_fields.extend(["processed_artifact_path", "split_path"])
     for row in rows:
         for field in comparable_fields:
             if row[field] != baseline[field]:
                 raise ValueError(f"Full-database formal multiseed results are not comparable on {field}")
         if row["dataset_subset_scope"] != FULL_DATABASE_SCOPE:
             raise ValueError("Full-database formal multiseed summary requires the full-database scope")
+        if row["split_type"] != expected_split_type:
+            raise ValueError(f"Full-database formal multiseed summary requires split_type={expected_split_type}")
         if row["max_steps"] != FORMAL_10000_MAX_STEPS or row["hard_max_steps"] != FORMAL_10000_HARD_MAX_STEPS:
             raise ValueError("Full-database formal multiseed summary requires the frozen 2000-step horizon")
         if row["optimizer_name"] != "SGD" or row["learning_rate"] != FORMAL_10000_LEARNING_RATE:
@@ -597,10 +837,11 @@ def _mean(values: Any) -> float:
     return sum(items) / len(items)
 
 
-def _markdown_report(summary: dict[str, Any]) -> str:
+def _markdown_report(summary: dict[str, Any], title: str) -> str:
     by_mode = {row["corruption_mode"]: row for row in summary["rows"]}
+    summary_gpu_label = "gpu_used_by_summary" if "gpu_used_by_summary" in summary else "gpu_used"
     lines = [
-        "# Full-Database Formal Seed0 Comparison",
+        f"# {title}",
         "",
         "This is a reporting-only comparison of completed full-database GEOM-Drugs formal seed0 outputs. It is not a benchmark result.",
         "",
@@ -608,6 +849,7 @@ def _markdown_report(summary: dict[str, Any]) -> str:
         "",
         f"- Dataset scope: `{summary['dataset_scope']}`",
         f"- Molecule count: `{summary['dataset']['molecule_count']}`",
+        f"- Split type: `{summary['dataset']['split_type']}`",
         f"- Split counts: `{summary['dataset']['split_counts']}`",
         f"- Seed: `{by_mode['isotropic']['random_seed']}`",
         f"- Max steps / hard cap: `{summary['training_horizon']['max_steps']}` / `{summary['training_horizon']['hard_max_steps']}`",
@@ -616,13 +858,13 @@ def _markdown_report(summary: dict[str, Any]) -> str:
         "",
         "## Run Metadata",
         "",
-        "| Mode | Stop reason | Executed steps | Best val step | Runtime seconds |",
-        "|---|---:|---:|---:|---:|",
+        "| Mode | Input hardware | Input GPU used | Stop reason | Executed steps | Best val step | Runtime seconds |",
+        "|---|---|---|---:|---:|---:|---:|",
     ]
     for mode in ["isotropic", "stiffness_structured"]:
         row = by_mode[mode]
         lines.append(
-            f"| {mode} | {row['stop_reason']} | {row['executed_train_steps']} | "
+            f"| {mode} | {row['hardware']} | {row['gpu_used']} | {row['stop_reason']} | {row['executed_train_steps']} | "
             f"{row['best_validation_loss_step']} | {row['runtime_seconds']:.3f} |"
         )
     lines.extend(
@@ -649,7 +891,7 @@ def _markdown_report(summary: dict[str, Any]) -> str:
             f"- `sampling_executed_by_summary`: `{summary['sampling_executed_by_summary']}`",
             f"- `raw_data_modified`: `{summary['raw_data_modified']}`",
             f"- `environment_modified`: `{summary['environment_modified']}`",
-            f"- `gpu_used`: `{summary['gpu_used']}`",
+            f"- `{summary_gpu_label}`: `{summary[summary_gpu_label]}`",
             "",
             "These values are diagnostics from existing result JSONs only; no training, sampling, preprocessing, scheduler action, GPU use, or environment change was performed by this comparison.",
             "",
@@ -658,9 +900,12 @@ def _markdown_report(summary: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def _markdown_multiseed_report(summary: dict[str, Any]) -> str:
+def _markdown_multiseed_report(
+    summary: dict[str, Any],
+    title: str = "Full-Database Formal Multi-Seed Summary",
+) -> str:
     lines = [
-        "# Full-Database Formal Multi-Seed Summary",
+        f"# {title}",
         "",
         "This is a reporting-only aggregation of completed full-database GEOM-Drugs formal outputs for seeds 0, 1, and 2. It is not a benchmark result.",
         "",
@@ -668,6 +913,7 @@ def _markdown_multiseed_report(summary: dict[str, Any]) -> str:
         "",
         f"- Dataset scope: `{summary['dataset_scope']}`",
         f"- Molecule count: `{summary['dataset']['molecule_count']}`",
+        f"- Split type: `{summary['dataset']['split_type']}`",
         f"- Split counts: `{summary['dataset']['split_counts']}`",
         f"- Seed set: `{summary['seed_set']}`",
         f"- Max steps / hard cap: `{summary['training_horizon']['max_steps']}` / `{summary['training_horizon']['hard_max_steps']}`",

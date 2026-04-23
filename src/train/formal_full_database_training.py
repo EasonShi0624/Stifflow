@@ -11,7 +11,12 @@ import time
 from pathlib import Path
 from typing import Any
 
-from src.data.geom_full_database import FULL_DATABASE_PROCESSED_ROOT, FULL_DATABASE_SCOPE, FULL_DATABASE_SPLIT_ROOT
+from src.data.geom_full_database import (
+    FULL_DATABASE_PROCESSED_ROOT,
+    FULL_DATABASE_SCAFFOLD_SPLIT_PATH,
+    FULL_DATABASE_SCOPE,
+    FULL_DATABASE_SPLIT_ROOT,
+)
 from src.models.checkpoint_sampling_smoke import (
     run_validation_checkpoint_training,
     warm_up_checkpoint_sampling_runtime,
@@ -31,6 +36,12 @@ from src.utils.config import load_config
 FORMAL_FULL_DATABASE_CONFIG_PATHS = (
     Path("configs/train/geom_full_database_formal_isotropic.yaml"),
     Path("configs/train/geom_full_database_formal_stiffness.yaml"),
+)
+FORMAL_FULL_DATABASE_ATTRIBUTION_MODES = (
+    "isotropic",
+    "harmonic_prior",
+    "torsion_only",
+    "stiffness_structured",
 )
 FORMAL_FULL_DATABASE_SEED = 0
 FORMAL_FULL_DATABASE_SEED_SET = (0, 1, 2)
@@ -87,7 +98,13 @@ def run_formal_full_database_training(
     require_cuda = bool(config["train"].get("require_cuda", False))
     processed_artifact_path = Path(config["data"]["processed_artifact_path"])
     split_path = Path(config["data"]["split_path"])
-    run_name = _run_name(corruption_mode=corruption_mode, seed=seed, max_steps=max_steps)
+    configured_split_type = str(config["data"]["split_type"])
+    run_name = _run_name(
+        corruption_mode=corruption_mode,
+        seed=seed,
+        max_steps=max_steps,
+        split_type=configured_split_type,
+    )
     manifest_path = output_root / "manifests" / f"{run_name}.json"
     results_path = output_root / "results" / f"{run_name}.json"
     log_path = output_root / "logs" / f"{run_name}.log"
@@ -104,13 +121,18 @@ def run_formal_full_database_training(
     split = tiny_real_data._load_tiny_real_split(split_path)
     if split.get("split_scope") != FULL_DATABASE_SCOPE:
         raise ValueError(f"full-database formal training requires split_scope={FULL_DATABASE_SCOPE!r}")
+    if split.get("split_type") != configured_split_type:
+        raise ValueError("full-database formal training config split_type must match the split artifact")
     split_membership = tiny_real_data._validate_split_coverage(split, records)
     split_counts = {key: len(split[key]) for key in ["train", "val", "test"]}
     if min(split_counts.values()) <= 0:
         raise ValueError("full-database formal training requires non-empty train/val/test splits")
-    expected_val_test = round(len(records) * 0.05)
-    if split_counts["val"] != expected_val_test or split_counts["test"] != expected_val_test:
-        raise ValueError("full-database formal split must preserve the 90/5/5 construction")
+    if configured_split_type == "random":
+        expected_val_test = round(len(records) * 0.05)
+        if split_counts["val"] != expected_val_test or split_counts["test"] != expected_val_test:
+            raise ValueError("full-database formal random split must preserve the 90/5/5 construction")
+    elif configured_split_type != "scaffold":
+        raise ValueError("full-database formal training supports only random or scaffold splits")
 
     config["eval"]["eval_subset_size"] = len(records)
     all_samples = tiny_real_data._build_flow_matching_samples(
@@ -156,6 +178,7 @@ def run_formal_full_database_training(
         "dataset_subset_scope": FULL_DATABASE_SCOPE,
         "processed_artifact_path": str(processed_artifact_path),
         "split_path": str(split_path),
+        "split_type": configured_split_type,
         "random_seed": seed,
         "corruption_mode": corruption_mode,
         "model_name": metrics["model_name"],
@@ -256,7 +279,7 @@ def run_formal_full_database_training(
             "degenerate_tiny_split": split.get("degenerate_tiny_split"),
             "counts": split_counts,
         },
-        "notes": _formal_full_database_notes(max_steps=max_steps),
+        "notes": _formal_full_database_notes(max_steps=max_steps, split_type=configured_split_type),
     }
     results = {
         **common,
@@ -278,7 +301,7 @@ def run_formal_full_database_training(
         "runtime_seconds": elapsed,
         "runtime_backend": runtime_backend,
         "runtime_warmup_scope": "full_cpu_formal_training_checkpoint_sampling_operation",
-        "notes": _formal_full_database_notes(max_steps=max_steps),
+        "notes": _formal_full_database_notes(max_steps=max_steps, split_type=configured_split_type),
     }
 
     for directory in [manifest_path.parent, results_path.parent, log_path.parent, best_checkpoint_path.parent]:
@@ -303,8 +326,16 @@ def validate_formal_full_database_config(config: dict[str, Any]) -> None:
         raise ValueError("full-database formal training must use the existing processed artifact schema")
     if not _allowed_processed_artifact_path(Path(config["data"]["processed_artifact_path"])):
         raise ValueError("full-database formal training must use the default artifact or a per-run full-database artifact")
-    if not _allowed_split_path(Path(config["data"]["split_path"])):
-        raise ValueError("full-database formal training must use the default split or a per-run random_seed0 split artifact")
+    split_type = config["data"].get("split_type")
+    if split_type not in {"random", "scaffold"}:
+        raise ValueError("full-database formal training split_type must be random or scaffold")
+    split_path = Path(config["data"]["split_path"])
+    if not _allowed_split_path(split_path):
+        raise ValueError("full-database formal training must use the default random/scaffold split or a per-run random_seed0 split artifact")
+    if split_type == "scaffold" and split_path != FULL_DATABASE_SCAFFOLD_SPLIT_PATH:
+        raise ValueError("full-database scaffold formal training must use the cached scaffold_seed0 split artifact")
+    if split_type == "random" and split_path == FULL_DATABASE_SCAFFOLD_SPLIT_PATH:
+        raise ValueError("full-database random formal training cannot use the scaffold split artifact")
     if int(config["experiment"]["seed"]) not in FORMAL_FULL_DATABASE_SEED_SET:
         raise ValueError(f"full-database formal training seed must be one of {FORMAL_FULL_DATABASE_SEED_SET}")
     if config["data"]["subset"].get("max_molecules") != "full_database":
@@ -313,7 +344,7 @@ def validate_formal_full_database_config(config: dict[str, Any]) -> None:
         raise ValueError("full-database formal training must preserve one conformer per molecule")
     if config["data"]["subset"].get("tag") != FULL_DATABASE_SCOPE:
         raise ValueError(f"full-database formal training must use tag={FULL_DATABASE_SCOPE!r}")
-    if config["corruption"]["mode"] not in {"isotropic", "stiffness_structured"}:
+    if config["corruption"]["mode"] not in set(FORMAL_FULL_DATABASE_ATTRIBUTION_MODES):
         raise ValueError(f"unsupported full-database formal corruption mode: {config['corruption']['mode']}")
     if config["model"].get("backbone") != "minimal_linear_velocity_pilot":
         raise ValueError("full-database formal training must keep the existing minimal linear backbone")
@@ -377,6 +408,8 @@ def _allowed_processed_artifact_path(path: Path) -> bool:
 def _allowed_split_path(path: Path) -> bool:
     if path == FULL_DATABASE_SPLIT_ROOT / "random_seed0" / "split.json":
         return True
+    if path == FULL_DATABASE_SCAFFOLD_SPLIT_PATH:
+        return True
     root = Path("data/splits/geom_drugs_full_database_runs")
     try:
         relative = path.relative_to(root)
@@ -385,21 +418,31 @@ def _allowed_split_path(path: Path) -> bool:
     return len(relative.parts) == 3 and relative.parts[-2:] == ("random_seed0", "split.json")
 
 
-def _run_name(corruption_mode: str, seed: int, max_steps: int) -> str:
+def _run_name(corruption_mode: str, seed: int, max_steps: int, split_type: str = "random") -> str:
     if corruption_mode == "isotropic":
         label = "isotropic"
+    elif corruption_mode == "harmonic_prior":
+        label = "harmonic"
+    elif corruption_mode == "torsion_only":
+        label = "torsion_only"
     elif corruption_mode == "stiffness_structured":
         label = "stiffness"
     else:
         raise ValueError(f"Unsupported full-database formal training mode: {corruption_mode}")
-    return f"geom_formal_full_database_train_{label}_steps{int(max_steps)}_seed{seed}"
+    split_label = "" if split_type == "random" else f"_{split_type}"
+    return f"geom_formal_full_database{split_label}_train_{label}_steps{int(max_steps)}_seed{seed}"
 
 
-def _formal_full_database_notes(max_steps: int) -> list[str]:
+def _formal_full_database_notes(max_steps: int, split_type: str) -> list[str]:
+    split_note = (
+        "a 90/5/5 random split"
+        if split_type == "random"
+        else "a cached full-database Bemis-Murcko scaffold split with 90/5/5 target fractions"
+    )
     return [
         "First full-database GEOM-Drugs formal training path, not a benchmark result.",
         f"The run reuses the frozen formal design from the 10000-molecule phase: same model, optimizer, learning rate, checkpoint/reload behavior, one-step sampling diagnostic, validation-driven checkpoint selection, patience, min_delta, and hard cap of {int(max_steps)} steps.",
-        "The data scope changes to the full available raw GEOM-Drugs rdkit_folder/drugs tree with one conformer per extractable molecule and a 90/5/5 random split.",
+        f"The data scope is the full available GEOM-Drugs one-conformer processed artifact with {split_note}.",
         "No raw-data modification, environment mutation, benchmark evaluation, or unbounded training is part of this path.",
     ]
 

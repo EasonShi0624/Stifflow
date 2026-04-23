@@ -252,6 +252,7 @@ def _build_flow_matching_samples(
         x0 = corruptor.corrupt(record, x1)
         assert_finite_coords(x0, f"{record['molecule_id']}.x0")
         t = rng.random()
+        rotatable_bond_count = _rotatable_bond_count(record, config)
         samples.append(
             {
                 "molecule_id": record["molecule_id"],
@@ -259,7 +260,7 @@ def _build_flow_matching_samples(
                 "smiles": record.get("smiles"),
                 "atom_count": len(record.get("atom_symbols", [])),
                 "bond_count": len(record.get("bonds", [])),
-                "rotatable_bond_count": record.get("rotatable_bond_count"),
+                "rotatable_bond_count": rotatable_bond_count,
                 "conformer_id": conformer.get("conformer_id"),
                 "bonds": record["bonds"],
                 "x0": x0,
@@ -270,6 +271,28 @@ def _build_flow_matching_samples(
             }
         )
     return samples
+
+
+def _rotatable_bond_count(record: dict[str, Any], config: dict[str, Any]) -> int | None:
+    value = record.get("rotatable_bond_count")
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float) and value.is_integer():
+        return int(value)
+    if not bool(config.get("eval", {}).get("compute_rotatable_bond_count_from_smiles", False)):
+        return None
+    smiles = record.get("smiles")
+    if not smiles:
+        return None
+    try:
+        from rdkit import Chem
+        from rdkit.Chem import Lipinski
+    except ImportError:
+        return None
+    mol = Chem.MolFromSmiles(str(smiles))
+    if mol is None:
+        return None
+    return int(Lipinski.NumRotatableBonds(mol))
 
 
 def _load_tiny_real_artifact(path: Path) -> dict[str, Any]:

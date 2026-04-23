@@ -65,8 +65,11 @@ def validate_config(config: dict[str, Any]) -> None:
         raise ConfigError("Only cartesian_linear / linear is supported in the smoke scaffold")
 
     mode = _require(config, "corruption.mode", str)
-    if mode not in {"isotropic", "stiffness_structured"}:
-        raise ConfigError("corruption.mode must be 'isotropic' or 'stiffness_structured'")
+    if mode not in {"isotropic", "harmonic_prior", "torsion_only", "stiffness_structured"}:
+        raise ConfigError(
+            "corruption.mode must be one of 'isotropic', 'harmonic_prior', "
+            "'torsion_only', or 'stiffness_structured'"
+        )
 
     for field in [
         "corruption.isotropic_sigma",

@@ -575,6 +575,71 @@ The split construction remains the same 90/5/5 random split with split seed `0`;
 
 Submit only after explicit approval, one job per mode/seed combination. The recommended account is `torch_pr_872_general`: these jobs request one standard GPU and a substantial CPU-side raw-tree preprocessing step, so faster queue turnaround is likely more valuable than A100-class hardware. `torch_pr_226_chemistry` may provide stronger GPUs such as A100, but queue time may be longer and the current minimal linear formal model is unlikely to benefit enough to justify that account by default.
 
+Prepared full-database scaffold-split formal seed0 path:
+
+```bash
+python scripts/prepare_geom_full_database_scaffold_split.py
+python scripts/run_geom_full_database_scaffold_formal_training_single.py --mode isotropic --seed 0 --device cuda --require-cuda
+python scripts/run_geom_full_database_scaffold_formal_training_single.py --mode stiffness_structured --seed 0 --device cuda --require-cuda
+python scripts/run_geom_full_database_scaffold_formal_training_single.py --mode isotropic --seed 1 --device cuda --require-cuda
+python scripts/run_geom_full_database_scaffold_formal_training_single.py --mode stiffness_structured --seed 1 --device cuda --require-cuda
+python scripts/run_geom_full_database_scaffold_formal_training_single.py --mode isotropic --seed 2 --device cuda --require-cuda
+python scripts/run_geom_full_database_scaffold_formal_training_single.py --mode stiffness_structured --seed 2 --device cuda --require-cuda
+```
+
+For cluster execution, use the prepared SLURM scripts only after explicit approval:
+
+```bash
+sbatch --account=torch_pr_872_general scripts/slurm_geom_full_database_scaffold_split.sbatch
+sbatch --account=torch_pr_872_general scripts/slurm_geom_full_database_scaffold_formal_training_isotropic_seed0_gpu.sbatch
+sbatch --account=torch_pr_872_general scripts/slurm_geom_full_database_scaffold_formal_training_stiffness_seed0_gpu.sbatch
+sbatch --account=torch_pr_872_general scripts/slurm_geom_full_database_scaffold_formal_training_isotropic_seed1_gpu.sbatch
+sbatch --account=torch_pr_872_general scripts/slurm_geom_full_database_scaffold_formal_training_stiffness_seed1_gpu.sbatch
+sbatch --account=torch_pr_872_general scripts/slurm_geom_full_database_scaffold_formal_training_isotropic_seed2_gpu.sbatch
+sbatch --account=torch_pr_872_general scripts/slurm_geom_full_database_scaffold_formal_training_stiffness_seed2_gpu.sbatch
+```
+
+The scaffold split command reads the cached full-database one-conformer processed artifact and writes only:
+- `data/splits/geom_drugs_full_database/scaffold_seed0/split.json`
+- `data/splits/geom_drugs_full_database/scaffold_seed0/manifest.json`
+
+The scaffold training commands require the cached processed artifact and cached scaffold split. They preserve the frozen full-database formal model, optimizer, learning rate, checkpoint/reload behavior, one-step sampling diagnostic, validation-selected checkpoint rule, early-stop rule, and hard step cap. Per mode they write outputs named like:
+- `experiments/results/geom_formal_full_database_scaffold_train_isotropic_steps2000_seed0.json`
+- `experiments/checkpoints/geom_formal_full_database_scaffold_train_isotropic_steps2000_seed0_best.pt`
+- `experiments/checkpoints/geom_formal_full_database_scaffold_train_isotropic_steps2000_seed0_latest.pt`
+- matching `stiffness` files for seed `0`
+- matching `isotropic` and `stiffness` files for seeds `1` and `2`
+
+These outputs are labeled `geom_drugs_full_database_formal_training_not_benchmark`, `benchmark_result: false`, `full_database_formal_training_run: true`, `checkpoint_reusable: true`, `checkpoint_selected_by_validation: true`, and `split_type: scaffold`. They are scaffold-split formal training artifacts, not benchmark results. GPU is more worthwhile here than in preprocessing-heavy per-run jobs because the processed artifact and split are reused, but the model is still small and the default account remains `torch_pr_872_general` for faster turnaround.
+
+Prepared full-database scaffold formal multiseed summary:
+
+```bash
+python scripts/compare_geom_full_database_scaffold_formal_multiseed.py
+```
+
+Run this after the scaffold-split formal outputs for seeds `0`, `1`, and `2` are present for both modes. It validates that all six inputs use the same full-database one-conformer scope, cached scaffold split, model-side formal settings, optimizer, learning rate, validation-selected checkpoint rule, one-step sampling diagnostic, and `2000`-step hard cap. It writes:
+- `experiments/results/geom_formal_full_database_scaffold_multiseed_summary.json`
+- `reports/tables/geom_formal_full_database_scaffold_multiseed_summary.md`
+
+The summary is labeled `geom_drugs_full_database_scaffold_formal_multiseed_summary_not_benchmark`, `benchmark_result: false`, `training_executed_by_summary: false`, `sampling_executed_by_summary: false`, `raw_data_modified: false`, `environment_modified: false`, and `gpu_used_by_summary: false`. It reports per-seed and aggregate best/reloaded validation losses, sampled RMSD means overall and by split, stop reasons, split counts, safety labels, and lower-is-better directional verdicts.
+
+Current full-database scaffold formal seed0 comparison:
+
+```bash
+python scripts/compare_geom_full_database_scaffold_formal_seed0.py
+```
+
+This reads the existing scaffold-split full-database formal seed0 result JSONs:
+- `experiments/results/geom_formal_full_database_scaffold_train_isotropic_steps2000_seed0.json`
+- `experiments/results/geom_formal_full_database_scaffold_train_stiffness_steps2000_seed0.json`
+
+It validates that both inputs use the same full-database one-conformer scope, cached scaffold split, seed, model-side formal settings, optimizer, learning rate, validation-selected checkpoint rule, one-step sampling diagnostic, and `2000`-step hard cap. It writes:
+- `experiments/results/geom_formal_full_database_scaffold_seed0_summary.json`
+- `reports/tables/geom_formal_full_database_scaffold_seed0_summary.md`
+
+The summary is labeled `geom_drugs_full_database_scaffold_formal_seed0_comparison_not_benchmark`, `benchmark_result: false`, `training_executed_by_summary: false`, `sampling_executed_by_summary: false`, `raw_data_modified: false`, `environment_modified: false`, and `gpu_used_by_summary: false`. It reports split counts, stop reasons, executed steps, best/reloaded validation losses, sampled RMSD means overall and by split, safety labels, and a lower-is-better directional verdict for stiffness vs isotropic.
+
 Current full-database formal seed0 comparison:
 
 ```bash
@@ -602,6 +667,45 @@ This reads the completed full-database formal result JSONs for isotropic and sti
 - `reports/tables/geom_formal_full_database_multiseed_summary.md`
 
 The summary is labeled `geom_drugs_full_database_formal_multiseed_summary_not_benchmark`, `benchmark_result: false`, `training_executed_by_summary: false`, `sampling_executed_by_summary: false`, `raw_data_modified: false`, `environment_modified: false`, and `gpu_used_by_summary: false`. It reports split counts, stop reasons, best/reloaded validation losses, sampled RMSD means overall/train/val/test, per-seed outcomes, aggregate means, and a lower-is-better multiseed directional verdict for stiffness vs isotropic.
+
+Prepared full-database attribution phase:
+
+```bash
+python scripts/run_geom_full_database_attribution_formal_training_single.py --split-type random --mode harmonic_prior --seed 0 --device cuda --require-cuda
+python scripts/run_geom_full_database_attribution_formal_training_single.py --split-type random --mode torsion_only --seed 0 --device cuda --require-cuda
+python scripts/run_geom_full_database_attribution_formal_training_single.py --split-type scaffold --mode harmonic_prior --seed 0 --device cuda --require-cuda
+python scripts/run_geom_full_database_attribution_formal_training_single.py --split-type scaffold --mode torsion_only --seed 0 --device cuda --require-cuda
+```
+
+The same entry point supports modes `isotropic`, `harmonic_prior`, `torsion_only`, and `stiffness_structured`, split types `random` and `scaffold`, and seeds `0`, `1`, and `2`. It reuses:
+- `data/processed/geom_drugs_full_database/molecules.json`
+- `data/splits/geom_drugs_full_database/random_seed0/split.json`
+- `data/splits/geom_drugs_full_database/scaffold_seed0/split.json`
+
+It preserves the frozen formal model, optimizer, learning rate, checkpoint/reload behavior, validation-selected checkpoint rule, one-step sampling diagnostic, split logic, processed-output schema, and `2000`-step hard cap. It remains explicitly non-benchmark. Do not launch these commands on a login node as real training; use the prepared SLURM wrapper only after explicit approval.
+
+Prepared attribution SLURM wrapper:
+
+```bash
+STIFFLOW_ATTRIBUTION_SPLIT_TYPE=random \
+STIFFLOW_ATTRIBUTION_MODE=harmonic_prior \
+STIFFLOW_ATTRIBUTION_SEED=0 \
+sbatch --account=torch_pr_872_general scripts/slurm_geom_full_database_attribution_formal_training_gpu.sbatch
+```
+
+Use `torch_pr_872_general` by default because the jobs reuse cached preprocessing/splits, use the current modest GPU formal-training path, and should usually get faster turnaround than `torch_pr_226_chemistry`. The chemistry account may be appropriate only if there is a clear A100-class need, with likely longer queue time. Do not submit without explicit approval.
+
+Prepared full-database attribution summary:
+
+```bash
+python scripts/summarize_geom_full_database_attribution_phase.py
+```
+
+Run this only after the A/B/D/E result matrix exists for the requested split types and seeds. It writes:
+- `experiments/results/geom_formal_full_database_attribution_summary.json`
+- `reports/tables/geom_formal_full_database_attribution_summary.md`
+
+The summary is labeled `geom_drugs_full_database_attribution_phase_summary_not_benchmark`, `benchmark_result: false`, `training_executed_by_summary: false`, `sampling_executed_by_summary: false`, `raw_data_modified: false`, `environment_modified: false`, and `gpu_used_by_summary: false`. It compares isotropic, harmonic-prior, torsion-only, and stiffness-structured outputs, reports available sampled-coordinate physical diagnostics, and includes rotatable-bond-count stratification when sampled result rows contain `rotatable_bond_count`.
 
 Current bounded tiny real-data pilot comparison report:
 

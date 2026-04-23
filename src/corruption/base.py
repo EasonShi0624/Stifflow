@@ -25,6 +25,14 @@ def build_corruptor(config: dict[str, Any], seed: int) -> Corruptor:
         from src.corruption.isotropic import IsotropicCorruptor
 
         return IsotropicCorruptor(config, seed)
+    if mode == "harmonic_prior":
+        from src.corruption.harmonic import HarmonicPriorCorruptor
+
+        return HarmonicPriorCorruptor(config, seed)
+    if mode == "torsion_only":
+        from src.corruption.torsion_only import TorsionOnlyCorruptor
+
+        return TorsionOnlyCorruptor(config, seed)
     if mode == "stiffness_structured":
         from src.corruption.stiffness_structured import StiffnessStructuredCorruptor
 

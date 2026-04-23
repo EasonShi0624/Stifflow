@@ -8,15 +8,19 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from src.corruption.harmonic import HarmonicPriorCorruptor
 from src.corruption.isotropic import IsotropicCorruptor
 from src.corruption.stiffness_structured import StiffnessStructuredCorruptor
+from src.corruption.torsion_only import TorsionOnlyCorruptor
 from src.baselines import rdkit_etkdg
 from src.baselines.rdkit_etkdg import RdkitSmokeError, run_rdkit_smoke, run_rdkit_tiny_real_dry_run
 from src.data.records import load_records
 from src.data.splits import make_random_split
 from src.data.geom_full_database import (
+    FULL_DATABASE_SCAFFOLD_SPLIT_PATH,
     FULL_DATABASE_SCOPE,
     prepare_geom_full_database_artifact,
+    prepare_geom_full_database_scaffold_split,
     prepare_geom_full_database_split,
 )
 from src.data.geom_preflight import run_geom_preflight
@@ -29,9 +33,17 @@ from src.eval.micro_pilot_checkpoint_sampling_compare import (
 from src.eval.data_scale_convergence_diagnostics import write_data_scale_check_convergence_diagnostics
 from src.eval.formal_full_database_compare import (
     MULTI_SEED_SUMMARY_RESULT_KIND as FORMAL_FULL_DATABASE_MULTI_SEED_SUMMARY_RESULT_KIND,
+    SCAFFOLD_MULTI_SEED_SUMMARY_RESULT_KIND as FORMAL_FULL_DATABASE_SCAFFOLD_MULTI_SEED_SUMMARY_RESULT_KIND,
+    SCAFFOLD_SEED0_SUMMARY_RESULT_KIND as FORMAL_FULL_DATABASE_SCAFFOLD_SEED0_SUMMARY_RESULT_KIND,
     SUMMARY_RESULT_KIND as FORMAL_FULL_DATABASE_SUMMARY_RESULT_KIND,
     write_formal_full_database_multiseed_summary,
+    write_formal_full_database_scaffold_multiseed_summary,
+    write_formal_full_database_scaffold_seed0_comparison,
     write_formal_full_database_seed0_comparison,
+)
+from src.eval.formal_attribution import (
+    ATTRIBUTION_SUMMARY_RESULT_KIND,
+    write_formal_attribution_phase_summary,
 )
 from src.eval.tiny_real_compare import write_tiny_real_comparison
 from src.eval.tiny_real_lifecycle import write_tiny_real_lifecycle_summary
@@ -182,6 +194,35 @@ class SmokeScaffoldTests(unittest.TestCase):
         sigmas = StiffnessStructuredCorruptor(config, seed=0).atom_sigmas(record, atom_count=3)
         self.assertTrue(all(sigma == config["corruption"]["bond_sigma"] for sigma in sigmas))
         self.assertLess(config["corruption"]["bond_sigma"], config["corruption"]["torsion_sigma"])
+
+    def test_harmonic_corruption_is_seed_deterministic(self) -> None:
+        config = load_config("configs/train/tiny_smoke.yaml")
+        config["corruption"]["mode"] = "harmonic_prior"
+        config["corruption"]["harmonic_smoothing_steps"] = 2
+        record = load_records("data/processed/smoke_fixture")[0]
+        coords = record["conformers"][0]["coords"]
+        first = HarmonicPriorCorruptor(config, seed=11).corrupt(record, coords)
+        second = HarmonicPriorCorruptor(config, seed=11).corrupt(record, coords)
+        self.assertEqual(first, second)
+        self.assertNotEqual(first, coords)
+        self.assertEqual(len(first), len(coords))
+
+    def test_torsion_only_corruption_preserves_bond_lengths(self) -> None:
+        config = load_config("configs/train/tiny_smoke.yaml")
+        config["corruption"]["mode"] = "torsion_only"
+        config["corruption"]["torsion_only_max_bonds"] = 1
+        record = {
+            "molecule_id": "torsion_fixture",
+            "bonds": [[0, 1, 1.0], [1, 2, 1.0], [2, 3, 1.0]],
+            "ring_atom_indices": [],
+        }
+        coords = [[0.0, 1.0, 0.0], [0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [1.0, 1.0, 0.0]]
+        corrupted = TorsionOnlyCorruptor(config, seed=3).corrupt(record, coords)
+        self.assertNotEqual(corrupted, coords)
+        for i, j, _ in record["bonds"]:
+            before = sum((coords[i][axis] - coords[j][axis]) ** 2 for axis in range(3)) ** 0.5
+            after = sum((corrupted[i][axis] - corrupted[j][axis]) ** 2 for axis in range(3)) ** 0.5
+            self.assertAlmostEqual(before, after, places=7)
 
     def test_dry_run_writes_manifest_and_results(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -2525,10 +2566,186 @@ logging:
             self.assertEqual(split_paths["counts"], {"train": 18, "val": 1, "test": 1})
             self.assertEqual(len(set(split["train"] + split["val"] + split["test"])), 20)
 
+    def test_geom_full_database_scaffold_split_reuses_processed_artifact(self) -> None:
+        try:
+            import rdkit  # noqa: F401
+        except ImportError:
+            self.skipTest("RDKit is not importable")
+
+        smiles_values = [
+            "CCO",
+            "CCN",
+            "CCC",
+            "CCCl",
+            "CCBr",
+            "CC(=O)N",
+            "CCOC",
+            "CCS",
+            "CC(C)O",
+            "CC(C)N",
+            "c1ccccc1",
+            "Cc1ccccc1",
+            "Oc1ccccc1",
+            "Nc1ccccc1",
+            "c1ccncc1",
+            "Cc1ccncc1",
+            "C1CCCCC1",
+            "CC1CCCCC1",
+            "C1CCNCC1",
+            "CC1CCNCC1",
+            "c1ccoc1",
+            "Cc1ccoc1",
+            "c1ccsc1",
+            "Cc1ccsc1",
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            artifact_path = root / "processed" / "molecules.json"
+            artifact_path.parent.mkdir(parents=True)
+            artifact_path.write_text(
+                json.dumps(
+                    {
+                        "dataset_kind": "geom_drugs_tiny_processed_dry_run",
+                        "result_kind": "processed_output_dry_run_not_benchmark",
+                        "benchmark_result": False,
+                        "subset_scope": FULL_DATABASE_SCOPE,
+                        "molecule_count": len(smiles_values),
+                        "conformer_count": len(smiles_values),
+                        "molecules": [
+                            {"molecule_id": f"mol_{index:03d}", "smiles": smiles}
+                            for index, smiles in enumerate(smiles_values)
+                        ],
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            split_paths = prepare_geom_full_database_scaffold_split(
+                processed_artifact_path=artifact_path,
+                split_root=root / "splits",
+                seed=0,
+            )
+            split = json.loads(Path(split_paths["split"]).read_text(encoding="utf-8"))
+            manifest = json.loads(Path(split_paths["manifest"]).read_text(encoding="utf-8"))
+            split_ids = split["train"] + split["val"] + split["test"]
+
+            self.assertEqual(split["split_type"], "scaffold")
+            self.assertEqual(split["split_scope"], FULL_DATABASE_SCOPE)
+            self.assertFalse(split["benchmark_result"])
+            self.assertFalse(split["degenerate_tiny_split"])
+            self.assertEqual(len(split_ids), len(smiles_values))
+            self.assertEqual(len(set(split_ids)), len(smiles_values))
+            self.assertGreater(split_paths["counts"]["train"], 0)
+            self.assertGreater(split_paths["counts"]["val"], 0)
+            self.assertGreater(split_paths["counts"]["test"], 0)
+            self.assertEqual(manifest["processed_artifact_reused"], True)
+            self.assertEqual(manifest["split_type"], "scaffold")
+            self.assertEqual(manifest["stereo_fallback_molecule_count"], 0)
+            self.assertEqual(manifest["skipped_molecule_count"], 0)
+            self.assertEqual(split["stereo_fallback_molecule_count"], 0)
+            self.assertEqual(split["skipped_molecule_count"], 0)
+            self.assertFalse(manifest["raw_data_modified"])
+            self.assertFalse(manifest["training_executed"])
+
+    def test_geom_full_database_scaffold_split_retries_without_stereo(self) -> None:
+        try:
+            import rdkit  # noqa: F401
+        except ImportError:
+            self.skipTest("RDKit is not importable")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            artifact_path = self._write_scaffold_test_artifact(root)
+            call_count = {"count": 0}
+
+            def fake_murcko_scaffold(mol):
+                call_count["count"] += 1
+                if call_count["count"] == 1:
+                    raise RuntimeError("Pre-condition Violation bad bond stereo")
+                return f"scaffold_{call_count['count']:03d}"
+
+            with patch(
+                "rdkit.Chem.Scaffolds.MurckoScaffold.MurckoScaffoldSmiles",
+                side_effect=fake_murcko_scaffold,
+            ):
+                split_paths = prepare_geom_full_database_scaffold_split(
+                    processed_artifact_path=artifact_path,
+                    split_root=root / "splits",
+                    seed=0,
+                )
+
+            split = json.loads(Path(split_paths["split"]).read_text(encoding="utf-8"))
+            manifest = json.loads(Path(split_paths["manifest"]).read_text(encoding="utf-8"))
+            split_ids = split["train"] + split["val"] + split["test"]
+
+            self.assertEqual(len(split_ids), 24)
+            self.assertEqual(split_paths["stereo_fallback_molecule_count"], 1)
+            self.assertEqual(split_paths["skipped_molecule_count"], 0)
+            self.assertEqual(split["stereo_fallback_molecule_count"], 1)
+            self.assertEqual(split["skipped_molecule_count"], 0)
+            self.assertEqual(manifest["stereo_fallback_molecule_count"], 1)
+            self.assertEqual(manifest["skipped_molecule_count"], 0)
+            self.assertEqual(manifest["stereo_fallback_examples"][0]["molecule_id"], "mol_000")
+            self.assertIn("bad bond stereo", manifest["stereo_fallback_examples"][0]["first_error"])
+
+    def test_geom_full_database_scaffold_split_skips_after_failed_stereo_retry(self) -> None:
+        try:
+            import rdkit  # noqa: F401
+        except ImportError:
+            self.skipTest("RDKit is not importable")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            artifact_path = self._write_scaffold_test_artifact(root)
+            call_count = {"count": 0}
+
+            def fake_murcko_scaffold(mol):
+                call_count["count"] += 1
+                if call_count["count"] in {1, 2}:
+                    raise RuntimeError("Pre-condition Violation bad bond stereo")
+                return f"scaffold_{call_count['count']:03d}"
+
+            with patch(
+                "rdkit.Chem.Scaffolds.MurckoScaffold.MurckoScaffoldSmiles",
+                side_effect=fake_murcko_scaffold,
+            ):
+                split_paths = prepare_geom_full_database_scaffold_split(
+                    processed_artifact_path=artifact_path,
+                    split_root=root / "splits",
+                    seed=0,
+                )
+
+            split = json.loads(Path(split_paths["split"]).read_text(encoding="utf-8"))
+            manifest = json.loads(Path(split_paths["manifest"]).read_text(encoding="utf-8"))
+            split_ids = split["train"] + split["val"] + split["test"]
+
+            self.assertEqual(len(split_ids), 23)
+            self.assertNotIn("mol_000", set(split_ids))
+            self.assertEqual(split_paths["stereo_fallback_molecule_count"], 0)
+            self.assertEqual(split_paths["skipped_molecule_count"], 1)
+            self.assertEqual(split["skipped_molecule_count"], 1)
+            self.assertEqual(split["skipped_molecule_ids"], ["mol_000"])
+            self.assertEqual(manifest["skipped_molecule_count"], 1)
+            self.assertEqual(
+                manifest["skipped_molecule_examples"][0]["reason"],
+                "scaffold_generation_failed_after_stereo_removal",
+            )
+            self.assertIn("bad bond stereo", manifest["skipped_molecule_examples"][0]["first_error"])
+            self.assertIn("bad bond stereo", manifest["skipped_molecule_examples"][0]["retry_error"])
+            self.assertFalse(manifest["benchmark_result"])
+            self.assertFalse(manifest["training_executed"])
+
     def test_formal_full_database_configs_freeze_formal_design(self) -> None:
         for path, mode in [
             ("configs/train/geom_full_database_formal_isotropic.yaml", "isotropic"),
+            ("configs/train/geom_full_database_formal_harmonic.yaml", "harmonic_prior"),
+            ("configs/train/geom_full_database_formal_torsion_only.yaml", "torsion_only"),
             ("configs/train/geom_full_database_formal_stiffness.yaml", "stiffness_structured"),
+            ("configs/train/geom_full_database_scaffold_formal_isotropic.yaml", "isotropic"),
+            ("configs/train/geom_full_database_scaffold_formal_harmonic.yaml", "harmonic_prior"),
+            ("configs/train/geom_full_database_scaffold_formal_torsion_only.yaml", "torsion_only"),
+            ("configs/train/geom_full_database_scaffold_formal_stiffness.yaml", "stiffness_structured"),
         ]:
             config = load_config(path)
             validate_formal_full_database_config(config)
@@ -2548,6 +2765,75 @@ logging:
             self.assertEqual(config["eval"]["eval_subset_size"], 0)
             self.assertEqual(FORMAL_FULL_DATABASE_SEED, 0)
             self.assertEqual(FORMAL_FULL_DATABASE_SEED_SET, (0, 1, 2))
+
+    def test_formal_full_database_scaffold_configs_reuse_cached_split(self) -> None:
+        for path in [
+            "configs/train/geom_full_database_scaffold_formal_isotropic.yaml",
+            "configs/train/geom_full_database_scaffold_formal_harmonic.yaml",
+            "configs/train/geom_full_database_scaffold_formal_torsion_only.yaml",
+            "configs/train/geom_full_database_scaffold_formal_stiffness.yaml",
+        ]:
+            config = load_config(path)
+            validate_formal_full_database_config(config)
+            self.assertEqual(config["data"]["split_type"], "scaffold")
+            self.assertEqual(config["data"]["split_path"], str(FULL_DATABASE_SCAFFOLD_SPLIT_PATH))
+            self.assertEqual(config["data"]["processed_artifact_path"], "data/processed/geom_drugs_full_database/molecules.json")
+            self.assertEqual(config["train"]["max_steps"], FORMAL_10000_MAX_STEPS)
+            self.assertEqual(config["train"]["hard_max_steps"], FORMAL_10000_MAX_STEPS)
+            self.assertEqual(config["train"]["optimizer"], "SGD")
+            self.assertEqual(config["train"]["learning_rate"], 1.0e-2)
+            self.assertEqual(config["train"]["early_stop"]["patience"], 200)
+            self.assertEqual(config["sample"]["sample_step_count"], 1)
+            self.assertEqual(config["sample"]["sample_step_size"], 0.1)
+
+    def _write_scaffold_test_artifact(self, root: Path) -> Path:
+        smiles_values = [
+            "CCO",
+            "CCN",
+            "CCC",
+            "CCCl",
+            "CCBr",
+            "CC(=O)N",
+            "CCOC",
+            "CCS",
+            "CC(C)O",
+            "CC(C)N",
+            "c1ccccc1",
+            "Cc1ccccc1",
+            "Oc1ccccc1",
+            "Nc1ccccc1",
+            "c1ccncc1",
+            "Cc1ccncc1",
+            "C1CCCCC1",
+            "CC1CCCCC1",
+            "C1CCNCC1",
+            "CC1CCNCC1",
+            "c1ccoc1",
+            "Cc1ccoc1",
+            "c1ccsc1",
+            "Cc1ccsc1",
+        ]
+        artifact_path = root / "processed" / "molecules.json"
+        artifact_path.parent.mkdir(parents=True)
+        artifact_path.write_text(
+            json.dumps(
+                {
+                    "dataset_kind": "geom_drugs_tiny_processed_dry_run",
+                    "result_kind": "processed_output_dry_run_not_benchmark",
+                    "benchmark_result": False,
+                    "subset_scope": FULL_DATABASE_SCOPE,
+                    "molecule_count": len(smiles_values),
+                    "conformer_count": len(smiles_values),
+                    "molecules": [
+                        {"molecule_id": f"mol_{index:03d}", "smiles": smiles}
+                        for index, smiles in enumerate(smiles_values)
+                    ],
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        return artifact_path
 
     def test_formal_full_database_accepts_per_run_gpu_paths_without_changing_settings(self) -> None:
         config = load_config("configs/train/geom_full_database_formal_isotropic.yaml")
@@ -2708,6 +2994,140 @@ logging:
             self.assertIn("Full-Database Formal Seed0 Comparison", first_report)
             self.assertIn("stiffness_better_on_all_tracked_metrics", first_report)
 
+    def test_formal_full_database_scaffold_seed0_comparison_is_deterministic(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            result_paths = []
+            for mode, label, best_loss, rmsd_base in [
+                ("isotropic", "isotropic", 0.40, 0.50),
+                ("stiffness_structured", "stiffness", 0.30, 0.40),
+            ]:
+                payload = {
+                    "run_name": f"geom_formal_full_database_scaffold_train_{label}_steps2000_seed0",
+                    "result_kind": "geom_drugs_full_database_formal_training_not_benchmark",
+                    "benchmark_result": False,
+                    "dataset_subset_scope": FULL_DATABASE_SCOPE,
+                    "processed_artifact_path": "data/processed/geom_drugs_full_database/molecules.json",
+                    "split_path": "data/splits/geom_drugs_full_database/scaffold_seed0/split.json",
+                    "random_seed": 0,
+                    "corruption_mode": mode,
+                    "model_name": "single_linear_velocity_smoke",
+                    "backbone": "minimal_linear_velocity_pilot",
+                    "hardware": "gpu_enabled",
+                    "gpu_used": True,
+                    "scheduler": "slurm",
+                    "slurm_account": "torch_pr_872_general",
+                    "formal_training_run": True,
+                    "full_database_formal_training_run": True,
+                    "max_steps": 2000,
+                    "hard_max_steps": 2000,
+                    "optimizer_name": "SGD",
+                    "learning_rate": 1.0e-2,
+                    "optimizer_step_count": 2000,
+                    "training_sample_count": 4,
+                    "validation_sample_count": 1,
+                    "sample_count": 6,
+                    "early_stop_monitor": "validation_loss_after_step",
+                    "early_stop_patience": 200,
+                    "early_stop_min_delta": 1.0e-6,
+                    "stopped_early": False,
+                    "early_stop_reason": "hard_cap_reached",
+                    "checkpoint_reusable": True,
+                    "checkpoint_selected_by_validation": True,
+                    "checkpoint_scope": "reusable_formal_full_database_validation_selected_checkpoint",
+                    "sampling_executed": True,
+                    "sample_step_count": 1,
+                    "sample_step_size": 0.1,
+                    "runtime_scope": "formal_full_database_train_validation_select_save_reload_sample_after_cpu_warmup",
+                    "runtime_seconds_reliable": True,
+                    "runtime_seconds": 10.0 if mode == "isotropic" else 11.0,
+                    "dataset": {
+                        "name": "geom_drugs",
+                        "kind": "geom_drugs_tiny_processed_dry_run",
+                        "subset_scope": FULL_DATABASE_SCOPE,
+                        "molecule_count": 6,
+                        "split_type": "scaffold",
+                        "split_scope": FULL_DATABASE_SCOPE,
+                        "split_counts": {"train": 4, "val": 1, "test": 1},
+                        "degenerate_tiny_split": False,
+                    },
+                    "metrics": {
+                        "metric_scope": "geom_drugs_formal_full_database_training_checkpoint_sampling",
+                        "executed_train_steps": 2000,
+                        "best_validation_loss": best_loss,
+                        "best_validation_loss_step": 2000,
+                        "reloaded_validation_loss": best_loss,
+                        "sampled_molecules": [
+                            {
+                                "molecule_id": "train_a",
+                                "split": "train",
+                                "sampled_rmsd_to_target": rmsd_base,
+                            },
+                            {
+                                "molecule_id": "train_b",
+                                "split": "train",
+                                "sampled_rmsd_to_target": rmsd_base + 0.02,
+                            },
+                            {
+                                "molecule_id": "train_c",
+                                "split": "train",
+                                "sampled_rmsd_to_target": rmsd_base + 0.04,
+                            },
+                            {
+                                "molecule_id": "train_d",
+                                "split": "train",
+                                "sampled_rmsd_to_target": rmsd_base + 0.06,
+                            },
+                            {
+                                "molecule_id": "val_a",
+                                "split": "val",
+                                "sampled_rmsd_to_target": rmsd_base + 0.08,
+                            },
+                            {
+                                "molecule_id": "test_a",
+                                "split": "test",
+                                "sampled_rmsd_to_target": rmsd_base + 0.10,
+                            },
+                        ],
+                    },
+                }
+                path = root / f"scaffold_{label}.json"
+                path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+                result_paths.append(path)
+
+            first = write_formal_full_database_scaffold_seed0_comparison(
+                result_paths=result_paths,
+                summary_path=root / "scaffold_summary.json",
+                report_path=root / "scaffold_summary.md",
+            )
+            first_summary = json.loads(first["summary"].read_text(encoding="utf-8"))
+            first_report = first["report"].read_text(encoding="utf-8")
+            second = write_formal_full_database_scaffold_seed0_comparison(
+                result_paths=result_paths,
+                summary_path=root / "scaffold_summary_again.json",
+                report_path=root / "scaffold_summary_again.md",
+            )
+            second_summary = json.loads(second["summary"].read_text(encoding="utf-8"))
+
+            self.assertEqual(first_summary, second_summary)
+            self.assertEqual(
+                first_summary["result_kind"],
+                FORMAL_FULL_DATABASE_SCAFFOLD_SEED0_SUMMARY_RESULT_KIND,
+            )
+            self.assertFalse(first_summary["benchmark_result"])
+            self.assertFalse(first_summary["training_executed_by_summary"])
+            self.assertFalse(first_summary["sampling_executed_by_summary"])
+            self.assertEqual(first_summary["dataset"]["split_type"], "scaffold")
+            self.assertEqual(first_summary["dataset"]["split_counts"], {"train": 4, "val": 1, "test": 1})
+            self.assertEqual(
+                first_summary["directional_verdict"]["verdict"],
+                "stiffness_better_on_all_tracked_metrics",
+            )
+            self.assertEqual(first_summary["directional_verdict"]["stiffness_win_count"], 6)
+            self.assertTrue(all(row["gpu_used"] for row in first_summary["rows"]))
+            self.assertIn("Full-Database Scaffold Formal Seed0 Comparison", first_report)
+            self.assertIn("Split type: `scaffold`", first_report)
+
     def test_formal_full_database_multiseed_summary_is_deterministic(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -2841,6 +3261,296 @@ logging:
             self.assertEqual(first_summary["directional_verdict"]["tracked_metric_seed_comparison_count"], 18)
             self.assertIn("Full-Database Formal Multi-Seed Summary", first_report)
             self.assertIn("stiffness_better_on_all_tracked_metrics_all_seeds", first_report)
+
+    def test_formal_full_database_scaffold_multiseed_summary_is_deterministic(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            result_paths = []
+            for seed in [0, 1, 2]:
+                for mode, label, loss_offset, rmsd_offset in [
+                    ("isotropic", "isotropic", 0.10, 0.20),
+                    ("stiffness_structured", "stiffness", 0.05, 0.10),
+                ]:
+                    best_loss = 0.30 + 0.01 * seed + loss_offset
+                    rmsd_base = 0.40 + 0.02 * seed + rmsd_offset
+                    payload = {
+                        "run_name": f"geom_formal_full_database_scaffold_train_{label}_steps2000_seed{seed}",
+                        "result_kind": "geom_drugs_full_database_formal_training_not_benchmark",
+                        "benchmark_result": False,
+                        "dataset_subset_scope": FULL_DATABASE_SCOPE,
+                        "processed_artifact_path": "data/processed/geom_drugs_full_database/molecules.json",
+                        "split_path": "data/splits/geom_drugs_full_database/scaffold_seed0/split.json",
+                        "random_seed": seed,
+                        "corruption_mode": mode,
+                        "model_name": "single_linear_velocity_smoke",
+                        "backbone": "minimal_linear_velocity_pilot",
+                        "hardware": "gpu_enabled",
+                        "gpu_used": True,
+                        "scheduler": "slurm",
+                        "slurm_account": "torch_pr_872_general",
+                        "formal_training_run": True,
+                        "full_database_formal_training_run": True,
+                        "max_steps": 2000,
+                        "hard_max_steps": 2000,
+                        "optimizer_name": "SGD",
+                        "learning_rate": 1.0e-2,
+                        "optimizer_step_count": 2000,
+                        "training_sample_count": 4,
+                        "validation_sample_count": 1,
+                        "sample_count": 6,
+                        "early_stop_monitor": "validation_loss_after_step",
+                        "early_stop_patience": 200,
+                        "early_stop_min_delta": 1.0e-6,
+                        "stopped_early": False,
+                        "early_stop_reason": "hard_cap_reached",
+                        "checkpoint_reusable": True,
+                        "checkpoint_selected_by_validation": True,
+                        "checkpoint_scope": "reusable_formal_full_database_validation_selected_checkpoint",
+                        "sampling_executed": True,
+                        "sample_step_count": 1,
+                        "sample_step_size": 0.1,
+                        "runtime_scope": "formal_full_database_train_validation_select_save_reload_sample_after_cpu_warmup",
+                        "runtime_seconds_reliable": True,
+                        "runtime_seconds": 10.0 + seed,
+                        "dataset": {
+                            "name": "geom_drugs",
+                            "kind": "geom_drugs_tiny_processed_dry_run",
+                            "subset_scope": FULL_DATABASE_SCOPE,
+                            "molecule_count": 6,
+                            "split_type": "scaffold",
+                            "split_scope": FULL_DATABASE_SCOPE,
+                            "split_counts": {"train": 4, "val": 1, "test": 1},
+                            "degenerate_tiny_split": False,
+                        },
+                        "metrics": {
+                            "metric_scope": "geom_drugs_formal_full_database_training_checkpoint_sampling",
+                            "executed_train_steps": 2000,
+                            "best_validation_loss": best_loss,
+                            "best_validation_loss_step": 2000,
+                            "reloaded_validation_loss": best_loss,
+                            "sampled_molecules": [
+                                {
+                                    "molecule_id": "train_a",
+                                    "split": "train",
+                                    "sampled_rmsd_to_target": rmsd_base,
+                                },
+                                {
+                                    "molecule_id": "train_b",
+                                    "split": "train",
+                                    "sampled_rmsd_to_target": rmsd_base + 0.02,
+                                },
+                                {
+                                    "molecule_id": "train_c",
+                                    "split": "train",
+                                    "sampled_rmsd_to_target": rmsd_base + 0.04,
+                                },
+                                {
+                                    "molecule_id": "train_d",
+                                    "split": "train",
+                                    "sampled_rmsd_to_target": rmsd_base + 0.06,
+                                },
+                                {
+                                    "molecule_id": "val_a",
+                                    "split": "val",
+                                    "sampled_rmsd_to_target": rmsd_base + 0.08,
+                                },
+                                {
+                                    "molecule_id": "test_a",
+                                    "split": "test",
+                                    "sampled_rmsd_to_target": rmsd_base + 0.10,
+                                },
+                            ],
+                        },
+                    }
+                    path = root / f"scaffold_{label}_seed{seed}.json"
+                    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+                    result_paths.append(path)
+
+            first = write_formal_full_database_scaffold_multiseed_summary(
+                result_paths=result_paths,
+                summary_path=root / "scaffold_multiseed_summary.json",
+                report_path=root / "scaffold_multiseed_summary.md",
+            )
+            first_summary = json.loads(first["summary"].read_text(encoding="utf-8"))
+            first_report = first["report"].read_text(encoding="utf-8")
+            second = write_formal_full_database_scaffold_multiseed_summary(
+                result_paths=result_paths,
+                summary_path=root / "scaffold_multiseed_summary_again.json",
+                report_path=root / "scaffold_multiseed_summary_again.md",
+            )
+            second_summary = json.loads(second["summary"].read_text(encoding="utf-8"))
+
+            self.assertEqual(first_summary, second_summary)
+            self.assertEqual(
+                first_summary["result_kind"],
+                FORMAL_FULL_DATABASE_SCAFFOLD_MULTI_SEED_SUMMARY_RESULT_KIND,
+            )
+            self.assertFalse(first_summary["benchmark_result"])
+            self.assertFalse(first_summary["training_executed_by_summary"])
+            self.assertFalse(first_summary["sampling_executed_by_summary"])
+            self.assertEqual(first_summary["seed_set"], [0, 1, 2])
+            self.assertEqual(first_summary["dataset"]["split_type"], "scaffold")
+            self.assertEqual(first_summary["dataset"]["split_counts"], {"train": 4, "val": 1, "test": 1})
+            self.assertEqual(
+                first_summary["dataset"]["processed_artifact_path"],
+                "data/processed/geom_drugs_full_database/molecules.json",
+            )
+            self.assertEqual(
+                first_summary["dataset"]["split_path"],
+                "data/splits/geom_drugs_full_database/scaffold_seed0/split.json",
+            )
+            self.assertEqual(
+                first_summary["directional_verdict"]["verdict"],
+                "stiffness_better_on_all_tracked_metrics_all_seeds",
+            )
+            self.assertEqual(first_summary["directional_verdict"]["stiffness_win_count"], 18)
+            self.assertIn("Full-Database Scaffold Formal Multi-Seed Summary", first_report)
+            self.assertIn("Split type: `scaffold`", first_report)
+
+    def test_formal_full_database_attribution_summary_covers_A_B_D_E(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            result_paths = []
+            mode_rows = [
+                ("isotropic", "isotropic", 0.50, 0.60, 0.10),
+                ("harmonic_prior", "harmonic", 0.45, 0.55, 0.08),
+                ("torsion_only", "torsion_only", 0.42, 0.52, 0.06),
+                ("stiffness_structured", "stiffness", 0.35, 0.45, 0.04),
+            ]
+            for split_type in ["random", "scaffold"]:
+                split_offset = 0.00 if split_type == "random" else 0.05
+                split_label = "" if split_type == "random" else "_scaffold"
+                split_path = (
+                    "data/splits/geom_drugs_full_database/random_seed0/split.json"
+                    if split_type == "random"
+                    else "data/splits/geom_drugs_full_database/scaffold_seed0/split.json"
+                )
+                for mode, label, best_loss, rmsd_base, bond_delta in mode_rows:
+                    sampled = [
+                        {
+                            "molecule_id": f"{split_type}_train",
+                            "split": "train",
+                            "sampled_rmsd_to_target": rmsd_base + split_offset,
+                            "sampled_finite_coordinate": True,
+                            "sampled_mean_abs_bond_length_delta": bond_delta,
+                            "rotatable_bond_count": 0,
+                        },
+                        {
+                            "molecule_id": f"{split_type}_val",
+                            "split": "val",
+                            "sampled_rmsd_to_target": rmsd_base + split_offset + 0.02,
+                            "sampled_finite_coordinate": True,
+                            "sampled_mean_abs_bond_length_delta": bond_delta + 0.01,
+                            "rotatable_bond_count": 2,
+                        },
+                        {
+                            "molecule_id": f"{split_type}_test",
+                            "split": "test",
+                            "sampled_rmsd_to_target": rmsd_base + split_offset + 0.04,
+                            "sampled_finite_coordinate": True,
+                            "sampled_mean_abs_bond_length_delta": bond_delta + 0.02,
+                            "rotatable_bond_count": 5,
+                        },
+                    ]
+                    payload = {
+                        "run_name": f"geom_formal_full_database{split_label}_train_{label}_steps2000_seed0",
+                        "result_kind": "geom_drugs_full_database_formal_training_not_benchmark",
+                        "benchmark_result": False,
+                        "dataset_subset_scope": FULL_DATABASE_SCOPE,
+                        "processed_artifact_path": "data/processed/geom_drugs_full_database/molecules.json",
+                        "split_path": split_path,
+                        "random_seed": 0,
+                        "corruption_mode": mode,
+                        "model_name": "single_linear_velocity_smoke",
+                        "backbone": "minimal_linear_velocity_pilot",
+                        "hardware": "gpu_enabled",
+                        "gpu_used": True,
+                        "scheduler": "slurm",
+                        "slurm_account": "torch_pr_872_general",
+                        "formal_training_run": True,
+                        "full_database_formal_training_run": True,
+                        "max_steps": 2000,
+                        "hard_max_steps": 2000,
+                        "optimizer_name": "SGD",
+                        "learning_rate": 1.0e-2,
+                        "optimizer_step_count": 2000,
+                        "training_sample_count": 1,
+                        "validation_sample_count": 1,
+                        "sample_count": 3,
+                        "early_stop_monitor": "validation_loss_after_step",
+                        "early_stop_patience": 200,
+                        "early_stop_min_delta": 1.0e-6,
+                        "stopped_early": False,
+                        "early_stop_reason": "hard_cap_reached",
+                        "checkpoint_reusable": True,
+                        "checkpoint_selected_by_validation": True,
+                        "checkpoint_scope": "reusable_formal_full_database_validation_selected_checkpoint",
+                        "sampling_executed": True,
+                        "sample_step_count": 1,
+                        "sample_step_size": 0.1,
+                        "runtime_scope": "formal_full_database_train_validation_select_save_reload_sample_after_cpu_warmup",
+                        "runtime_seconds_reliable": True,
+                        "runtime_seconds": 10.0,
+                        "dataset": {
+                            "name": "geom_drugs",
+                            "kind": "geom_drugs_tiny_processed_dry_run",
+                            "subset_scope": FULL_DATABASE_SCOPE,
+                            "molecule_count": 3,
+                            "split_type": split_type,
+                            "split_scope": FULL_DATABASE_SCOPE,
+                            "split_counts": {"train": 1, "val": 1, "test": 1},
+                            "degenerate_tiny_split": False,
+                        },
+                        "metrics": {
+                            "metric_scope": "geom_drugs_formal_full_database_training_checkpoint_sampling",
+                            "executed_train_steps": 2000,
+                            "best_validation_loss": best_loss + split_offset,
+                            "best_validation_loss_step": 2000,
+                            "reloaded_validation_loss": best_loss + split_offset,
+                            "sampled_molecules": sampled,
+                        },
+                    }
+                    path = root / f"{split_type}_{label}.json"
+                    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+                    result_paths.append(path)
+
+            first = write_formal_attribution_phase_summary(
+                result_paths=result_paths,
+                summary_path=root / "attribution_summary.json",
+                report_path=root / "attribution_summary.md",
+                expected_split_types=("random", "scaffold"),
+                expected_seeds=(0,),
+            )
+            first_summary = json.loads(first["summary"].read_text(encoding="utf-8"))
+            first_report = first["report"].read_text(encoding="utf-8")
+            second = write_formal_attribution_phase_summary(
+                result_paths=result_paths,
+                summary_path=root / "attribution_summary_again.json",
+                report_path=root / "attribution_summary_again.md",
+                expected_split_types=("random", "scaffold"),
+                expected_seeds=(0,),
+            )
+            second_summary = json.loads(second["summary"].read_text(encoding="utf-8"))
+
+            self.assertEqual(first_summary, second_summary)
+            self.assertEqual(first_summary["result_kind"], ATTRIBUTION_SUMMARY_RESULT_KIND)
+            self.assertFalse(first_summary["benchmark_result"])
+            self.assertFalse(first_summary["training_executed_by_summary"])
+            self.assertFalse(first_summary["sampling_executed_by_summary"])
+            self.assertEqual(first_summary["row_count"], 8)
+            self.assertEqual(
+                set(first_summary["attribution_modes"]),
+                {"isotropic", "harmonic_prior", "torsion_only", "stiffness_structured"},
+            )
+            self.assertEqual(first_summary["physical_validity_diagnostics"]["status"], "available")
+            self.assertEqual(first_summary["rotatable_bond_stratification"]["status"], "available")
+            self.assertEqual(
+                first_summary["directional_verdict"]["verdict"],
+                "stiffness_better_than_all_A_B_D_baselines_on_all_core_metrics",
+            )
+            self.assertIn("Full-Database Attribution Phase Summary", first_report)
+            self.assertIn("Harmonic", first_report)
+            self.assertIn("Rotatable-Bond Stratification", first_report)
 
     def test_formal_10000_summary_is_deterministic(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

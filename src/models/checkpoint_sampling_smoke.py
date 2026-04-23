@@ -593,18 +593,52 @@ def _sample_coordinates(
             device=device,
         )
         rmsd_to_target = _torch_rmsd(torch, sampled_coords, target)
+        geometry_diagnostics = _sample_geometry_diagnostics(
+            torch=torch,
+            sampled_coords=sampled_coords,
+            target_coords=target,
+            bonds=sample.get("bonds", []),
+        )
         sampled.append(
             {
                 "molecule_id": sample["molecule_id"],
                 "split": sample.get("split"),
+                "rotatable_bond_count": sample.get("rotatable_bond_count"),
                 "atom_count": int(sampled_coords.shape[0]),
                 "sample_step_count": 1,
                 "sample_step_size": float(sample_step_size),
                 "sampled_rmsd_to_target": rmsd_to_target,
+                **geometry_diagnostics,
                 "predicted_velocity_norm": float(torch.sqrt((prediction * prediction).sum()).detach().cpu().item()),
             }
         )
     return sampled
+
+
+def _sample_geometry_diagnostics(
+    torch: Any,
+    sampled_coords: Any,
+    target_coords: Any,
+    bonds: list[list[int | float]],
+) -> dict[str, Any]:
+    finite = bool(torch.isfinite(sampled_coords).all().detach().cpu().item())
+    bond_deltas = []
+    atom_count = int(sampled_coords.shape[0])
+    for bond in bonds:
+        if len(bond) < 2:
+            continue
+        i, j = int(bond[0]), int(bond[1])
+        if i < 0 or j < 0 or i >= atom_count or j >= atom_count:
+            continue
+        sampled_distance = torch.sqrt(((sampled_coords[i] - sampled_coords[j]) ** 2).sum())
+        target_distance = torch.sqrt(((target_coords[i] - target_coords[j]) ** 2).sum())
+        bond_deltas.append(float(abs(sampled_distance - target_distance).detach().cpu().item()))
+    mean_bond_delta = None if not bond_deltas else sum(bond_deltas) / len(bond_deltas)
+    return {
+        "sampled_finite_coordinate": finite,
+        "sampled_mean_abs_bond_length_delta": mean_bond_delta,
+        "sampled_bond_count_checked": len(bond_deltas),
+    }
 
 
 def _per_sample_metrics(

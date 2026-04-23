@@ -92,6 +92,9 @@ The repo contains:
 - a reporting-only bounded 10000-molecule convergence diagnostics summary/report over the existing steps200 loss traces;
 - a prepared first formal bounded CPU-only 10000-molecule training path with max_steps `2000`, validation-loss checkpoint selection/stopping, reusable best/latest checkpoints, and a fixed non-benchmark aggregation interface;
 - a prepared first full-database CPU-only GEOM-Drugs formal training path that scans the available `rdkit_folder/drugs` raw tree, writes a one-conformer-per-molecule processed artifact and 90/5/5 random split, then runs the frozen formal training design for isotropic and stiffness-structured modes at seed `0` after approved scheduling;
+- a prepared cached-input full-database attribution training path for the A/B/D/E source modes: isotropic, harmonic-prior, torsion-only, and stiffness-structured, over the existing random and scaffold splits;
+- a parameterized SLURM wrapper for the full-database attribution path that requires explicit split/mode/seed environment variables and must not be submitted without approval;
+- a reporting-only full-database attribution summary path that aggregates completed A/B/D/E formal outputs, reports available sampled-coordinate physical diagnostics, and performs rotatable-bond-count stratification when sampled outputs include rotatable metadata;
 - honest placeholders for GEOM preprocessing, model sampling, and ablation orchestration.
 
 Still missing or intentionally incomplete:
@@ -104,7 +107,7 @@ Still missing or intentionally incomplete:
 - trainable model loops beyond the bounded tiny smoke checks, the bounded three-molecule pilot, bounded six-molecule micro-pilot, and bounded 30/500/10000-molecule data-scale checks;
 - real model sampling beyond bounded tiny smoke checks, the bounded six-molecule micro-pilot checkpoint/sampling pilot, and bounded 30/500/10000-molecule checkpoint/sampling data-scale checks;
 - real COV/MAT over generated conformer ensembles;
-- PoseBusters/MMFF/UFF/xTB integrations;
+- PoseBusters/MMFF/UFF/xTB integrations beyond the prepared sampled-coordinate bond-delta diagnostic hook;
 - full random-vs-scaffold benchmark runs.
 
 If any of the above now exist, update this file.

@@ -20,6 +20,8 @@ FULL_DATABASE_PROCESSED_MANIFEST_PATH = FULL_DATABASE_PROCESSED_ROOT / "manifest
 FULL_DATABASE_SPLIT_ROOT = Path("data/splits/geom_drugs_full_database")
 FULL_DATABASE_SPLIT_PATH = FULL_DATABASE_SPLIT_ROOT / "random_seed0" / "split.json"
 FULL_DATABASE_SPLIT_MANIFEST_PATH = FULL_DATABASE_SPLIT_ROOT / "random_seed0" / "manifest.json"
+FULL_DATABASE_SCAFFOLD_SPLIT_PATH = FULL_DATABASE_SPLIT_ROOT / "scaffold_seed0" / "split.json"
+FULL_DATABASE_SCAFFOLD_SPLIT_MANIFEST_PATH = FULL_DATABASE_SPLIT_ROOT / "scaffold_seed0" / "manifest.json"
 FULL_DATABASE_PROCESSED_RESULT_KIND = "processed_output_dry_run_not_benchmark"
 FULL_DATABASE_SPLIT_RESULT_KIND = RESULT_KIND
 FULL_DATABASE_SPLIT_FRACTIONS = {"train": 0.90, "val": 0.05, "test": 0.05}
@@ -281,6 +283,188 @@ def prepare_geom_full_database_split(
     }
 
 
+def prepare_geom_full_database_scaffold_split(
+    processed_artifact_path: str | Path = FULL_DATABASE_ARTIFACT_PATH,
+    split_root: str | Path = FULL_DATABASE_SPLIT_ROOT,
+    seed: int = 0,
+    force: bool = False,
+) -> dict[str, Any]:
+    """Write or reuse the cached full-database Bemis-Murcko scaffold split.
+
+    The processed artifact is reused as-is. No raw files are read or modified.
+    Split assignment is scaffold-grouped and targets the same 90/5/5 partition
+    policy as the random full-database path while accepting group-size drift.
+    """
+
+    try:
+        from rdkit import Chem
+        from rdkit.Chem.Scaffolds import MurckoScaffold
+    except ImportError as exc:  # pragma: no cover - depends on local environment.
+        raise RuntimeError("RDKit is required to prepare the full-database scaffold split") from exc
+
+    processed_artifact_path = Path(processed_artifact_path)
+    split_root = Path(split_root)
+    output_dir = split_root / f"scaffold_seed{seed}"
+    split_path = output_dir / "split.json"
+    manifest_path = output_dir / "manifest.json"
+    if split_path.exists() and manifest_path.exists() and not force:
+        split = json.loads(split_path.read_text(encoding="utf-8"))
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        _validate_full_database_split(split)
+        return {
+            "split": split_path,
+            "manifest": manifest_path,
+            "reused_existing": True,
+            "counts": {partition: len(split[partition]) for partition in ["train", "val", "test"]},
+            "stereo_fallback_molecule_count": int(manifest.get("stereo_fallback_molecule_count", 0)),
+            "skipped_molecule_count": int(manifest.get("skipped_molecule_count", 0)),
+        }
+
+    start = time.time()
+    artifact = _load_processed_artifact(processed_artifact_path)
+    records = artifact["molecules"]
+    molecule_ids = [record["molecule_id"] for record in records]
+    if len(molecule_ids) != len(set(molecule_ids)):
+        raise ValueError("Full-database processed artifact has duplicate molecule IDs")
+    if len(molecule_ids) < 20:
+        raise ValueError("Full-database scaffold split preparation requires at least 20 molecules")
+
+    scaffold_groups: dict[str, list[str]] = {}
+    acyclic_fallback_molecule_count = 0
+    stereo_fallback_molecule_count = 0
+    stereo_fallback_examples: list[dict[str, str]] = []
+    skipped_molecules: list[dict[str, Any]] = []
+    for record in records:
+        molecule_id = str(record["molecule_id"])
+        smiles = str(record.get("smiles", ""))
+        mol = Chem.MolFromSmiles(smiles)
+        if mol is None:
+            skipped_molecules.append(
+                {
+                    "molecule_id": molecule_id,
+                    "smiles": smiles,
+                    "reason": "invalid_smiles",
+                    "first_error": "Chem.MolFromSmiles returned None",
+                    "retry_error": None,
+                }
+            )
+            continue
+        scaffold_result = _scaffold_key_with_stereo_fallback(
+            Chem=Chem,
+            MurckoScaffold=MurckoScaffold,
+            mol=mol,
+            molecule_id=molecule_id,
+            smiles=smiles,
+        )
+        if scaffold_result["skipped"]:
+            skipped_molecules.append(scaffold_result["skip_record"])
+            continue
+        scaffold = scaffold_result["scaffold"]
+        if scaffold_result["used_acyclic_fallback"]:
+            acyclic_fallback_molecule_count += 1
+        if scaffold_result["used_stereo_fallback"]:
+            stereo_fallback_molecule_count += 1
+            if len(stereo_fallback_examples) < 25:
+                stereo_fallback_examples.append(scaffold_result["fallback_record"])
+        scaffold_groups.setdefault(scaffold, []).append(molecule_id)
+
+    usable_molecule_count = sum(len(ids) for ids in scaffold_groups.values())
+    if usable_molecule_count < 20:
+        raise ValueError("Full-database scaffold split preparation requires at least 20 usable molecules")
+    if len(scaffold_groups) < 3:
+        raise ValueError("Full-database scaffold split requires at least three scaffold groups")
+
+    rng = random.Random(seed)
+    groups = [
+        {"scaffold": scaffold, "molecule_ids": sorted(ids), "shuffle_key": rng.random()}
+        for scaffold, ids in scaffold_groups.items()
+    ]
+    groups.sort(key=lambda group: (-len(group["molecule_ids"]), group["shuffle_key"], group["scaffold"]))
+    targets = _full_database_split_targets(usable_molecule_count)
+    partitions = _assign_scaffold_groups(groups, targets)
+    skipped_molecule_ids = sorted(record["molecule_id"] for record in skipped_molecules)
+    split = {
+        "dataset_name": "geom_drugs",
+        "dataset_kind": EXPECTED_DATASET_KIND,
+        "result_kind": FULL_DATABASE_SPLIT_RESULT_KIND,
+        "benchmark_result": False,
+        "split_type": "scaffold",
+        "seed": int(seed),
+        "split_scope": FULL_DATABASE_SCOPE,
+        "degenerate_tiny_split": False,
+        "train": sorted(partitions["train"]),
+        "val": sorted(partitions["val"]),
+        "test": sorted(partitions["test"]),
+        "input_molecule_count": len(molecule_ids),
+        "usable_molecule_count": usable_molecule_count,
+        "stereo_fallback_molecule_count": stereo_fallback_molecule_count,
+        "skipped_molecule_count": len(skipped_molecules),
+        "skipped_molecule_ids": skipped_molecule_ids,
+        "notes": [
+            "Full-database formal-training Bemis-Murcko scaffold split using the same 90/5/5 target policy as the random full-database path.",
+            "Scaffold grouping can make final split counts drift from exact targets; train/val/test remain non-empty and molecule-disjoint.",
+            "Acyclic molecules use canonical SMILES as the fallback group key when Murcko scaffold extraction is empty.",
+            "Molecules that trigger RDKit scaffold/canonicalization stereo errors are retried after removing stereochemistry from a copied molecule.",
+            "Molecules that still cannot be assigned a scaffold are skipped and reported in this split artifact and manifest.",
+            "This split is prepared for scaffold-split formal training and is not a benchmark claim.",
+        ],
+    }
+    _validate_full_database_split(split)
+
+    group_sizes = sorted((len(ids) for ids in scaffold_groups.values()), reverse=True)
+    counts = {partition: len(split[partition]) for partition in ["train", "val", "test"]}
+    manifest = {
+        "run_name": f"geom_full_database_scaffold_split_seed{seed}",
+        "dataset_name": "geom_drugs",
+        "dataset_kind": EXPECTED_DATASET_KIND,
+        "result_kind": FULL_DATABASE_SPLIT_RESULT_KIND,
+        "benchmark_result": False,
+        "execution_mode": "scheduled_or_local_cpu_full_database_scaffold_split_preparation",
+        "hardware": "cpu_only",
+        "scheduler": None,
+        "slurm_account": None,
+        "training_executed": False,
+        "raw_data_modified": False,
+        "processed_data_modified": False,
+        "processed_artifact_reused": True,
+        "full_split_written": True,
+        "processed_artifact_path": str(processed_artifact_path),
+        "split_path": str(split_path),
+        "split_type": "scaffold",
+        "split_scope": FULL_DATABASE_SCOPE,
+        "seed": int(seed),
+        "split_target_fractions": FULL_DATABASE_SPLIT_FRACTIONS,
+        "target_counts": targets,
+        "counts": counts,
+        "input_molecule_count": len(molecule_ids),
+        "usable_molecule_count": usable_molecule_count,
+        "scaffold_group_count": len(scaffold_groups),
+        "acyclic_fallback_molecule_count": acyclic_fallback_molecule_count,
+        "stereo_fallback_molecule_count": stereo_fallback_molecule_count,
+        "stereo_fallback_examples": stereo_fallback_examples,
+        "skipped_molecule_count": len(skipped_molecules),
+        "skipped_molecule_examples": skipped_molecules[:25],
+        "skipped_molecule_ids_recorded_in_split": True,
+        "largest_scaffold_group_size": group_sizes[0],
+        "top_scaffold_group_sizes": group_sizes[:10],
+        "runtime_seconds": time.time() - start,
+        "notes": split["notes"],
+    }
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    split_path.write_text(json.dumps(split, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return {
+        "split": split_path,
+        "manifest": manifest_path,
+        "reused_existing": False,
+        "counts": counts,
+        "scaffold_group_count": len(scaffold_groups),
+        "stereo_fallback_molecule_count": stereo_fallback_molecule_count,
+        "skipped_molecule_count": len(skipped_molecules),
+    }
+
+
 def _load_processed_artifact(path: Path) -> dict[str, Any]:
     if not path.exists():
         raise FileNotFoundError(f"Full-database processed artifact not found: {path}")
@@ -308,8 +492,8 @@ def _validate_full_database_split(split: dict[str, Any]) -> None:
         raise ValueError("Full-database split must be labeled benchmark_result=false")
     if split.get("split_scope") != FULL_DATABASE_SCOPE:
         raise ValueError(f"Expected split_scope={FULL_DATABASE_SCOPE!r}")
-    if split.get("split_type") != "random":
-        raise ValueError("Full-database split currently supports only split_type=random")
+    if split.get("split_type") not in {"random", "scaffold"}:
+        raise ValueError("Full-database split supports only split_type=random or scaffold")
     if split.get("degenerate_tiny_split") is not False:
         raise ValueError("Full-database split must be nondegenerate")
     split_ids = split["train"] + split["val"] + split["test"]
@@ -317,6 +501,123 @@ def _validate_full_database_split(split: dict[str, Any]) -> None:
         raise ValueError("Full-database split requires non-empty train/val/test partitions")
     if len(split_ids) != len(set(split_ids)):
         raise ValueError("Full-database split assigns a molecule more than once")
+
+
+def _scaffold_key_with_stereo_fallback(
+    Chem: Any,
+    MurckoScaffold: Any,
+    mol: Any,
+    molecule_id: str,
+    smiles: str,
+) -> dict[str, Any]:
+    try:
+        scaffold, used_acyclic_fallback = _scaffold_key(Chem, MurckoScaffold, mol)
+        return {
+            "scaffold": scaffold,
+            "used_acyclic_fallback": used_acyclic_fallback,
+            "used_stereo_fallback": False,
+            "fallback_record": None,
+            "skipped": False,
+            "skip_record": None,
+        }
+    except Exception as first_exc:  # pragma: no cover - exact RDKit failures depend on input chemistry.
+        first_error = _exception_summary(first_exc)
+
+    try:
+        clean_mol = Chem.Mol(mol)
+        Chem.RemoveStereochemistry(clean_mol)
+        scaffold, used_acyclic_fallback = _scaffold_key(Chem, MurckoScaffold, clean_mol)
+        return {
+            "scaffold": scaffold,
+            "used_acyclic_fallback": used_acyclic_fallback,
+            "used_stereo_fallback": True,
+            "fallback_record": {
+                "molecule_id": molecule_id,
+                "smiles": smiles,
+                "first_error": first_error,
+                "fallback": "copy_remove_stereochemistry_retry",
+            },
+            "skipped": False,
+            "skip_record": None,
+        }
+    except Exception as retry_exc:  # pragma: no cover - exact RDKit failures depend on input chemistry.
+        return {
+            "scaffold": None,
+            "used_acyclic_fallback": False,
+            "used_stereo_fallback": False,
+            "fallback_record": None,
+            "skipped": True,
+            "skip_record": {
+                "molecule_id": molecule_id,
+                "smiles": smiles,
+                "reason": "scaffold_generation_failed_after_stereo_removal",
+                "first_error": first_error,
+                "retry_error": _exception_summary(retry_exc),
+            },
+        }
+
+
+def _scaffold_key(Chem: Any, MurckoScaffold: Any, mol: Any) -> tuple[str, bool]:
+    scaffold = MurckoScaffold.MurckoScaffoldSmiles(mol=mol)
+    used_acyclic_fallback = False
+    if not scaffold:
+        scaffold = Chem.MolToSmiles(mol, canonical=True)
+        used_acyclic_fallback = True
+    if not scaffold:
+        raise ValueError("RDKit produced an empty scaffold and empty canonical SMILES fallback")
+    return scaffold, used_acyclic_fallback
+
+
+def _exception_summary(exc: BaseException) -> str:
+    text = f"{type(exc).__name__}: {exc}"
+    text = " ".join(text.split())
+    return text[:500]
+
+
+def _full_database_split_targets(molecule_count: int) -> dict[str, int]:
+    val_count = max(1, round(molecule_count * FULL_DATABASE_SPLIT_FRACTIONS["val"]))
+    test_count = max(1, round(molecule_count * FULL_DATABASE_SPLIT_FRACTIONS["test"]))
+    train_count = molecule_count - val_count - test_count
+    if train_count <= 0:
+        raise ValueError("Full-database split fractions leave no training molecules")
+    return {"train": train_count, "val": val_count, "test": test_count}
+
+
+def _assign_scaffold_groups(
+    groups: list[dict[str, Any]],
+    targets: dict[str, int],
+) -> dict[str, list[str]]:
+    partitions = {"train": [], "val": [], "test": []}
+    for group in groups:
+        molecule_ids = group["molecule_ids"]
+        best_partition = min(
+            partitions,
+            key=lambda partition: _partition_score_after_assignment(partitions, targets, partition, len(molecule_ids)),
+        )
+        partitions[best_partition].extend(molecule_ids)
+    _ensure_nonempty_partitions(partitions)
+    return partitions
+
+
+def _partition_score_after_assignment(
+    partitions: dict[str, list[str]],
+    targets: dict[str, int],
+    candidate_partition: str,
+    group_size: int,
+) -> tuple[float, int]:
+    score = 0.0
+    for partition, target in targets.items():
+        count = len(partitions[partition])
+        if partition == candidate_partition:
+            count += group_size
+        score += ((count - target) / max(1, target)) ** 2
+    return (score, len(partitions[candidate_partition]))
+
+
+def _ensure_nonempty_partitions(partitions: dict[str, list[str]]) -> None:
+    empty = [partition for partition, molecule_ids in partitions.items() if not molecule_ids]
+    if empty:
+        raise ValueError(f"Full-database scaffold split produced empty partitions: {empty}")
 
 
 def _record_skip(skip_reasons: dict[str, int], reason: str) -> None:
