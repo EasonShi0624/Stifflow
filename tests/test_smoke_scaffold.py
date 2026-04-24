@@ -43,6 +43,7 @@ from src.eval.formal_full_database_compare import (
 )
 from src.eval.formal_attribution import (
     ATTRIBUTION_SUMMARY_RESULT_KIND,
+    write_formal_attribution_phase_outputs,
     write_formal_attribution_phase_summary,
 )
 from src.eval.tiny_real_compare import write_tiny_real_comparison
@@ -63,6 +64,7 @@ from src.train.formal_10000_training import (
 )
 from src.train.formal_full_database_training import (
     FORMAL_FULL_DATABASE_CHECKPOINT_SCOPE,
+    FORMAL_FULL_DATABASE_RESULT_KIND,
     FORMAL_FULL_DATABASE_SEED,
     FORMAL_FULL_DATABASE_SEED_SET,
     validate_formal_full_database_config,
@@ -3548,9 +3550,146 @@ logging:
                 first_summary["directional_verdict"]["verdict"],
                 "stiffness_better_than_all_A_B_D_baselines_on_all_core_metrics",
             )
-            self.assertIn("Full-Database Attribution Phase Summary", first_report)
+            self.assertIn("Full-Database Attribution Summary (Cross-Split Master)", first_report)
             self.assertIn("Harmonic", first_report)
             self.assertIn("Rotatable-Bond Stratification", first_report)
+
+    def test_formal_attribution_bundle_reports_partial_scaffold_matrix_honestly(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            result_paths = []
+            sampled_by_split = [
+                ("formal_train", "train", 0, 0.50),
+                ("formal_val", "val", 2, 0.45),
+                ("formal_test", "test", 5, 0.40),
+            ]
+            mode_rows = [
+                ("isotropic", "isotropic", 0.40),
+                ("harmonic_prior", "harmonic", 0.35),
+                ("torsion_only", "torsion_only", 0.30),
+                ("stiffness_structured", "stiffness", 0.20),
+            ]
+            scaffold_modes = {"isotropic", "stiffness_structured"}
+            for split_type, split_offset in [("random", 0.0), ("scaffold", 0.1)]:
+                for mode, label, best_loss in mode_rows:
+                    if split_type == "scaffold" and mode not in scaffold_modes:
+                        continue
+                    sampled = []
+                    for molecule_id, sample_split, rotatable_count, rmsd in sampled_by_split:
+                        row = {
+                            "molecule_id": f"{split_type}_{label}_{molecule_id}",
+                            "split": sample_split,
+                            "sampled_rmsd_to_target": rmsd + split_offset,
+                            "sample_step_count": 1,
+                            "sample_step_size": 0.1,
+                            "atom_count": 6,
+                            "predicted_velocity_norm": 0.2,
+                        }
+                        if split_type == "random":
+                            row["rotatable_bond_count"] = rotatable_count
+                            row["sampled_finite_coordinate"] = True
+                            row["sampled_mean_abs_bond_length_delta"] = 0.01
+                            row["sampled_bond_count_checked"] = 5
+                        sampled.append(row)
+                    payload = {
+                        "run_name": f"geom_formal_full_database_{split_type}_train_{label}_steps2000_seed0",
+                        "result_kind": FORMAL_FULL_DATABASE_RESULT_KIND,
+                        "benchmark_result": False,
+                        "formal_training_run": True,
+                        "full_database_formal_training_run": True,
+                        "processed_artifact_path": f"data/processed/{split_type}.json",
+                        "split_path": f"data/splits/{split_type}.json",
+                        "corruption_mode": mode,
+                        "model_name": "minimal_egnn_flow_matcher",
+                        "backbone": "minimal_egnn",
+                        "random_seed": 0,
+                        "max_steps": 2000,
+                        "hard_max_steps": 2000,
+                        "optimizer_name": "SGD",
+                        "optimizer_step_count": 2000,
+                        "training_sample_count": 1,
+                        "validation_sample_count": 1,
+                        "sample_count": 3,
+                        "learning_rate": 0.01,
+                        "early_stop_monitor": "validation_loss_after_step",
+                        "early_stop_patience": 200,
+                        "early_stop_min_delta": 1.0e-6,
+                        "stopped_early": False,
+                        "early_stop_reason": "hard_cap_reached",
+                        "checkpoint_reusable": True,
+                        "checkpoint_selected_by_validation": True,
+                        "checkpoint_scope": "reusable_formal_full_database_validation_selected_checkpoint",
+                        "sampling_executed": True,
+                        "sample_step_count": 1,
+                        "sample_step_size": 0.1,
+                        "runtime_scope": "formal_full_database_train_validation_select_save_reload_sample_after_cpu_warmup",
+                        "runtime_seconds_reliable": True,
+                        "runtime_seconds": 10.0 + split_offset,
+                        "hardware": "cpu_only",
+                        "gpu_used": False,
+                        "dataset_subset_scope": FULL_DATABASE_SCOPE,
+                        "dataset": {
+                            "name": "geom_drugs",
+                            "kind": "geom_drugs_tiny_processed_dry_run",
+                            "subset_scope": FULL_DATABASE_SCOPE,
+                            "molecule_count": 3,
+                            "split_type": split_type,
+                            "split_scope": FULL_DATABASE_SCOPE,
+                            "split_counts": {"train": 1, "val": 1, "test": 1},
+                            "degenerate_tiny_split": False,
+                        },
+                        "metrics": {
+                            "metric_scope": "geom_drugs_formal_full_database_training_checkpoint_sampling",
+                            "executed_train_steps": 2000,
+                            "best_validation_loss": best_loss + split_offset,
+                            "best_validation_loss_step": 2000,
+                            "reloaded_validation_loss": best_loss + split_offset,
+                            "sampled_molecules": sampled,
+                        },
+                    }
+                    path = root / f"{split_type}_{label}.json"
+                    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+                    result_paths.append(path)
+
+            outputs = write_formal_attribution_phase_outputs(
+                result_paths=result_paths,
+                master_summary_path=root / "master.json",
+                master_report_path=root / "master.md",
+                random_summary_path=root / "random.json",
+                random_report_path=root / "random.md",
+                scaffold_summary_path=root / "scaffold.json",
+                scaffold_report_path=root / "scaffold.md",
+                expected_split_types=("random", "scaffold"),
+                expected_seeds=(0,),
+            )
+
+            master_summary = json.loads(outputs["master_summary"].read_text(encoding="utf-8"))
+            random_summary = json.loads(outputs["random_summary"].read_text(encoding="utf-8"))
+            scaffold_summary = json.loads(outputs["scaffold_summary"].read_text(encoding="utf-8"))
+            scaffold_report = outputs["scaffold_report"].read_text(encoding="utf-8")
+
+            self.assertEqual(random_summary["coverage"]["by_split"]["random"]["missing_seed_mode_pairs"], [])
+            self.assertFalse(scaffold_summary["coverage"]["complete_expected_matrix"])
+            self.assertEqual(
+                scaffold_summary["coverage"]["by_split"]["scaffold"]["missing_seed_mode_pairs"],
+                [
+                    {"seed": 0, "corruption_mode": "harmonic_prior"},
+                    {"seed": 0, "corruption_mode": "torsion_only"},
+                ],
+            )
+            self.assertEqual(
+                scaffold_summary["directional_verdict"]["required_baseline_focus"]["harmonic_prior"],
+                "not_available_in_input_results",
+            )
+            self.assertEqual(
+                scaffold_summary["directional_verdict"]["required_baseline_focus"]["torsion_only"],
+                "not_available_in_input_results",
+            )
+            self.assertEqual(
+                master_summary["directional_verdict"]["overall_verdict"],
+                "stiffness_better_or_tied_on_all_available_core_metrics_but_expected_matrix_is_incomplete",
+            )
+            self.assertIn("Missing expected seed/mode pairs", scaffold_report)
 
     def test_formal_10000_summary_is_deterministic(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

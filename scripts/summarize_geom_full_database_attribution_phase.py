@@ -14,9 +14,13 @@ ensure_stifflow_python()
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from src.eval.formal_attribution import (  # noqa: E402
+    DEFAULT_ATTRIBUTION_RANDOM_REPORT_PATH,
+    DEFAULT_ATTRIBUTION_RANDOM_SUMMARY_PATH,
     DEFAULT_ATTRIBUTION_REPORT_PATH,
+    DEFAULT_ATTRIBUTION_SCAFFOLD_REPORT_PATH,
+    DEFAULT_ATTRIBUTION_SCAFFOLD_SUMMARY_PATH,
     DEFAULT_ATTRIBUTION_SUMMARY_PATH,
-    write_formal_attribution_phase_summary,
+    write_formal_attribution_phase_outputs,
 )
 
 
@@ -29,8 +33,22 @@ def main() -> None:
         default=None,
         help="Input result JSON. May be repeated. Defaults to the prepared random/scaffold A/B/D/E seed 0/1/2 matrix.",
     )
-    parser.add_argument("--summary-path", default=str(DEFAULT_ATTRIBUTION_SUMMARY_PATH))
-    parser.add_argument("--report-path", default=str(DEFAULT_ATTRIBUTION_REPORT_PATH))
+    parser.add_argument(
+        "--summary-path",
+        dest="master_summary_path",
+        default=str(DEFAULT_ATTRIBUTION_SUMMARY_PATH),
+        help="Cross-split master summary JSON output path.",
+    )
+    parser.add_argument(
+        "--report-path",
+        dest="master_report_path",
+        default=str(DEFAULT_ATTRIBUTION_REPORT_PATH),
+        help="Cross-split master markdown report output path.",
+    )
+    parser.add_argument("--random-summary-path", default=str(DEFAULT_ATTRIBUTION_RANDOM_SUMMARY_PATH))
+    parser.add_argument("--random-report-path", default=str(DEFAULT_ATTRIBUTION_RANDOM_REPORT_PATH))
+    parser.add_argument("--scaffold-summary-path", default=str(DEFAULT_ATTRIBUTION_SCAFFOLD_SUMMARY_PATH))
+    parser.add_argument("--scaffold-report-path", default=str(DEFAULT_ATTRIBUTION_SCAFFOLD_REPORT_PATH))
     parser.add_argument(
         "--split-type",
         action="append",
@@ -50,17 +68,31 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    paths = write_formal_attribution_phase_summary(
+    paths = write_formal_attribution_phase_outputs(
         result_paths=args.result_paths,
-        summary_path=args.summary_path,
-        report_path=args.report_path,
+        master_summary_path=args.master_summary_path,
+        master_report_path=args.master_report_path,
+        random_summary_path=args.random_summary_path,
+        random_report_path=args.random_report_path,
+        scaffold_summary_path=args.scaffold_summary_path,
+        scaffold_report_path=args.scaffold_report_path,
         expected_split_types=tuple(args.split_types or ["random", "scaffold"]),
         expected_seeds=tuple(args.seeds or [0, 1, 2]),
     )
-    print(f"summary: {paths['summary']}")
-    print(f"report: {paths['report']}")
+    for key in [
+        "random_summary",
+        "random_report",
+        "scaffold_summary",
+        "scaffold_report",
+        "master_summary",
+        "master_report",
+    ]:
+        if key in paths:
+            print(f"{key}: {paths[key]}")
     print("benchmark_result: false")
-    print("note: Reporting-only full-database attribution-phase summary; no training, sampling, jobs, GPUs, raw-data changes, or environment changes.")
+    print(
+        "note: Reporting-only full-database attribution-phase summaries; no training, sampling, jobs, GPUs, raw-data changes, or environment changes."
+    )
 
 
 if __name__ == "__main__":
