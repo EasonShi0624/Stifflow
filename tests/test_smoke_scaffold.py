@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import copy
 import pickle
+import random
 import tempfile
 import unittest
 from pathlib import Path
@@ -46,6 +47,14 @@ from src.eval.formal_attribution import (
     write_formal_attribution_phase_outputs,
     write_formal_attribution_phase_summary,
 )
+from src.eval.formal_diagnostic_backfill import BACKFILL_NOTE, backfill_single_formal_result
+from src.eval.paper_closure import (
+    CLAIM_SUMMARY_RESULT_KIND,
+    CORE_RESULTS_RESULT_KIND,
+    PHYSICAL_SUMMARY_RESULT_KIND,
+    ROTATABLE_SUMMARY_RESULT_KIND,
+    write_paper_closure_outputs,
+)
 from src.eval.tiny_real_compare import write_tiny_real_comparison
 from src.eval.tiny_real_lifecycle import write_tiny_real_lifecycle_summary
 from src.eval.tiny_real_pilot_compare import write_micro_pilot_multiseed_summary, write_tiny_real_pilot_comparison
@@ -65,12 +74,14 @@ from src.train.formal_10000_training import (
 from src.train.formal_full_database_training import (
     FORMAL_FULL_DATABASE_CHECKPOINT_SCOPE,
     FORMAL_FULL_DATABASE_RESULT_KIND,
+    FORMAL_FULL_DATABASE_RUNTIME_SCOPE,
     FORMAL_FULL_DATABASE_SEED,
     FORMAL_FULL_DATABASE_SEED_SET,
     validate_formal_full_database_config,
 )
 from src.train.pipeline import run_smoke_pipeline
 from src.train.smoke import run_smoke
+from src.train import tiny_real as tiny_real_data
 from src.train.tiny_real import run_tiny_real_model_dry_runs
 from src.train.tiny_real_checkpoint_sampling import (
     run_data_scale_check_checkpoint_sampling_configs,
@@ -5285,6 +5296,643 @@ logging:
             self.assertEqual(len(split["test"]), 25)
             self.assertEqual(manifest["bounds"]["hard_max_molecules"], 500)
             self.assertEqual(manifest["counts"], {"train": 450, "val": 25, "test": 25})
+
+    def test_paper_closure_reports_supported_and_unsupported_claims(self) -> None:
+        def formal_summary(result_kind: str, split_type: str) -> dict[str, object]:
+            split_counts = {"train": 9, "val": 1, "test": 1}
+            return {
+                "result_kind": result_kind,
+                "benchmark_result": False,
+                "dataset_scope": FULL_DATABASE_SCOPE,
+                "seed_set": [0, 1, 2],
+                "dataset": {
+                    "name": "geom_drugs",
+                    "kind": "geom_drugs_full_database_processed",
+                    "subset_scope": FULL_DATABASE_SCOPE,
+                    "split_type": split_type,
+                    "split_scope": FULL_DATABASE_SCOPE,
+                    "split_counts": split_counts,
+                },
+                "aggregate_metric_comparisons": [
+                    {
+                        "metric": metric,
+                        "isotropic_mean": 0.20,
+                        "stiffness_structured_mean": 0.10,
+                        "stiffness_minus_isotropic_mean": -0.10,
+                        "stiffness_outcome_by_seed": ["better", "better", "better"],
+                        "stiffness_win_count": 3,
+                        "stiffness_tie_count": 0,
+                        "stiffness_loss_count": 0,
+                    }
+                    for metric in [
+                        "best_validation_loss",
+                        "reloaded_validation_loss",
+                        "sampled_rmsd_to_target_overall_mean",
+                        "sampled_rmsd_to_target_train_mean",
+                        "sampled_rmsd_to_target_val_mean",
+                        "sampled_rmsd_to_target_test_mean",
+                    ]
+                ],
+                "directional_verdict": {
+                    "verdict": "stiffness_better_on_all_tracked_metrics_all_seeds",
+                },
+            }
+
+        def attribution_row(mode: str, with_diag: bool) -> dict[str, object]:
+            bins = {
+                "0": {
+                    "count": 1,
+                    "mean_sampled_rmsd_to_target": 0.10 if mode == "harmonic_prior" else 0.60,
+                    "mean_sampled_rmsd_to_target_by_split": {"train": 0.11, "val": 0.10, "test": 0.09},
+                }
+            }
+            physical = {
+                "status": "available_from_sampled_molecules" if with_diag else "not_available_in_result_json",
+                "finite_coordinate_rate": 1.0 if with_diag else None,
+                "mean_abs_bond_length_delta": 0.03 if mode == "harmonic_prior" else (0.09 if with_diag else None),
+                "mean_bond_count_checked": 10.0 if with_diag else None,
+            }
+            rotatable = {
+                "status": "available_from_sampled_molecules" if with_diag else "not_available_in_result_json",
+                "bins": bins if with_diag else {},
+            }
+            return {
+                "corruption_mode": mode,
+                "physical_validity": physical,
+                "rotatable_bond_stratification": rotatable,
+            }
+
+        def attribution_summary(result_kind: str, split_type: str) -> dict[str, object]:
+            split_counts = {"train": 9, "val": 1, "test": 1}
+            rows = []
+            for mode in ["isotropic", "harmonic_prior", "torsion_only", "stiffness_structured"]:
+                for _seed in [0, 1, 2]:
+                    rows.append(attribution_row(mode, with_diag=mode in {"harmonic_prior", "torsion_only"}))
+            metric_table = {
+                "best_validation_loss": {
+                    "isotropic": 0.20,
+                    "harmonic_prior": 0.05,
+                    "torsion_only": 1.50,
+                    "stiffness_structured": 0.10,
+                },
+                "reloaded_validation_loss": {
+                    "isotropic": 0.20,
+                    "harmonic_prior": 0.05,
+                    "torsion_only": 1.50,
+                    "stiffness_structured": 0.10,
+                },
+                "sampled_rmsd_to_target_overall_mean": {
+                    "isotropic": 0.30,
+                    "harmonic_prior": 0.12,
+                    "torsion_only": 1.10,
+                    "stiffness_structured": 0.18,
+                },
+                "sampled_rmsd_to_target_train_mean": {
+                    "isotropic": 0.31,
+                    "harmonic_prior": 0.12,
+                    "torsion_only": 1.15,
+                    "stiffness_structured": 0.18,
+                },
+                "sampled_rmsd_to_target_val_mean": {
+                    "isotropic": 0.29,
+                    "harmonic_prior": 0.13,
+                    "torsion_only": 1.05,
+                    "stiffness_structured": 0.19,
+                },
+                "sampled_rmsd_to_target_test_mean": {
+                    "isotropic": 0.30,
+                    "harmonic_prior": 0.11,
+                    "torsion_only": 1.08,
+                    "stiffness_structured": 0.17,
+                },
+                "sampled_mean_abs_bond_length_delta": {
+                    "harmonic_prior": 0.03,
+                    "torsion_only": 0.09,
+                },
+            }
+            baseline_verdicts = {
+                "isotropic": {
+                    "tracked_core_comparison_count": 12,
+                    "stiffness_win_count": 12,
+                    "stiffness_tie_count": 0,
+                    "stiffness_loss_count": 0,
+                },
+                "harmonic_prior": {
+                    "tracked_core_comparison_count": 12,
+                    "stiffness_win_count": 0,
+                    "stiffness_tie_count": 0,
+                    "stiffness_loss_count": 12,
+                },
+                "torsion_only": {
+                    "tracked_core_comparison_count": 12,
+                    "stiffness_win_count": 12,
+                    "stiffness_tie_count": 0,
+                    "stiffness_loss_count": 0,
+                },
+            }
+            return {
+                "result_kind": result_kind,
+                "benchmark_result": False,
+                "dataset_scope": FULL_DATABASE_SCOPE,
+                "seed_set": [0, 1, 2],
+                "split_types": [split_type],
+                "coverage": {
+                    "complete_expected_matrix": True,
+                    "missing": [],
+                    "by_split": {split_type: {"complete_expected_matrix": True}},
+                },
+                "dataset": {
+                    "name": "geom_drugs",
+                    "kind": "geom_drugs_full_database_processed",
+                    "subset_scope": FULL_DATABASE_SCOPE,
+                    "split_counts_by_type": {split_type: split_counts},
+                },
+                "aggregate_metric_comparisons": [
+                    {
+                        "split_type": split_type,
+                        "metric_means_by_mode": metric_table,
+                    }
+                ],
+                "directional_verdict": {
+                    "overall_verdict": "mixed_or_inconclusive",
+                    "baseline_verdicts": baseline_verdicts,
+                },
+                "rows": rows,
+                "physical_validity_diagnostics": {
+                    "status": "available",
+                    "available_row_count": 6,
+                    "row_count": 12,
+                },
+                "rotatable_bond_stratification": {
+                    "status": "available",
+                    "available_row_count": 6,
+                    "row_count": 12,
+                },
+            }
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            formal_random_path = root / "formal_random.json"
+            formal_scaffold_path = root / "formal_scaffold.json"
+            attr_random_path = root / "attr_random.json"
+            attr_scaffold_path = root / "attr_scaffold.json"
+            attr_master_path = root / "attr_master.json"
+
+            formal_random_path.write_text(
+                json.dumps(
+                    formal_summary(FORMAL_FULL_DATABASE_MULTI_SEED_SUMMARY_RESULT_KIND, "random"),
+                    indent=2,
+                    sort_keys=True,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            formal_scaffold_path.write_text(
+                json.dumps(
+                    formal_summary(FORMAL_FULL_DATABASE_SCAFFOLD_MULTI_SEED_SUMMARY_RESULT_KIND, "scaffold"),
+                    indent=2,
+                    sort_keys=True,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            attr_random_path.write_text(
+                json.dumps(
+                    attribution_summary("geom_drugs_full_database_attribution_random_summary_not_benchmark", "random"),
+                    indent=2,
+                    sort_keys=True,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            attr_scaffold_path.write_text(
+                json.dumps(
+                    attribution_summary("geom_drugs_full_database_attribution_scaffold_summary_not_benchmark", "scaffold"),
+                    indent=2,
+                    sort_keys=True,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            attr_master = attribution_summary("geom_drugs_full_database_attribution_master_summary_not_benchmark", "random")
+            attr_master["split_types"] = ["random", "scaffold"]
+            attr_master["dataset"]["split_counts_by_type"] = {
+                "random": {"train": 9, "val": 1, "test": 1},
+                "scaffold": {"train": 9, "val": 1, "test": 1},
+            }
+            attr_master_path.write_text(
+                json.dumps(attr_master, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+
+            outputs = write_paper_closure_outputs(
+                formal_random_summary_path=formal_random_path,
+                formal_scaffold_summary_path=formal_scaffold_path,
+                attribution_random_summary_path=attr_random_path,
+                attribution_scaffold_summary_path=attr_scaffold_path,
+                attribution_master_summary_path=attr_master_path,
+                core_summary_path=root / "core.json",
+                core_report_path=root / "core.md",
+                physical_summary_path=root / "physical.json",
+                physical_report_path=root / "physical.md",
+                rotatable_summary_path=root / "rotatable.json",
+                rotatable_report_path=root / "rotatable.md",
+                claim_summary_path=root / "claim.json",
+                claim_report_path=root / "claim.md",
+            )
+
+            core = json.loads(outputs["core_summary"].read_text(encoding="utf-8"))
+            physical = json.loads(outputs["physical_summary"].read_text(encoding="utf-8"))
+            rotatable = json.loads(outputs["rotatable_summary"].read_text(encoding="utf-8"))
+            claim = json.loads(outputs["claim_summary"].read_text(encoding="utf-8"))
+
+            self.assertEqual(core["result_kind"], CORE_RESULTS_RESULT_KIND)
+            self.assertEqual(physical["result_kind"], PHYSICAL_SUMMARY_RESULT_KIND)
+            self.assertEqual(rotatable["result_kind"], ROTATABLE_SUMMARY_RESULT_KIND)
+            self.assertEqual(claim["result_kind"], CLAIM_SUMMARY_RESULT_KIND)
+            self.assertEqual(
+                claim["claims"]["stiffness_vs_isotropic"]["support_level"],
+                "supported_on_tracked_loss_and_sampled_rmsd_metrics",
+            )
+            self.assertEqual(
+                claim["claims"]["stiffness_vs_torsion_only"]["support_level"],
+                "supported_on_tracked_loss_and_sampled_rmsd_metrics",
+            )
+            self.assertEqual(
+                claim["claims"]["stiffness_vs_harmonic_prior"]["support_level"],
+                "not_supported_harmonic_prior_is_better_on_tracked_loss_and_sampled_rmsd_metrics",
+            )
+            self.assertIn("does not support stiffness beating harmonic-prior", claim["not_supported_by_current_evidence"][0])
+            self.assertEqual(
+                physical["split_summaries"]["random"]["modes"]["stiffness_structured"]["available_seed_count"],
+                0,
+            )
+            self.assertTrue(physical["coverage_gap_present"])
+            self.assertTrue(rotatable["coverage_gap_present"])
+            self.assertEqual(rotatable["split_summaries"]["scaffold"]["comparisons"], [])
+            self.assertIn("Stiffness is better than isotropic", outputs["claim_report"].read_text(encoding="utf-8"))
+
+    def test_formal_diagnostic_backfill_restores_missing_sampled_fields(self) -> None:
+        try:
+            import torch  # noqa: F401
+        except ImportError:
+            self.skipTest("PyTorch is not importable in this interpreter")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            processed = root / "processed" / "molecules.json"
+            split_path = root / "splits" / "split.json"
+            checkpoint_path = root / "checkpoints" / "best.pt"
+            latest_checkpoint_path = root / "checkpoints" / "latest.pt"
+            result_path = root / "results" / "formal_result.json"
+            processed.parent.mkdir(parents=True)
+            split_path.parent.mkdir(parents=True)
+
+            molecules = [
+                {
+                    "molecule_id": f"geom_full_{index}",
+                    "smiles": "CCO",
+                    "atom_symbols": ["C", "C", "O", "H"],
+                    "bonds": [[0, 1, 1], [1, 2, 1], [0, 3, 1]],
+                    "conformers": [
+                        {
+                            "conformer_id": str(index),
+                            "coords": [
+                                [0.0, 0.0, 0.0],
+                                [1.5 + 0.05 * index, 0.0, 0.0],
+                                [2.8 + 0.05 * index, 0.2, 0.0],
+                                [0.0, 1.0, 0.0],
+                            ],
+                        }
+                    ],
+                    "ring_atom_indices": [],
+                    "rotatable_bond_count": index,
+                }
+                for index in range(3)
+            ]
+            processed.write_text(
+                json.dumps(
+                    {
+                        "dataset_kind": "geom_drugs_tiny_processed_dry_run",
+                        "result_kind": "processed_output_dry_run_not_benchmark",
+                        "benchmark_result": False,
+                        "subset_scope": FULL_DATABASE_SCOPE,
+                        "molecules": molecules,
+                    },
+                    indent=2,
+                    sort_keys=True,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            split_path.write_text(
+                json.dumps(
+                    {
+                        "dataset_kind": "geom_drugs_tiny_processed_dry_run",
+                        "result_kind": "split_dry_run_not_benchmark",
+                        "benchmark_result": False,
+                        "split_type": "random",
+                        "split_scope": FULL_DATABASE_SCOPE,
+                        "degenerate_tiny_split": False,
+                        "train": ["geom_full_0"],
+                        "val": ["geom_full_1"],
+                        "test": ["geom_full_2"],
+                    },
+                    indent=2,
+                    sort_keys=True,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            config = load_config("configs/train/geom_full_database_formal_isotropic.yaml")
+            config["experiment"]["seed"] = 0
+            config["data"]["processed_artifact_path"] = str(processed)
+            config["data"]["split_path"] = str(split_path)
+            config["data"]["split_type"] = "random"
+            config["eval"]["eval_subset_size"] = len(molecules)
+            config["eval"]["compute_physical_validity_diagnostics"] = True
+            config["eval"]["compute_rotatable_bond_stratification"] = True
+            config["eval"]["compute_rotatable_bond_count_from_smiles"] = True
+
+            artifact = tiny_real_data._load_tiny_real_artifact(processed)
+            split_membership = {
+                "geom_full_0": "train",
+                "geom_full_1": "val",
+                "geom_full_2": "test",
+            }
+            samples = list(
+                tiny_real_data._iter_flow_matching_samples(
+                    config,
+                    artifact["molecules"],
+                    random.Random(0),
+                    split_membership,
+                )
+            )
+            train_samples = [sample for sample in samples if sample["split"] == "train"]
+            validation_samples = [sample for sample in samples if sample["split"] == "val"]
+            metrics = run_validation_checkpoint_training(
+                samples=train_samples,
+                validation_samples=validation_samples,
+                sampling_samples=samples,
+                checkpoint_path=checkpoint_path,
+                latest_checkpoint_path=latest_checkpoint_path,
+                seed=0,
+                max_steps=201,
+                hard_max_steps=202,
+                learning_rate=1.0e-2,
+                sample_step_size=0.1,
+                early_stop={"enabled": True, "patience": 1, "min_delta": 1.0e9, "monitor": "validation_loss_after_step"},
+                checkpoint_result_kind="reusable_formal_full_database_validation_selected_checkpoint_not_benchmark",
+                checkpoint_scope=FORMAL_FULL_DATABASE_CHECKPOINT_SCOPE,
+            )
+
+            stripped_sampled = []
+            for item in metrics["sampled_molecules"]:
+                stripped_sampled.append(
+                    {
+                        key: value
+                        for key, value in item.items()
+                        if key
+                        not in {
+                            "rotatable_bond_count",
+                            "sampled_finite_coordinate",
+                            "sampled_mean_abs_bond_length_delta",
+                            "sampled_bond_count_checked",
+                        }
+                    }
+                )
+            result_payload = {
+                "run_name": "geom_formal_full_database_train_isotropic_steps2000_seed0",
+                "result_kind": FORMAL_FULL_DATABASE_RESULT_KIND,
+                "benchmark_result": False,
+                "corruption_mode": "isotropic",
+                "random_seed": 0,
+                "checkpoint_scope": FORMAL_FULL_DATABASE_CHECKPOINT_SCOPE,
+                "checkpoint_reusable": True,
+                "checkpoint_selected_by_validation": True,
+                "runtime_scope": FORMAL_FULL_DATABASE_RUNTIME_SCOPE,
+                "sampling_executed": True,
+                "best_checkpoint_path": str(checkpoint_path),
+                "processed_artifact_path": str(processed),
+                "split_path": str(split_path),
+                "sample_step_size": 0.1,
+                "dataset": {
+                    "split_type": "random",
+                    "split_counts": {"train": 1, "val": 1, "test": 1},
+                },
+                "metrics": {
+                    "sampled_molecules": stripped_sampled,
+                },
+                "notes": ["Original formal result without backfilled sampled diagnostics."],
+            }
+            result_path.parent.mkdir(parents=True)
+            result_path.write_text(json.dumps(result_payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+            outcome = backfill_single_formal_result(result_path=result_path)
+            refreshed = json.loads(result_path.read_text(encoding="utf-8"))
+            first_sample = refreshed["metrics"]["sampled_molecules"][0]
+
+            self.assertTrue(outcome["updated"])
+            self.assertEqual(outcome["status_before"]["physical_key_count"], 0)
+            self.assertEqual(outcome["status_after"]["physical_key_count"], 3)
+            self.assertEqual(outcome["status_after"]["rotatable_numeric_count"], 3)
+            self.assertIn("sampled_finite_coordinate", first_sample)
+            self.assertIn("sampled_mean_abs_bond_length_delta", first_sample)
+            self.assertIn("sampled_bond_count_checked", first_sample)
+            self.assertIn("rotatable_bond_count", first_sample)
+            self.assertEqual(refreshed["diagnostic_backfill"]["execution_mode"], "local_evaluation_only_checkpoint_reload_sampling")
+            self.assertFalse(refreshed["diagnostic_backfill"]["training_reexecuted"])
+            self.assertIn(BACKFILL_NOTE, refreshed["notes"])
+
+    def test_paper_closure_marks_full_diagnostic_coverage_when_backfill_exists(self) -> None:
+        def formal_summary(result_kind: str, split_type: str) -> dict[str, object]:
+            split_counts = {"train": 9, "val": 1, "test": 1}
+            return {
+                "result_kind": result_kind,
+                "benchmark_result": False,
+                "dataset_scope": FULL_DATABASE_SCOPE,
+                "seed_set": [0, 1, 2],
+                "dataset": {
+                    "name": "geom_drugs",
+                    "kind": "geom_drugs_full_database_processed",
+                    "subset_scope": FULL_DATABASE_SCOPE,
+                    "split_type": split_type,
+                    "split_scope": FULL_DATABASE_SCOPE,
+                    "split_counts": split_counts,
+                },
+                "aggregate_metric_comparisons": [
+                    {
+                        "metric": metric,
+                        "isotropic_mean": 0.20,
+                        "stiffness_structured_mean": 0.10,
+                        "stiffness_minus_isotropic_mean": -0.10,
+                        "stiffness_outcome_by_seed": ["better", "better", "better"],
+                        "stiffness_win_count": 3,
+                        "stiffness_tie_count": 0,
+                        "stiffness_loss_count": 0,
+                    }
+                    for metric in [
+                        "best_validation_loss",
+                        "reloaded_validation_loss",
+                        "sampled_rmsd_to_target_overall_mean",
+                        "sampled_rmsd_to_target_train_mean",
+                        "sampled_rmsd_to_target_val_mean",
+                        "sampled_rmsd_to_target_test_mean",
+                    ]
+                ],
+                "directional_verdict": {
+                    "verdict": "stiffness_better_on_all_tracked_metrics_all_seeds",
+                },
+            }
+
+        def attribution_summary(result_kind: str, split_type: str) -> dict[str, object]:
+            split_counts = {"train": 9, "val": 1, "test": 1}
+            rows = []
+            per_mode_bond_delta = {
+                "isotropic": 0.07,
+                "harmonic_prior": 0.03,
+                "torsion_only": 0.09,
+                "stiffness_structured": 0.05,
+            }
+            per_mode_rmsd = {
+                "isotropic": 0.25,
+                "harmonic_prior": 0.12,
+                "torsion_only": 1.00,
+                "stiffness_structured": 0.18,
+            }
+            for mode in ["isotropic", "harmonic_prior", "torsion_only", "stiffness_structured"]:
+                for _seed in [0, 1, 2]:
+                    rows.append(
+                        {
+                            "corruption_mode": mode,
+                            "physical_validity": {
+                                "status": "available_from_sampled_molecules",
+                                "finite_coordinate_rate": 1.0,
+                                "mean_abs_bond_length_delta": per_mode_bond_delta[mode],
+                                "mean_bond_count_checked": 10.0,
+                            },
+                            "rotatable_bond_stratification": {
+                                "status": "available_from_sampled_molecules",
+                                "bins": {
+                                    "0": {
+                                        "count": 1,
+                                        "mean_sampled_rmsd_to_target": per_mode_rmsd[mode],
+                                        "mean_sampled_rmsd_to_target_by_split": {
+                                            "train": per_mode_rmsd[mode],
+                                            "val": per_mode_rmsd[mode],
+                                            "test": per_mode_rmsd[mode],
+                                        },
+                                    }
+                                },
+                            },
+                        }
+                    )
+            baseline_verdicts = {
+                "isotropic": {"tracked_core_comparison_count": 12, "stiffness_win_count": 12, "stiffness_tie_count": 0, "stiffness_loss_count": 0},
+                "harmonic_prior": {"tracked_core_comparison_count": 12, "stiffness_win_count": 0, "stiffness_tie_count": 0, "stiffness_loss_count": 12},
+                "torsion_only": {"tracked_core_comparison_count": 12, "stiffness_win_count": 12, "stiffness_tie_count": 0, "stiffness_loss_count": 0},
+            }
+            return {
+                "result_kind": result_kind,
+                "benchmark_result": False,
+                "dataset_scope": FULL_DATABASE_SCOPE,
+                "seed_set": [0, 1, 2],
+                "split_types": [split_type],
+                "coverage": {"complete_expected_matrix": True, "missing": [], "by_split": {split_type: {"complete_expected_matrix": True}}},
+                "dataset": {
+                    "name": "geom_drugs",
+                    "kind": "geom_drugs_full_database_processed",
+                    "subset_scope": FULL_DATABASE_SCOPE,
+                    "split_counts_by_type": {split_type: split_counts},
+                },
+                "aggregate_metric_comparisons": [
+                    {
+                        "split_type": split_type,
+                        "metric_means_by_mode": {
+                            "best_validation_loss": {"isotropic": 0.20, "harmonic_prior": 0.05, "torsion_only": 1.50, "stiffness_structured": 0.10},
+                            "reloaded_validation_loss": {"isotropic": 0.20, "harmonic_prior": 0.05, "torsion_only": 1.50, "stiffness_structured": 0.10},
+                            "sampled_rmsd_to_target_overall_mean": {"isotropic": 0.25, "harmonic_prior": 0.12, "torsion_only": 1.00, "stiffness_structured": 0.18},
+                            "sampled_rmsd_to_target_train_mean": {"isotropic": 0.25, "harmonic_prior": 0.12, "torsion_only": 1.00, "stiffness_structured": 0.18},
+                            "sampled_rmsd_to_target_val_mean": {"isotropic": 0.25, "harmonic_prior": 0.12, "torsion_only": 1.00, "stiffness_structured": 0.18},
+                            "sampled_rmsd_to_target_test_mean": {"isotropic": 0.25, "harmonic_prior": 0.12, "torsion_only": 1.00, "stiffness_structured": 0.18},
+                            "sampled_mean_abs_bond_length_delta": {
+                                "isotropic": 0.07,
+                                "harmonic_prior": 0.03,
+                                "torsion_only": 0.09,
+                                "stiffness_structured": 0.05,
+                            },
+                        },
+                    }
+                ],
+                "directional_verdict": {"overall_verdict": "mixed_or_inconclusive", "baseline_verdicts": baseline_verdicts},
+                "rows": rows,
+                "physical_validity_diagnostics": {"status": "available", "available_row_count": 12, "row_count": 12},
+                "rotatable_bond_stratification": {"status": "available", "available_row_count": 12, "row_count": 12},
+            }
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "formal_random.json").write_text(
+                json.dumps(formal_summary(FORMAL_FULL_DATABASE_MULTI_SEED_SUMMARY_RESULT_KIND, "random"), indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+            (root / "formal_scaffold.json").write_text(
+                json.dumps(formal_summary(FORMAL_FULL_DATABASE_SCAFFOLD_MULTI_SEED_SUMMARY_RESULT_KIND, "scaffold"), indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+            (root / "attr_random.json").write_text(
+                json.dumps(attribution_summary("geom_drugs_full_database_attribution_random_summary_not_benchmark", "random"), indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+            (root / "attr_scaffold.json").write_text(
+                json.dumps(attribution_summary("geom_drugs_full_database_attribution_scaffold_summary_not_benchmark", "scaffold"), indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+            master = attribution_summary("geom_drugs_full_database_attribution_master_summary_not_benchmark", "random")
+            master["split_types"] = ["random", "scaffold"]
+            master["dataset"]["split_counts_by_type"] = {
+                "random": {"train": 9, "val": 1, "test": 1},
+                "scaffold": {"train": 9, "val": 1, "test": 1},
+            }
+            (root / "attr_master.json").write_text(
+                json.dumps(master, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+
+            outputs = write_paper_closure_outputs(
+                formal_random_summary_path=root / "formal_random.json",
+                formal_scaffold_summary_path=root / "formal_scaffold.json",
+                attribution_random_summary_path=root / "attr_random.json",
+                attribution_scaffold_summary_path=root / "attr_scaffold.json",
+                attribution_master_summary_path=root / "attr_master.json",
+                core_summary_path=root / "core.json",
+                core_report_path=root / "core.md",
+                physical_summary_path=root / "physical.json",
+                physical_report_path=root / "physical.md",
+                rotatable_summary_path=root / "rotatable.json",
+                rotatable_report_path=root / "rotatable.md",
+                claim_summary_path=root / "claim.json",
+                claim_report_path=root / "claim.md",
+            )
+
+            physical = json.loads(outputs["physical_summary"].read_text(encoding="utf-8"))
+            rotatable = json.loads(outputs["rotatable_summary"].read_text(encoding="utf-8"))
+            claim = json.loads(outputs["claim_summary"].read_text(encoding="utf-8"))
+
+            self.assertFalse(physical["coverage_gap_present"])
+            self.assertFalse(rotatable["coverage_gap_present"])
+            self.assertIn("No A/B/D/E coverage gap remains", physical["availability_limitation"])
+            self.assertIn("No A/B/D/E coverage gap remains", rotatable["availability_limitation"])
+            self.assertIn(
+                "Physical-validity proxy diagnostics now cover A/B/D/E on both random and scaffold splits.",
+                claim["supported_by_current_evidence"],
+            )
+            self.assertIn(
+                "Rotatable-bond-count stratified sampled RMSD diagnostics now cover A/B/D/E on both random and scaffold splits.",
+                claim["supported_by_current_evidence"],
+            )
+            self.assertIn("coverage gap is now closed", claim["one_sentence_conclusion"])
 
 
 if __name__ == "__main__":

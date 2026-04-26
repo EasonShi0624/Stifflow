@@ -241,9 +241,17 @@ def _build_flow_matching_samples(
     rng: random.Random,
     split_membership: dict[str, str],
 ) -> list[dict[str, Any]]:
+    return list(_iter_flow_matching_samples(config, records, rng, split_membership))
+
+
+def _iter_flow_matching_samples(
+    config: dict[str, Any],
+    records: list[dict[str, Any]],
+    rng: random.Random,
+    split_membership: dict[str, str],
+):
     corruptor = build_corruptor(config, int(config["experiment"]["seed"]))
     max_eval = int(config["eval"]["eval_subset_size"])
-    samples = []
 
     for record in records[:max_eval]:
         conformer = record["conformers"][0]
@@ -253,24 +261,21 @@ def _build_flow_matching_samples(
         assert_finite_coords(x0, f"{record['molecule_id']}.x0")
         t = rng.random()
         rotatable_bond_count = _rotatable_bond_count(record, config)
-        samples.append(
-            {
-                "molecule_id": record["molecule_id"],
-                "split": split_membership[record["molecule_id"]],
-                "smiles": record.get("smiles"),
-                "atom_count": len(record.get("atom_symbols", [])),
-                "bond_count": len(record.get("bonds", [])),
-                "rotatable_bond_count": rotatable_bond_count,
-                "conformer_id": conformer.get("conformer_id"),
-                "bonds": record["bonds"],
-                "x0": x0,
-                "x1": x1,
-                "t": t,
-                "xt": _interpolate(x0, x1, t),
-                "target_velocity": _velocity(x0, x1),
-            }
-        )
-    return samples
+        yield {
+            "molecule_id": record["molecule_id"],
+            "split": split_membership[record["molecule_id"]],
+            "smiles": record.get("smiles"),
+            "atom_count": len(record.get("atom_symbols", [])),
+            "bond_count": len(record.get("bonds", [])),
+            "rotatable_bond_count": rotatable_bond_count,
+            "conformer_id": conformer.get("conformer_id"),
+            "bonds": record["bonds"],
+            "x0": x0,
+            "x1": x1,
+            "t": t,
+            "xt": _interpolate(x0, x1, t),
+            "target_velocity": _velocity(x0, x1),
+        }
 
 
 def _rotatable_bond_count(record: dict[str, Any], config: dict[str, Any]) -> int | None:

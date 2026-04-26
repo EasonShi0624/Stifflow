@@ -292,6 +292,57 @@ def run_validation_checkpoint_training(
     }
 
 
+def sample_existing_checkpoint(
+    samples: Any,
+    checkpoint_path: str | Path,
+    sample_step_size: float,
+    device: str = "cpu",
+    require_cuda: bool = False,
+) -> dict[str, Any]:
+    """Reload an existing checkpoint and run sampling only."""
+
+    if sample_step_size <= 0.0 or sample_step_size > 1.0:
+        raise ValueError("sample_step_size must be in (0, 1]")
+
+    torch = _load_torch()
+    device = _resolve_device(torch, device=device, require_cuda=require_cuda)
+    if device == "cpu":
+        torch.set_num_threads(1)
+
+    checkpoint_path = Path(checkpoint_path)
+    payload = torch.load(checkpoint_path, map_location=device, weights_only=False)
+    model = torch.nn.Linear(4, 3)
+    model.load_state_dict(payload["model_state_dict"])
+    model.to(device)
+    model.eval()
+
+    with torch.no_grad():
+        sampled = _sample_coordinates(torch, model, samples, sample_step_size, device=device)
+
+    return {
+        "model_name": "single_linear_velocity_smoke",
+        "backend": "torch_cuda" if device.startswith("cuda") else "torch_cpu",
+        "torch_version": getattr(torch, "__version__", "unknown"),
+        "device": device,
+        "cuda_available": bool(torch.cuda.is_available()),
+        "cuda_required": bool(require_cuda),
+        "cuda_device_name": torch.cuda.get_device_name(0) if device.startswith("cuda") else None,
+        "trainable_parameter_count": sum(parameter.numel() for parameter in model.parameters()),
+        "forward_pass_count": len(sampled),
+        "checkpoint_path": str(checkpoint_path),
+        "checkpoint_reloaded": True,
+        "checkpoint_reloaded_path": str(checkpoint_path),
+        "checkpoint_result_kind": payload.get("result_kind"),
+        "checkpoint_benchmark_result": payload.get("benchmark_result"),
+        "checkpoint_scope": payload.get("checkpoint_scope"),
+        "checkpoint_reusable": payload.get("checkpoint_scope") is not None,
+        "sample_step_size": float(sample_step_size),
+        "sample_count": len(sampled),
+        "sampled_molecules": sampled,
+        "note": "Existing checkpoint reloaded for evaluation-only sampled diagnostics; non-benchmark output.",
+    }
+
+
 def _run_checkpoint_sampling(
     samples: list[dict[str, Any]],
     checkpoint_path: str | Path,
@@ -573,7 +624,7 @@ def _batch_tensors(torch: Any, samples: list[dict[str, Any]], device: str = "cpu
 def _sample_coordinates(
     torch: Any,
     model: Any,
-    samples: list[dict[str, Any]],
+    samples: Any,
     sample_step_size: float,
     device: str = "cpu",
 ) -> list[dict[str, Any]]:
