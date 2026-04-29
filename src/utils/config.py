@@ -65,10 +65,19 @@ def validate_config(config: dict[str, Any]) -> None:
         raise ConfigError("Only cartesian_linear / linear is supported in the smoke scaffold")
 
     mode = _require(config, "corruption.mode", str)
-    if mode not in {"isotropic", "harmonic_prior", "torsion_only", "stiffness_structured"}:
+    supported_modes = {
+        "isotropic",
+        "harmonic_prior",
+        "torsion_only",
+        "stiffness_structured",
+        "hybrid_harmonic_stiffness_v1",
+        "harmonic_stiffness_residual_v1",
+    }
+    if mode not in supported_modes:
         raise ConfigError(
             "corruption.mode must be one of 'isotropic', 'harmonic_prior', "
-            "'torsion_only', or 'stiffness_structured'"
+            "'torsion_only', 'stiffness_structured', 'hybrid_harmonic_stiffness_v1', "
+            "or 'harmonic_stiffness_residual_v1'"
         )
 
     for field in [
@@ -80,6 +89,15 @@ def validate_config(config: dict[str, Any]) -> None:
         value = _require(config, field, (int, float))
         if value < 0:
             raise ConfigError(f"{field} must be non-negative")
+
+    if mode == "hybrid_harmonic_stiffness_v1":
+        value = _require(config, "corruption.modulation_strength", (int, float))
+        if value < 0 or value > 1:
+            raise ConfigError("corruption.modulation_strength must be in [0, 1]")
+    if mode == "harmonic_stiffness_residual_v1":
+        value = _require(config, "corruption.residual_strength", (int, float))
+        if value < 0 or value > 1:
+            raise ConfigError("corruption.residual_strength must be in [0, 1]")
 
     _require(config, "train.enabled", bool)
     _require(config, "sample.enabled", bool)

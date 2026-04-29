@@ -1,0 +1,93 @@
+# Full-database random-split hybrid harmonic + stiffness pilot configuration.
+# This is not a benchmark config. It reuses the cached full-database processed
+# artifact plus cached random split and preserves the frozen formal training
+# design unchanged; only the source corruption mode and conservative lambda change.
+
+experiment:
+  name: geom_formal_full_database_train_hybrid_harmonic_stiffness_v1_lambda025_steps2000_seed0
+  seed: 0
+  output_root: experiments
+
+data:
+  dataset_name: geom_drugs
+  dataset_kind: geom_drugs_tiny_processed_dry_run
+  raw_root: data/raw/geom_drugs
+  processed_root: data/processed/geom_drugs_full_database
+  split_root: data/splits/geom_drugs_full_database/random_seed0
+  processed_artifact_path: data/processed/geom_drugs_full_database/molecules.json
+  split_path: data/splits/geom_drugs_full_database/random_seed0/split.json
+  split_type: random
+  subset:
+    max_molecules: full_database
+    max_conformers_per_mol: 1
+    tag: geom_drugs_full_database_one_conformer
+
+model:
+  backbone: minimal_linear_velocity_pilot
+  pilot_model: single_linear_velocity_pilot
+  hidden_dim: 0
+  num_layers: 1
+  time_embedding_dim: 1
+
+flow_matching:
+  objective: cartesian_linear
+  interpolation: linear
+
+corruption:
+  mode: hybrid_harmonic_stiffness_v1
+  stiffness_table: heuristic_v1
+  protect_rings: true
+  protect_amides: true
+  protect_aromatic_conjugated: true
+  isotropic_sigma: 0.25
+  harmonic_sigma: 0.25
+  harmonic_smoothing_steps: 2
+  harmonic_neighbor_weight: 0.65
+  harmonic_anchor_weight: 0.15
+  modulation_strength: 0.25
+  hybrid_min_noise_scale: 0.50
+  hybrid_max_noise_scale: 1.25
+  bond_sigma: 0.02
+  angle_sigma: 0.08
+  torsion_sigma: 0.30
+
+train:
+  enabled: true
+  formal_training: true
+  pilot_only: false
+  batch_scope: full_database_train_split
+  max_steps: 2000
+  hard_max_steps: 2000
+  optimizer: SGD
+  learning_rate: 1.0e-2
+  num_workers: 0
+  checkpointing_enabled: true
+  checkpoint_scope: reusable_formal_full_database_validation_selected_checkpoint
+  early_stop:
+    enabled: true
+    monitor: validation_loss_after_step
+    patience: 200
+    min_delta: 1.0e-6
+
+sample:
+  enabled: true
+  pilot_only: false
+  sample_step_count: 1
+  sample_step_size: 0.1
+  sample_scope: all_full_database_molecules
+
+eval:
+  enabled: true
+  eval_subset_size: 0
+  compute_train_val_test_losses: true
+  compute_cov_mat: false
+  compute_validity: false
+  compute_energy_checks: false
+  compute_physical_validity_diagnostics: true
+  compute_rotatable_bond_stratification: true
+  compute_rotatable_bond_count_from_smiles: true
+
+logging:
+  save_manifest: true
+  save_results_json: true
+  save_log: true

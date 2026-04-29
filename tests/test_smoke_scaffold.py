@@ -10,6 +10,10 @@ from pathlib import Path
 from unittest.mock import patch
 
 from src.corruption.harmonic import HarmonicPriorCorruptor
+from src.corruption.hybrid_harmonic_stiffness import (
+    HarmonicStiffnessResidualV1Corruptor,
+    HybridHarmonicStiffnessV1Corruptor,
+)
 from src.corruption.isotropic import IsotropicCorruptor
 from src.corruption.stiffness_structured import StiffnessStructuredCorruptor
 from src.corruption.torsion_only import TorsionOnlyCorruptor
@@ -47,6 +51,10 @@ from src.eval.formal_attribution import (
     write_formal_attribution_phase_outputs,
     write_formal_attribution_phase_summary,
 )
+from src.eval.hybrid_harmonic_stiffness_pilot import (
+    HYBRID_PILOT_SUMMARY_RESULT_KIND,
+    write_hybrid_harmonic_stiffness_pilot_summary,
+)
 from src.eval.formal_diagnostic_backfill import BACKFILL_NOTE, backfill_single_formal_result
 from src.eval.paper_closure import (
     CLAIM_SUMMARY_RESULT_KIND,
@@ -73,6 +81,7 @@ from src.train.formal_10000_training import (
 )
 from src.train.formal_full_database_training import (
     FORMAL_FULL_DATABASE_CHECKPOINT_SCOPE,
+    FORMAL_FULL_DATABASE_HYBRID_PILOT_MODES,
     FORMAL_FULL_DATABASE_RESULT_KIND,
     FORMAL_FULL_DATABASE_RUNTIME_SCOPE,
     FORMAL_FULL_DATABASE_SEED,
@@ -182,6 +191,20 @@ class SmokeScaffoldTests(unittest.TestCase):
         self.assertEqual(config["data"]["dataset_name"], "synthetic_smoke")
         self.assertEqual(config["corruption"]["mode"], "isotropic")
 
+    def test_hybrid_pilot_configs_load(self) -> None:
+        config_paths = [
+            "configs/train/geom_full_database_formal_hybrid_harmonic_stiffness_v1_lambda010.yaml",
+            "configs/train/geom_full_database_formal_hybrid_harmonic_stiffness_v1_lambda025.yaml",
+            "configs/train/geom_full_database_formal_hybrid_harmonic_stiffness_v1_lambda050.yaml",
+            "configs/train/geom_full_database_formal_harmonic_stiffness_residual_v1_lambda010.yaml",
+            "configs/train/geom_full_database_formal_harmonic_stiffness_residual_v1_lambda025.yaml",
+            "configs/train/geom_full_database_formal_harmonic_stiffness_residual_v1_lambda050.yaml",
+        ]
+        for path in config_paths:
+            config = load_config(path)
+            self.assertIn(config["corruption"]["mode"], FORMAL_FULL_DATABASE_HYBRID_PILOT_MODES)
+            validate_formal_full_database_config(config)
+
     def test_random_split_keeps_molecules_unique(self) -> None:
         records = load_records("data/processed/smoke_fixture")
         split = make_random_split(records, dataset_name="synthetic_smoke", seed=0)
@@ -219,6 +242,63 @@ class SmokeScaffoldTests(unittest.TestCase):
         self.assertEqual(first, second)
         self.assertNotEqual(first, coords)
         self.assertEqual(len(first), len(coords))
+
+    def test_hybrid_harmonic_stiffness_scales_stiff_and_soft_atoms_conservatively(self) -> None:
+        config = load_config("configs/train/tiny_smoke.yaml")
+        config["corruption"].update(
+            {
+                "mode": "hybrid_harmonic_stiffness_v1",
+                "harmonic_sigma": 0.25,
+                "harmonic_smoothing_steps": 2,
+                "harmonic_neighbor_weight": 0.65,
+                "harmonic_anchor_weight": 0.15,
+                "modulation_strength": 0.50,
+                "protect_aromatic_conjugated": True,
+            }
+        )
+        record = {
+            "molecule_id": "hybrid_scale_fixture",
+            "atom_symbols": ["C", "C", "C", "C"],
+            "bonds": [[0, 1, 1.0], [1, 2, 1.0], [2, 3, 1.0]],
+            "ring_atom_indices": [0],
+        }
+        scales = HybridHarmonicStiffnessV1Corruptor(config, seed=0).atom_noise_scales(record, atom_count=4)
+        self.assertLess(scales[0], 1.0)
+        self.assertGreater(scales[3], 1.0)
+        self.assertGreaterEqual(min(scales), 0.50)
+        self.assertLessEqual(max(scales), 1.25)
+
+    def test_harmonic_stiffness_residual_is_seed_deterministic_and_preserves_soft_bond_lengths(self) -> None:
+        config = load_config("configs/train/tiny_smoke.yaml")
+        config["corruption"].update(
+            {
+                "mode": "harmonic_stiffness_residual_v1",
+                "harmonic_sigma": 0.0,
+                "harmonic_smoothing_steps": 2,
+                "harmonic_neighbor_weight": 0.65,
+                "harmonic_anchor_weight": 0.15,
+                "residual_strength": 0.50,
+                "residual_torsion_sigma": 0.30,
+                "residual_max_rotatable_bonds": 4,
+                "residual_max_angle": 0.25,
+                "protect_aromatic_conjugated": True,
+            }
+        )
+        record = {
+            "molecule_id": "hybrid_residual_fixture",
+            "atom_symbols": ["C", "C", "C", "C"],
+            "bonds": [[0, 1, 1.0], [1, 2, 1.0], [2, 3, 1.0]],
+            "ring_atom_indices": [],
+        }
+        coords = [[0.0, 1.0, 0.0], [0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [1.0, 1.0, 0.0]]
+        first = HarmonicStiffnessResidualV1Corruptor(config, seed=9).corrupt(record, coords)
+        second = HarmonicStiffnessResidualV1Corruptor(config, seed=9).corrupt(record, coords)
+        self.assertEqual(first, second)
+        self.assertNotEqual(first, coords)
+        for i, j, _ in record["bonds"]:
+            before = sum((coords[i][axis] - coords[j][axis]) ** 2 for axis in range(3)) ** 0.5
+            after = sum((first[i][axis] - first[j][axis]) ** 2 for axis in range(3)) ** 0.5
+            self.assertAlmostEqual(before, after, places=7)
 
     def test_torsion_only_corruption_preserves_bond_lengths(self) -> None:
         config = load_config("configs/train/tiny_smoke.yaml")
@@ -3564,6 +3644,144 @@ logging:
             self.assertIn("Full-Database Attribution Summary (Cross-Split Master)", first_report)
             self.assertIn("Harmonic", first_report)
             self.assertIn("Rotatable-Bond Stratification", first_report)
+
+    def test_hybrid_harmonic_stiffness_pilot_summary_compares_against_harmonic(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+
+            def write_result(
+                mode: str,
+                label: str,
+                best_loss: float,
+                rmsd: float,
+                bond_delta: float,
+                strength: float | None = None,
+            ) -> Path:
+                sampled = [
+                    {
+                        "molecule_id": f"{label}_train",
+                        "split": "train",
+                        "sampled_rmsd_to_target": rmsd,
+                        "sampled_finite_coordinate": True,
+                        "sampled_mean_abs_bond_length_delta": bond_delta,
+                        "sampled_bond_count_checked": 5,
+                    },
+                    {
+                        "molecule_id": f"{label}_val",
+                        "split": "val",
+                        "sampled_rmsd_to_target": rmsd + 0.01,
+                        "sampled_finite_coordinate": True,
+                        "sampled_mean_abs_bond_length_delta": bond_delta + 0.001,
+                        "sampled_bond_count_checked": 5,
+                    },
+                    {
+                        "molecule_id": f"{label}_test",
+                        "split": "test",
+                        "sampled_rmsd_to_target": rmsd + 0.02,
+                        "sampled_finite_coordinate": True,
+                        "sampled_mean_abs_bond_length_delta": bond_delta + 0.002,
+                        "sampled_bond_count_checked": 5,
+                    },
+                ]
+                run_name = f"geom_formal_full_database_train_{label}_steps2000_seed0"
+                payload = {
+                    "run_name": run_name,
+                    "result_kind": FORMAL_FULL_DATABASE_RESULT_KIND,
+                    "benchmark_result": False,
+                    "dataset_subset_scope": FULL_DATABASE_SCOPE,
+                    "processed_artifact_path": "data/processed/geom_drugs_full_database/molecules.json",
+                    "split_path": "data/splits/geom_drugs_full_database/random_seed0/split.json",
+                    "random_seed": 0,
+                    "corruption_mode": mode,
+                    "hybrid_source_strength": strength,
+                    "hybrid_source_strength_key": None if strength is None else "modulation_strength",
+                    "model_name": "single_linear_velocity_smoke",
+                    "backbone": "minimal_linear_velocity_pilot",
+                    "hardware": "gpu_enabled",
+                    "gpu_used": True,
+                    "scheduler": "slurm",
+                    "slurm_account": "torch_pr_872_general",
+                    "formal_training_run": True,
+                    "full_database_formal_training_run": True,
+                    "max_steps": 2000,
+                    "hard_max_steps": 2000,
+                    "optimizer_name": "SGD",
+                    "learning_rate": 1.0e-2,
+                    "optimizer_step_count": 2000,
+                    "training_sample_count": 1,
+                    "validation_sample_count": 1,
+                    "sample_count": 3,
+                    "early_stop_monitor": "validation_loss_after_step",
+                    "early_stop_patience": 200,
+                    "early_stop_min_delta": 1.0e-6,
+                    "stopped_early": False,
+                    "early_stop_reason": "hard_cap_reached",
+                    "checkpoint_reusable": True,
+                    "checkpoint_selected_by_validation": True,
+                    "checkpoint_scope": "reusable_formal_full_database_validation_selected_checkpoint",
+                    "sampling_executed": True,
+                    "sample_step_count": 1,
+                    "sample_step_size": 0.1,
+                    "runtime_scope": "formal_full_database_train_validation_select_save_reload_sample_after_cpu_warmup",
+                    "runtime_seconds_reliable": True,
+                    "runtime_seconds": 10.0,
+                    "dataset": {
+                        "name": "geom_drugs",
+                        "kind": "geom_drugs_tiny_processed_dry_run",
+                        "subset_scope": FULL_DATABASE_SCOPE,
+                        "molecule_count": 3,
+                        "split_type": "random",
+                        "split_scope": FULL_DATABASE_SCOPE,
+                        "split_counts": {"train": 1, "val": 1, "test": 1},
+                        "degenerate_tiny_split": False,
+                    },
+                    "metrics": {
+                        "metric_scope": "geom_drugs_formal_full_database_training_checkpoint_sampling",
+                        "executed_train_steps": 2000,
+                        "best_validation_loss": best_loss,
+                        "best_validation_loss_step": 2000,
+                        "reloaded_validation_loss": best_loss,
+                        "sampled_molecules": sampled,
+                    },
+                }
+                path = root / f"{label}.json"
+                path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+                return path
+
+            result_paths = [
+                write_result("harmonic_prior", "harmonic", 0.20, 0.20, 0.020),
+                write_result("stiffness_structured", "stiffness", 0.30, 0.30, 0.030),
+                write_result("isotropic", "isotropic", 0.40, 0.40, 0.040),
+                write_result("torsion_only", "torsion_only", 0.50, 0.50, 0.050),
+                write_result(
+                    "hybrid_harmonic_stiffness_v1",
+                    "hybrid_harmonic_stiffness_v1_lambda010",
+                    0.10,
+                    0.10,
+                    0.010,
+                    strength=0.10,
+                ),
+            ]
+            outputs = write_hybrid_harmonic_stiffness_pilot_summary(
+                result_paths=result_paths,
+                summary_path=root / "hybrid_summary.json",
+                report_path=root / "hybrid_summary.md",
+            )
+            summary = json.loads(outputs["summary"].read_text(encoding="utf-8"))
+            report = outputs["report"].read_text(encoding="utf-8")
+
+            self.assertEqual(summary["result_kind"], HYBRID_PILOT_SUMMARY_RESULT_KIND)
+            self.assertFalse(summary["benchmark_result"])
+            self.assertFalse(summary["training_executed_by_summary"])
+            self.assertEqual(summary["coverage"]["baseline_rows_available"], list(("harmonic_prior", "stiffness_structured", "isotropic", "torsion_only")))
+            self.assertEqual(len(summary["coverage"]["missing_hybrids"]), 5)
+            self.assertTrue(summary["directional_verdict"]["success_claim_supported"])
+            self.assertEqual(
+                summary["directional_verdict"]["verdict"],
+                "at_least_one_hybrid_beats_harmonic_prior_on_tracked_core_metrics",
+            )
+            self.assertIn("not a benchmark result", report)
+            self.assertIn("hybrid_harmonic_stiffness_v1", report)
 
     def test_formal_attribution_bundle_reports_partial_scaffold_matrix_honestly(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

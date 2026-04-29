@@ -35,10 +35,27 @@ class HarmonicPriorCorruptor(Corruptor):
 
     def corrupt(self, record: dict[str, Any], coords: Coordinates) -> Coordinates:
         atom_count = len(coords)
+        sigmas = [self.sigma for _ in range(atom_count)]
+        noise = self.sample_harmonic_noise(record, coords, sigmas)
+        return _apply_noise(coords, noise)
+
+    def sample_harmonic_noise(
+        self,
+        record: dict[str, Any],
+        coords: Coordinates,
+        atom_sigmas: list[float] | None = None,
+    ) -> Coordinates:
+        atom_count = len(coords)
+        if atom_sigmas is None:
+            atom_sigmas = [self.sigma for _ in range(atom_count)]
+        if len(atom_sigmas) != atom_count:
+            raise ValueError("atom_sigmas length must match the coordinate atom count")
+        if any(sigma < 0.0 for sigma in atom_sigmas):
+            raise ValueError("atom_sigmas must be non-negative")
         adjacency = _adjacency(record.get("bonds", []), atom_count)
         original_noise = [
-            [self.rng.gauss(0.0, self.sigma) for _ in xyz]
-            for xyz in coords
+            [self.rng.gauss(0.0, atom_sigmas[atom_index]) for _ in xyz]
+            for atom_index, xyz in enumerate(coords)
         ]
         noise = [list(row) for row in original_noise]
         for _ in range(self.smoothing_steps):
@@ -64,10 +81,7 @@ class HarmonicPriorCorruptor(Corruptor):
                     )
                 next_noise.append(smoothed)
             noise = next_noise
-        return [
-            [float(value) + noise[atom_index][axis] for axis, value in enumerate(xyz)]
-            for atom_index, xyz in enumerate(coords)
-        ]
+        return noise
 
 
 def _adjacency(bonds: list[list[int | float]], atom_count: int) -> list[list[int]]:
@@ -81,3 +95,12 @@ def _adjacency(bonds: list[list[int | float]], atom_count: int) -> list[list[int
         adjacency[i].append(j)
         adjacency[j].append(i)
     return adjacency
+
+
+def _apply_noise(coords: Coordinates, noise: Coordinates) -> Coordinates:
+    if len(coords) != len(noise):
+        raise ValueError("coords and noise must have the same atom count")
+    return [
+        [float(value) + noise[atom_index][axis] for axis, value in enumerate(xyz)]
+        for atom_index, xyz in enumerate(coords)
+    ]

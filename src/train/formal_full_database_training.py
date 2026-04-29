@@ -43,6 +43,14 @@ FORMAL_FULL_DATABASE_ATTRIBUTION_MODES = (
     "torsion_only",
     "stiffness_structured",
 )
+FORMAL_FULL_DATABASE_HYBRID_PILOT_MODES = (
+    "hybrid_harmonic_stiffness_v1",
+    "harmonic_stiffness_residual_v1",
+)
+FORMAL_FULL_DATABASE_SUPPORTED_MODES = (
+    *FORMAL_FULL_DATABASE_ATTRIBUTION_MODES,
+    *FORMAL_FULL_DATABASE_HYBRID_PILOT_MODES,
+)
 FORMAL_FULL_DATABASE_SEED = 0
 FORMAL_FULL_DATABASE_SEED_SET = (0, 1, 2)
 FORMAL_FULL_DATABASE_RESULT_KIND = "geom_drugs_full_database_formal_training_not_benchmark"
@@ -104,6 +112,7 @@ def run_formal_full_database_training(
         seed=seed,
         max_steps=max_steps,
         split_type=configured_split_type,
+        corruption_config=config["corruption"],
     )
     manifest_path = output_root / "manifests" / f"{run_name}.json"
     results_path = output_root / "results" / f"{run_name}.json"
@@ -181,6 +190,8 @@ def run_formal_full_database_training(
         "split_type": configured_split_type,
         "random_seed": seed,
         "corruption_mode": corruption_mode,
+        "hybrid_source_strength": _hybrid_source_strength(config["corruption"]),
+        "hybrid_source_strength_key": _hybrid_source_strength_key(config["corruption"]),
         "model_name": metrics["model_name"],
         "backbone": config["model"]["backbone"],
         "execution_mode": FORMAL_FULL_DATABASE_GPU_EXECUTION_MODE
@@ -344,7 +355,7 @@ def validate_formal_full_database_config(config: dict[str, Any]) -> None:
         raise ValueError("full-database formal training must preserve one conformer per molecule")
     if config["data"]["subset"].get("tag") != FULL_DATABASE_SCOPE:
         raise ValueError(f"full-database formal training must use tag={FULL_DATABASE_SCOPE!r}")
-    if config["corruption"]["mode"] not in set(FORMAL_FULL_DATABASE_ATTRIBUTION_MODES):
+    if config["corruption"]["mode"] not in set(FORMAL_FULL_DATABASE_SUPPORTED_MODES):
         raise ValueError(f"unsupported full-database formal corruption mode: {config['corruption']['mode']}")
     if config["model"].get("backbone") != "minimal_linear_velocity_pilot":
         raise ValueError("full-database formal training must keep the existing minimal linear backbone")
@@ -418,7 +429,13 @@ def _allowed_split_path(path: Path) -> bool:
     return len(relative.parts) == 3 and relative.parts[-2:] == ("random_seed0", "split.json")
 
 
-def _run_name(corruption_mode: str, seed: int, max_steps: int, split_type: str = "random") -> str:
+def _run_name(
+    corruption_mode: str,
+    seed: int,
+    max_steps: int,
+    split_type: str = "random",
+    corruption_config: dict[str, Any] | None = None,
+) -> str:
     if corruption_mode == "isotropic":
         label = "isotropic"
     elif corruption_mode == "harmonic_prior":
@@ -427,10 +444,43 @@ def _run_name(corruption_mode: str, seed: int, max_steps: int, split_type: str =
         label = "torsion_only"
     elif corruption_mode == "stiffness_structured":
         label = "stiffness"
+    elif corruption_mode == "hybrid_harmonic_stiffness_v1":
+        label = f"hybrid_harmonic_stiffness_v1_{_lambda_label(_hybrid_strength(corruption_config, 'modulation_strength'))}"
+    elif corruption_mode == "harmonic_stiffness_residual_v1":
+        label = f"harmonic_stiffness_residual_v1_{_lambda_label(_hybrid_strength(corruption_config, 'residual_strength'))}"
     else:
         raise ValueError(f"Unsupported full-database formal training mode: {corruption_mode}")
     split_label = "" if split_type == "random" else f"_{split_type}"
     return f"geom_formal_full_database{split_label}_train_{label}_steps{int(max_steps)}_seed{seed}"
+
+
+def _hybrid_strength(corruption_config: dict[str, Any] | None, key: str) -> float:
+    if corruption_config is None or key not in corruption_config:
+        raise ValueError(f"{key} is required to build hybrid full-database run names")
+    value = float(corruption_config[key])
+    if value < 0.0 or value > 1.0:
+        raise ValueError(f"{key} must be in [0, 1]")
+    return value
+
+
+def _lambda_label(value: float) -> str:
+    return f"lambda{int(round(float(value) * 100)):03d}"
+
+
+def _hybrid_source_strength(corruption_config: dict[str, Any]) -> float | None:
+    key = _hybrid_source_strength_key(corruption_config)
+    if key is None:
+        return None
+    return float(corruption_config[key])
+
+
+def _hybrid_source_strength_key(corruption_config: dict[str, Any]) -> str | None:
+    mode = corruption_config.get("mode")
+    if mode == "hybrid_harmonic_stiffness_v1":
+        return "modulation_strength"
+    if mode == "harmonic_stiffness_residual_v1":
+        return "residual_strength"
+    return None
 
 
 def _formal_full_database_notes(max_steps: int, split_type: str) -> list[str]:

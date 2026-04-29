@@ -37,4 +37,12 @@ def build_corruptor(config: dict[str, Any], seed: int) -> Corruptor:
         from src.corruption.stiffness_structured import StiffnessStructuredCorruptor
 
         return StiffnessStructuredCorruptor(config, seed)
+    if mode == "hybrid_harmonic_stiffness_v1":
+        from src.corruption.hybrid_harmonic_stiffness import HybridHarmonicStiffnessV1Corruptor
+
+        return HybridHarmonicStiffnessV1Corruptor(config, seed)
+    if mode == "harmonic_stiffness_residual_v1":
+        from src.corruption.hybrid_harmonic_stiffness import HarmonicStiffnessResidualV1Corruptor
+
+        return HarmonicStiffnessResidualV1Corruptor(config, seed)
     raise ValueError(f"Unsupported corruption mode: {mode}")
