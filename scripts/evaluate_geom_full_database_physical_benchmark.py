@@ -14,9 +14,13 @@ ensure_stifflow_python()
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from src.eval.physical_benchmark import (  # noqa: E402
+    DEFAULT_PHYSICAL_OUTPUT_DIR,
+    DEFAULT_PHYSICAL_SUMMARY_JSON,
+    DEFAULT_PHYSICAL_SUMMARY_MD,
     DEFAULT_PLAN_JSON,
     DEFAULT_PLAN_MD,
     evaluate_existing_result_physical_subset,
+    evaluate_full_database_physical_matrix,
     write_physical_benchmark_plan,
 )
 
@@ -39,6 +43,11 @@ def main() -> None:
         help="Actually run a bounded evaluation-only diagnostic pass for one result JSON.",
     )
     parser.add_argument(
+        "--run-matrix",
+        action="store_true",
+        help="Run the 24-result full-database physical diagnostic matrix.",
+    )
+    parser.add_argument(
         "--result-path",
         help="Existing full-database result JSON to evaluate when --run is set.",
     )
@@ -47,10 +56,31 @@ def main() -> None:
         help="Output JSON for --run diagnostics. Required with --run.",
     )
     parser.add_argument(
+        "--output-dir",
+        default=str(DEFAULT_PHYSICAL_OUTPUT_DIR),
+        help="Output directory for per-run JSONs when --run-matrix is set.",
+    )
+    parser.add_argument(
+        "--summary-json",
+        default=str(DEFAULT_PHYSICAL_SUMMARY_JSON),
+        help="Summary JSON path when --run-matrix is set.",
+    )
+    parser.add_argument(
+        "--summary-md",
+        default=str(DEFAULT_PHYSICAL_SUMMARY_MD),
+        help="Summary markdown path when --run-matrix is set.",
+    )
+    parser.add_argument(
         "--max-molecules",
         type=int,
         default=None,
         help="Bound the number of molecules evaluated from the selected result. Required unless --allow-full-database.",
+    )
+    parser.add_argument(
+        "--max-molecules-per-result",
+        type=int,
+        default=None,
+        help="Bound the number of molecules evaluated per result when --run-matrix is set.",
     )
     parser.add_argument(
         "--allow-full-database",
@@ -84,9 +114,35 @@ def main() -> None:
     print(f"plan_markdown: {outputs['markdown']}")
     print("plan_status: written")
 
-    if not args.run:
+    if args.run and args.run_matrix:
+        raise SystemExit("Use only one of --run or --run-matrix")
+
+    if not args.run and not args.run_matrix:
         print("evaluation_status: not_run")
         print("note: default action is plan generation only; no training, preprocessing, sampling pass, job, or xTB run.")
+        return
+
+    if args.run_matrix:
+        if args.max_molecules_per_result is None and not args.allow_full_database:
+            raise SystemExit("--run-matrix requires --max-molecules-per-result unless --allow-full-database is set")
+        result = evaluate_full_database_physical_matrix(
+            output_dir=args.output_dir,
+            summary_json_path=args.summary_json,
+            summary_markdown_path=args.summary_md,
+            max_molecules_per_result=args.max_molecules_per_result,
+            device=args.device,
+            include_posebusters=not args.skip_posebusters,
+            include_forcefields=not args.skip_forcefields,
+            allow_full_database=args.allow_full_database,
+        )
+        print("evaluation_status: completed")
+        print(f"per_run_output_dir: {args.output_dir}")
+        print(f"summary_json: {args.summary_json}")
+        print(f"summary_markdown: {args.summary_md}")
+        print(f"run_count: {result['run_count']}")
+        print("xtb_execution_status: not_run")
+        print("benchmark_result: false")
+        print("note: matrix evaluation-only checkpoint reload; no training or preprocessing was run.")
         return
 
     if not args.result_path or not args.output_json:

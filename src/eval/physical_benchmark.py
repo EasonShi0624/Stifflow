@@ -35,6 +35,9 @@ DEFAULT_PLAN_JSON = RESULTS_DIR / "geom_full_database_physical_benchmark_plan.js
 DEFAULT_PLAN_MD = REPORTS_TABLE_DIR / "geom_full_database_physical_benchmark_plan.md"
 DEFAULT_XTB_PLAN_JSON = RESULTS_DIR / "geom_full_database_xtb_subset_plan.json"
 DEFAULT_XTB_PLAN_MD = REPORTS_TABLE_DIR / "geom_full_database_xtb_subset_plan.md"
+DEFAULT_PHYSICAL_OUTPUT_DIR = RESULTS_DIR / "geom_full_database_physical_benchmark"
+DEFAULT_PHYSICAL_SUMMARY_JSON = RESULTS_DIR / "geom_full_database_physical_benchmark_summary.json"
+DEFAULT_PHYSICAL_SUMMARY_MD = REPORTS_TABLE_DIR / "geom_full_database_physical_benchmark_summary.md"
 
 SPLITS = ("random", "scaffold")
 METHODS = ("isotropic", "harmonic", "torsion_only", "stiffness_structured")
@@ -83,6 +86,7 @@ COORDINATE_FIELD_NAMES = (
     "predicted_coords",
     "predicted_coordinates",
 )
+_POSEBUSTERS_MOL_RUNNER: Any | None = None
 
 
 def full_database_result_path(split: str, method: str, seed: int) -> Path:
@@ -705,6 +709,8 @@ def evaluate_existing_result_physical_subset(
     include_forcefields: bool = True,
     allow_full_database: bool = False,
     save_per_molecule: bool = False,
+    record_cache: dict[Path, list[dict[str, Any]]] | None = None,
+    split_cache: dict[Path, dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Run an explicitly gated evaluation-only physical diagnostic pass.
 
@@ -729,17 +735,19 @@ def evaluate_existing_result_physical_subset(
     artifact_path = ROOT / payload["processed_artifact_path"]
     split_path = ROOT / payload["split_path"]
     checkpoint_path = ROOT / payload.get("best_checkpoint_path", payload["checkpoint_path"])
-    records = tiny_real_data._load_tiny_real_artifact(artifact_path)["molecules"]
+    records = _cached_records(artifact_path, record_cache)
     if max_molecules is not None:
         records = records[: int(max_molecules)]
     for record in records:
         if record.get("rotatable_bond_count") is None:
             record["rotatable_bond_count"] = tiny_real_data._rotatable_bond_count(record, config)
-    split_payload = tiny_real_data._load_tiny_real_split(split_path)
+    split_payload = _cached_split(split_path, split_cache)
     split_membership = _split_membership(split_payload)
     config["eval"]["eval_subset_size"] = len(records)
 
     rows = []
+    aggregate_state = _new_aggregate_state()
+    sample_count = 0
     tool_availability = check_tool_availability()
     samples = tiny_real_data._iter_flow_matching_samples(
         config,
@@ -762,14 +770,17 @@ def evaluate_existing_result_physical_subset(
             use_posebusters=include_posebusters,
             run_forcefields=include_forcefields,
         )
-        rows.append(
-            {
-                "molecule_id": sample["molecule_id"],
-                "split_partition": sample["split"],
-                "rotatable_bond_count": sample.get("rotatable_bond_count"),
-                "diagnostics": diag,
-            }
-        )
+        sample_count += 1
+        _update_aggregate_state(aggregate_state, diag)
+        if save_per_molecule:
+            rows.append(
+                {
+                    "molecule_id": sample["molecule_id"],
+                    "split_partition": sample["split"],
+                    "rotatable_bond_count": sample.get("rotatable_bond_count"),
+                    "diagnostics": diag,
+                }
+            )
 
     output = {
         "result_kind": "physical_benchmark_diagnostics_not_benchmark_until_reviewed",
@@ -785,9 +796,9 @@ def evaluate_existing_result_physical_subset(
         "method": method,
         "seed": seed,
         "max_molecules": max_molecules,
-        "sample_count": len(rows),
+        "sample_count": sample_count,
         "tool_availability": tool_availability,
-        "aggregates": aggregate_physical_diagnostics(rows),
+        "aggregates": _finalize_aggregate_state(aggregate_state),
         "per_molecule": rows if save_per_molecule else None,
         "runtime_seconds": time.time() - start,
         "notes": [
@@ -797,6 +808,216 @@ def evaluate_existing_result_physical_subset(
     }
     _write_json(output_path, output)
     return output
+
+
+def evaluate_full_database_physical_matrix(
+    output_dir: str | Path = DEFAULT_PHYSICAL_OUTPUT_DIR,
+    summary_json_path: str | Path = DEFAULT_PHYSICAL_SUMMARY_JSON,
+    summary_markdown_path: str | Path = DEFAULT_PHYSICAL_SUMMARY_MD,
+    max_molecules_per_result: int | None = None,
+    device: str = "cpu",
+    include_posebusters: bool = True,
+    include_forcefields: bool = True,
+    allow_full_database: bool = False,
+) -> dict[str, Any]:
+    """Run the gated physical diagnostic pass across the 24 completed runs."""
+
+    if max_molecules_per_result is None and not allow_full_database:
+        raise ValueError("Matrix evaluation requires max_molecules_per_result or allow_full_database=True")
+    start = time.time()
+    output_dir = Path(output_dir)
+    summary_json_path = Path(summary_json_path)
+    summary_markdown_path = Path(summary_markdown_path)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    record_cache: dict[Path, list[dict[str, Any]]] = {}
+    split_cache: dict[Path, dict[str, Any]] = {}
+    per_run = []
+    for split in SPLITS:
+        for method in METHODS:
+            for seed in SEEDS:
+                result_path = full_database_result_path(split, method, seed)
+                output_path = output_dir / f"geom_full_database_physical_benchmark_{split}_{method}_seed{seed}.json"
+                run_output = evaluate_existing_result_physical_subset(
+                    result_path=result_path,
+                    output_path=output_path,
+                    max_molecules=max_molecules_per_result,
+                    device=device,
+                    include_posebusters=include_posebusters,
+                    include_forcefields=include_forcefields,
+                    allow_full_database=allow_full_database,
+                    save_per_molecule=False,
+                    record_cache=record_cache,
+                    split_cache=split_cache,
+                )
+                per_run.append(
+                    {
+                        "split": split,
+                        "method": method,
+                        "seed": seed,
+                        "output_json": str(_relative(output_path)),
+                        "sample_count": run_output["sample_count"],
+                        "aggregates": run_output["aggregates"],
+                        "runtime_seconds": run_output["runtime_seconds"],
+                    }
+                )
+
+    summary = summarize_physical_matrix(per_run)
+    payload = {
+        "result_kind": "physical_benchmark_matrix_summary_not_benchmark_until_reviewed",
+        "benchmark_result": False,
+        "training_executed": False,
+        "preprocessing_executed": False,
+        "scheduler_submitted_by_script": False,
+        "xtb_executed": False,
+        "device": device,
+        "max_molecules_per_result": max_molecules_per_result,
+        "include_posebusters": include_posebusters,
+        "include_forcefields": include_forcefields,
+        "run_count": len(per_run),
+        "per_run": per_run,
+        "summary": summary,
+        "runtime_seconds": time.time() - start,
+        "notes": [
+            "CPU-only evaluation from existing result JSONs, processed artifact, split files, and checkpoints.",
+            "No training, preprocessing, raw-data mutation, processed-artifact mutation, split mutation, checkpoint mutation, environment mutation, or xTB execution.",
+        ],
+    }
+    _write_json(summary_json_path, payload)
+    _write_text(summary_markdown_path, render_physical_matrix_summary_markdown(payload))
+    return payload
+
+
+def summarize_physical_matrix(per_run: list[dict[str, Any]]) -> dict[str, Any]:
+    """Build method-level summaries and rankings from per-run aggregate outputs."""
+
+    by_method: dict[str, list[dict[str, Any]]] = {method: [] for method in METHODS}
+    by_split_method: dict[str, dict[str, list[dict[str, Any]]]] = {
+        split: {method: [] for method in METHODS} for split in SPLITS
+    }
+    for row in per_run:
+        method = row["method"]
+        split = row["split"]
+        by_method[method].append(row)
+        by_split_method[split][method].append(row)
+
+    method_summary = {method: _summarize_run_group(rows) for method, rows in by_method.items()}
+    split_method_summary = {
+        split: {method: _summarize_run_group(rows) for method, rows in method_rows.items()}
+        for split, method_rows in by_split_method.items()
+    }
+    ranking = sorted(
+        (
+            {
+                "method": method,
+                "overall_intramolecular_pass_rate_mean": values["pass_rate_means"].get(
+                    "overall_intramolecular_pass"
+                ),
+                "mmff_available_rate_mean": values["pass_rate_means"].get("MMFF_available"),
+                "uff_available_rate_mean": values["pass_rate_means"].get("UFF_available"),
+                "mean_abs_bond_length_delta_to_target_mean": values["numeric_means"].get(
+                    "mean_abs_bond_length_delta_to_target"
+                ),
+            }
+            for method, values in method_summary.items()
+        ),
+        key=lambda row: (
+            _sort_desc(row["overall_intramolecular_pass_rate_mean"]),
+            _sort_desc(row["mmff_available_rate_mean"]),
+            _sort_asc(row["mean_abs_bond_length_delta_to_target_mean"]),
+        ),
+    )
+    return {
+        "method_summary": method_summary,
+        "split_method_summary": split_method_summary,
+        "ranking_by_intramolecular_pass_rate": ranking,
+        "ranking_metric_note": (
+            "Ranking is descriptive and uses mean overall intramolecular pass rate first, then MMFF availability, "
+            "then lower mean absolute bond-length delta. Energies are not normalized by molecule size and should not "
+            "be overinterpreted as a universal ranking metric."
+        ),
+    }
+
+
+def render_physical_matrix_summary_markdown(payload: dict[str, Any]) -> str:
+    summary = payload["summary"]
+    lines = [
+        "# GEOM Full-Database Physical Benchmark Summary",
+        "",
+        "**Status:** generated physical diagnostics; still labeled non-benchmark until reviewed.",
+        "",
+        f"- Runs evaluated: {payload['run_count']}.",
+        f"- xTB executed: {_yes_no(bool(payload['xtb_executed']))}.",
+        f"- Max molecules per result: {payload['max_molecules_per_result'] or 'full selected result'}.",
+        f"- Runtime seconds: {payload['runtime_seconds']:.3f}.",
+        "",
+        "## Method Ranking",
+        "",
+        "| Rank | Method | Intramolecular pass rate | MMFF available | UFF available | Mean abs bond delta |",
+        "|---:|---|---:|---:|---:|---:|",
+    ]
+    for rank, row in enumerate(summary["ranking_by_intramolecular_pass_rate"], start=1):
+        lines.append(
+            f"| {rank} | {row['method']} | {_fmt(row['overall_intramolecular_pass_rate_mean'])} | "
+            f"{_fmt(row['mmff_available_rate_mean'])} | {_fmt(row['uff_available_rate_mean'])} | "
+            f"{_fmt(row['mean_abs_bond_length_delta_to_target_mean'])} |"
+        )
+    lines.extend(
+        [
+            "",
+            f"Ranking note: {summary['ranking_metric_note']}",
+            "",
+            "## Method Aggregates",
+            "",
+            "| Method | Runs | Samples | Finite coord | Overall pass | RDKit sanitize | MMFF available | UFF available | MMFF failures | UFF failures |",
+            "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
+        ]
+    )
+    for method, values in summary["method_summary"].items():
+        passes = values["pass_rate_means"]
+        failures = values["failure_reason_counts"]
+        mmff_failures = sum(count for reason, count in failures.items() if reason.startswith("MMFF:"))
+        uff_failures = sum(count for reason, count in failures.items() if reason.startswith("UFF:"))
+        lines.append(
+            f"| {method} | {values['run_count']} | {values['sample_count']} | "
+            f"{_fmt(passes.get('finite_coordinate_pass'))} | "
+            f"{_fmt(passes.get('overall_intramolecular_pass'))} | "
+            f"{_fmt(passes.get('rdkit_sanitize_success'))} | "
+            f"{_fmt(passes.get('MMFF_available'))} | "
+            f"{_fmt(passes.get('UFF_available'))} | "
+            f"{mmff_failures} | {uff_failures} |"
+        )
+    lines.extend(
+        [
+            "",
+            "## Split x Method Aggregates",
+            "",
+            "| Split | Method | Runs | Samples | Overall pass | MMFF available | UFF available | Mean abs bond delta |",
+            "|---|---|---:|---:|---:|---:|---:|---:|",
+        ]
+    )
+    for split, methods in summary["split_method_summary"].items():
+        for method, values in methods.items():
+            passes = values["pass_rate_means"]
+            numerics = values["numeric_means"]
+            lines.append(
+                f"| {split} | {method} | {values['run_count']} | {values['sample_count']} | "
+                f"{_fmt(passes.get('overall_intramolecular_pass'))} | "
+                f"{_fmt(passes.get('MMFF_available'))} | "
+                f"{_fmt(passes.get('UFF_available'))} | "
+                f"{_fmt(numerics.get('mean_abs_bond_length_delta_to_target'))} |"
+            )
+    lines.extend(
+        [
+            "",
+            "## Guardrail",
+            "",
+            "These diagnostics are physical-validity diagnostics only. They should be interpreted alongside the "
+            "existing RMSD/loss summaries and should not be used to claim overall physical superiority unless "
+            "coverage and failure modes support that claim.",
+            "",
+        ]
+    )
+    return "\n".join(lines)
 
 
 def evaluate_molecule_physical_diagnostics(
@@ -896,9 +1117,12 @@ def run_posebusters_mol_checks(mol: Any) -> dict[str, Any]:
     """Run PoseBusters mol-config checks on an RDKit molecule when available."""
 
     try:
-        from posebusters import PoseBusters
+        global _POSEBUSTERS_MOL_RUNNER
+        if _POSEBUSTERS_MOL_RUNNER is None:
+            from posebusters import PoseBusters
 
-        report = PoseBusters(config="mol").bust([mol], full_report=True)
+            _POSEBUSTERS_MOL_RUNNER = PoseBusters(config="mol")
+        report = _POSEBUSTERS_MOL_RUNNER.bust([mol], full_report=True)
         row = report.iloc[0].to_dict()
         bool_items = {str(key): _to_python_scalar(value) for key, value in row.items()}
         pass_values = [value for value in bool_items.values() if isinstance(value, bool)]
@@ -1014,6 +1238,176 @@ def aggregate_physical_diagnostics(rows: list[dict[str, Any]]) -> dict[str, Any]
         "numeric_summaries": {key: _numeric_summary(items) for key, items in values.items()},
         "failure_reasons": failure_reasons,
     }
+
+
+def _new_aggregate_state() -> dict[str, Any]:
+    return {
+        "sample_count": 0,
+        "pass_counts": {},
+        "numeric_values": {
+            "mean_abs_bond_length_delta_to_target": [],
+            "max_abs_bond_length_delta_to_target": [],
+            "MMFF_energy_initial": [],
+            "MMFF_energy_final": [],
+            "MMFF_gradient_norm_initial": [],
+            "MMFF_gradient_norm_final": [],
+            "UFF_energy_initial": [],
+            "UFF_energy_final": [],
+            "UFF_gradient_norm_initial": [],
+            "UFF_gradient_norm_final": [],
+        },
+        "failure_reasons": {},
+    }
+
+
+def _update_aggregate_state(state: dict[str, Any], diag: dict[str, Any]) -> None:
+    state["sample_count"] += 1
+    pass_values = {
+        "finite_coordinate_pass": diag.get("finite_coordinate_pass"),
+        "overall_intramolecular_pass": diag.get("overall_intramolecular_pass"),
+        "rdkit_sanitize_success": diag.get("rdkit_molecule", {}).get("sanitize_success"),
+        "fallback_bond_length_sanity_pass": diag.get("fallback_geometry", {}).get("bond_length_sanity_pass"),
+        "fallback_bond_angle_sanity_pass": diag.get("fallback_geometry", {}).get("bond_angle_sanity_pass"),
+        "fallback_severe_clash_pass": diag.get("fallback_geometry", {}).get("severe_clash_pass"),
+    }
+    forcefields = diag.get("forcefields", {})
+    for name in ("MMFF", "UFF"):
+        ff = forcefields.get(name, {})
+        pass_values[f"{name}_available"] = ff.get("available")
+        pass_values[f"{name}_optimization_converged"] = ff.get("optimization_converged")
+    for key, value in pass_values.items():
+        if value is None:
+            continue
+        counts = state["pass_counts"].setdefault(key, {"count": 0, "passed": 0})
+        counts["count"] += 1
+        counts["passed"] += int(bool(value))
+
+    bond = diag.get("fallback_geometry", {}).get("bond_lengths", {})
+    _append_number(state["numeric_values"]["mean_abs_bond_length_delta_to_target"], bond.get("mean_abs_delta_to_target"))
+    _append_number(state["numeric_values"]["max_abs_bond_length_delta_to_target"], bond.get("max_abs_delta_to_target"))
+    for name in ("MMFF", "UFF"):
+        ff = forcefields.get(name, {})
+        _append_number(state["numeric_values"][f"{name}_energy_initial"], ff.get("energy_initial"))
+        _append_number(state["numeric_values"][f"{name}_energy_final"], ff.get("energy_final"))
+        _append_number(state["numeric_values"][f"{name}_gradient_norm_initial"], ff.get("gradient_norm_initial"))
+        _append_number(state["numeric_values"][f"{name}_gradient_norm_final"], ff.get("gradient_norm_final"))
+        reason = ff.get("failure_reason")
+        if reason:
+            label = f"{name}:{reason}"
+            state["failure_reasons"][label] = state["failure_reasons"].get(label, 0) + 1
+
+
+def _finalize_aggregate_state(state: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "sample_count": state["sample_count"],
+        "pass_rates": {
+            key: {
+                "count": values["count"],
+                "passed": values["passed"],
+                "rate": values["passed"] / values["count"] if values["count"] else None,
+            }
+            for key, values in sorted(state["pass_counts"].items())
+        },
+        "numeric_summaries": {
+            key: _numeric_summary(values) for key, values in state["numeric_values"].items()
+        },
+        "failure_reasons": dict(sorted(state["failure_reasons"].items())),
+    }
+
+
+def _cached_records(
+    artifact_path: Path,
+    record_cache: dict[Path, list[dict[str, Any]]] | None,
+) -> list[dict[str, Any]]:
+    artifact_path = artifact_path.resolve()
+    if record_cache is not None and artifact_path in record_cache:
+        return record_cache[artifact_path]
+    records = tiny_real_data._load_tiny_real_artifact(artifact_path)["molecules"]
+    if record_cache is not None:
+        record_cache[artifact_path] = records
+    return records
+
+
+def _cached_split(
+    split_path: Path,
+    split_cache: dict[Path, dict[str, Any]] | None,
+) -> dict[str, Any]:
+    split_path = split_path.resolve()
+    if split_cache is not None and split_path in split_cache:
+        return split_cache[split_path]
+    split_payload = tiny_real_data._load_tiny_real_split(split_path)
+    if split_cache is not None:
+        split_cache[split_path] = split_payload
+    return split_payload
+
+
+def _summarize_run_group(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    pass_keys = sorted(
+        {
+            key
+            for row in rows
+            for key in row.get("aggregates", {}).get("pass_rates", {})
+        }
+    )
+    numeric_keys = sorted(
+        {
+            key
+            for row in rows
+            for key in row.get("aggregates", {}).get("numeric_summaries", {})
+        }
+    )
+    failure_counts: dict[str, int] = {}
+    for row in rows:
+        for reason, count in row.get("aggregates", {}).get("failure_reasons", {}).items():
+            failure_counts[reason] = failure_counts.get(reason, 0) + int(count)
+    return {
+        "run_count": len(rows),
+        "sample_count": sum(int(row.get("sample_count", 0)) for row in rows),
+        "pass_rate_means": {
+            key: _mean_present(
+                [
+                    row.get("aggregates", {}).get("pass_rates", {}).get(key, {}).get("rate")
+                    for row in rows
+                ]
+            )
+            for key in pass_keys
+        },
+        "numeric_means": {
+            key: _mean_present(
+                [
+                    row.get("aggregates", {}).get("numeric_summaries", {}).get(key, {}).get("mean")
+                    for row in rows
+                ]
+            )
+            for key in numeric_keys
+        },
+        "failure_reason_counts": dict(sorted(failure_counts.items())),
+    }
+
+
+def _mean_present(values: list[Any]) -> float | None:
+    usable = [
+        float(value)
+        for value in values
+        if isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(float(value))
+    ]
+    return mean(usable) if usable else None
+
+
+def _sort_desc(value: Any) -> float:
+    return -float(value) if isinstance(value, (int, float)) and value is not None else math.inf
+
+
+def _sort_asc(value: Any) -> float:
+    return float(value) if isinstance(value, (int, float)) and value is not None else math.inf
+
+
+def _fmt(value: Any) -> str:
+    if value is None:
+        return "NA"
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return f"{float(value):.6g}"
+    return str(value)
 
 
 def _iter_sampled_coordinates_from_checkpoint(
