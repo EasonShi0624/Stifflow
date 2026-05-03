@@ -9,6 +9,7 @@
 - In attribution, the random split ordering is harmonic < stiffness_structured < isotropic < torsion_only; the scaffold split ordering is harmonic < stiffness_structured < isotropic < torsion_only.
 - Harmonic is stronger than stiffness_structured on the tracked loss and sampled RMSD metrics, so the evidence does not support a stiffness-wins-overall claim.
 - The qualitative ordering does not flip between random and scaffold splits.
+- AMR-R, COV-R, AMR-P, and COV-P are not present and are not computable honestly from the current completed outputs.
 - Physical-validity evidence is currently proxy-level: finite-coordinate rates and mean absolute bond-length deltas are available, but PoseBusters, MMFF/UFF, xTB, and COV/MAT are not present in the supplied summaries.
 
 ## 2. Experimental scope
@@ -21,6 +22,14 @@
 - Tracked core metrics: best validation loss, reloaded validation loss, sampled RMSD overall, and sampled RMSD on train/val/test.
 - Reporting scope: this bundle reads existing summaries only. It does not run training, preprocessing, sampling, scheduler jobs, or environment modification.
 - Compact numeric table: `reports/tables/full_database_presentation_key_table.md`.
+- AMR/COV availability table: `reports/tables/full_database_amr_cov_metric_availability.md`.
+- Machine-readable presentation summary: `experiments/results/geom_full_database_presentation_results_summary.json`.
+
+### 2.1 AMR/COV availability audit
+
+The requested AMR/COV ensemble metrics are unavailable in the completed full-database outputs. The current processed artifact records `304339` molecules and `304339` conformers with `max_conformers_per_mol=1` and `one_conformer_per_molecule=True`. The completed result JSONs store one scalar `sampled_rmsd_to_target` per sampled molecule plus proxy validity fields, not generated coordinate ensembles or full reference conformer sets.
+
+See `reports/tables/full_database_amr_cov_metric_availability.md` for the explicit metric-by-metric AMR/COV status.
 
 ## 3. Main results
 
@@ -82,7 +91,7 @@ The evidence does not support stiffness_structured beating harmonic. Harmonic is
 
 - The source artifacts are explicitly labeled non-benchmark/reporting-only; this report preserves that label.
 - The full-database outputs use a one-conformer-per-molecule setup and one-step sampled RMSD diagnostics, not a full conformer-ensemble benchmark.
-- COV-R, COV-P, MAT-R, and MAT-P are not present in the supplied summary files.
+- AMR-R, COV-R, AMR-P, and COV-P are not present in the supplied summary/result files and are not computable from the current one-conformer/one-sample artifacts.
 - PoseBusters, MMFF/UFF energies, MMFF/UFF force norms, and xTB/GFN2-xTB checks are not present in the supplied summary files.
 - Physical validity is limited to finite-coordinate coverage and mean absolute bond-length delta proxies.
 - The rotatable-bond analysis is a stratified RMSD diagnostic, not a diversity or coverage analysis.
@@ -96,4 +105,4 @@ The clean slide message is that stiffness_structured source corruption is a reli
 - State that stiffness_structured beats isotropic on all tracked random and scaffold A/E seed-metric comparisons.
 - State that stiffness_structured beats torsion_only in the attribution setting on both splits.
 - State that harmonic is stronger than stiffness_structured on the tracked loss/RMSD metrics.
-- Separate supported results from unavailable metrics: COV/MAT and full physical-validity checks are not in the current summaries.
+- Separate supported results from unavailable metrics: AMR/COV, COV/MAT, and full physical-validity checks are not in the current summaries.

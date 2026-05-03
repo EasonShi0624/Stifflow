@@ -101,6 +101,9 @@ def run_formal_full_database_training(
     max_steps = int(config["train"]["max_steps"])
     hard_max_steps = int(config["train"]["hard_max_steps"])
     learning_rate = float(config["train"]["learning_rate"])
+    optimizer_name = str(config["train"].get("optimizer", "SGD"))
+    optimizer_weight_decay = float(config["train"].get("optimizer_weight_decay", 0.0))
+    lr_scheduler = copy.deepcopy(config["train"].get("lr_scheduler"))
     sample_step_size = float(config["sample"]["sample_step_size"])
     device = str(config["train"].get("device", "cpu"))
     require_cuda = bool(config["train"].get("require_cuda", False))
@@ -114,6 +117,9 @@ def run_formal_full_database_training(
         split_type=configured_split_type,
         corruption_config=config["corruption"],
     )
+    run_name_suffix = _run_name_suffix(config)
+    if run_name_suffix:
+        run_name = f"{run_name}_{run_name_suffix}"
     manifest_path = output_root / "manifests" / f"{run_name}.json"
     results_path = output_root / "results" / f"{run_name}.json"
     log_path = output_root / "logs" / f"{run_name}.log"
@@ -175,6 +181,9 @@ def run_formal_full_database_training(
         checkpoint_scope=FORMAL_FULL_DATABASE_CHECKPOINT_SCOPE,
         device=device,
         require_cuda=require_cuda,
+        optimizer_name=optimizer_name,
+        optimizer_weight_decay=optimizer_weight_decay,
+        lr_scheduler=lr_scheduler,
     )
     elapsed = time.time() - start
     scheduler = "slurm" if os.environ.get("SLURM_JOB_ID") else None
@@ -222,6 +231,10 @@ def run_formal_full_database_training(
         "optimizer_created": True,
         "optimizer_name": metrics["optimizer_name"],
         "learning_rate": learning_rate,
+        "optimizer_weight_decay": optimizer_weight_decay,
+        "final_learning_rate": metrics.get("final_learning_rate"),
+        "lr_scheduler": metrics.get("lr_scheduler"),
+        "lr_scheduler_name": metrics.get("lr_scheduler_name"),
         "optimizer_step_count": int(metrics["optimizer_step_count"]),
         "backward_executed": True,
         "backward_pass_count": int(metrics["backward_pass_count"]),
@@ -290,7 +303,11 @@ def run_formal_full_database_training(
             "degenerate_tiny_split": split.get("degenerate_tiny_split"),
             "counts": split_counts,
         },
-        "notes": _formal_full_database_notes(max_steps=max_steps, split_type=configured_split_type),
+        "notes": _formal_full_database_notes(
+            max_steps=max_steps,
+            split_type=configured_split_type,
+            optimizer_pilot=bool(config["train"].get("optimizer_pilot", False)),
+        ),
     }
     results = {
         **common,
@@ -312,7 +329,11 @@ def run_formal_full_database_training(
         "runtime_seconds": elapsed,
         "runtime_backend": runtime_backend,
         "runtime_warmup_scope": "full_cpu_formal_training_checkpoint_sampling_operation",
-        "notes": _formal_full_database_notes(max_steps=max_steps, split_type=configured_split_type),
+        "notes": _formal_full_database_notes(
+            max_steps=max_steps,
+            split_type=configured_split_type,
+            optimizer_pilot=bool(config["train"].get("optimizer_pilot", False)),
+        ),
     }
 
     for directory in [manifest_path.parent, results_path.parent, log_path.parent, best_checkpoint_path.parent]:
@@ -373,10 +394,19 @@ def validate_formal_full_database_config(config: dict[str, Any]) -> None:
         raise ValueError(f"full-database max_steps must remain fixed at {FORMAL_10000_MAX_STEPS}")
     if int(config["train"]["hard_max_steps"]) != FORMAL_10000_HARD_MAX_STEPS:
         raise ValueError(f"full-database hard_max_steps must remain fixed at {FORMAL_10000_HARD_MAX_STEPS}")
-    if float(config["train"]["learning_rate"]) != FORMAL_10000_LEARNING_RATE:
-        raise ValueError("full-database formal training must keep the existing SGD learning rate")
-    if config["train"].get("optimizer") != "SGD":
-        raise ValueError("full-database formal training must keep optimizer=SGD")
+    optimizer_pilot = bool(config["train"].get("optimizer_pilot", False))
+    optimizer_name = str(config["train"].get("optimizer", "SGD"))
+    learning_rate = float(config["train"]["learning_rate"])
+    if optimizer_pilot:
+        _validate_optimizer_pilot_config(config, optimizer_name=optimizer_name, learning_rate=learning_rate)
+    else:
+        if learning_rate != FORMAL_10000_LEARNING_RATE:
+            raise ValueError("full-database formal training must keep the existing SGD learning rate")
+        if optimizer_name != "SGD":
+            raise ValueError("full-database formal training must keep optimizer=SGD")
+        scheduler = config["train"].get("lr_scheduler")
+        if scheduler is not None and scheduler is not False:
+            raise ValueError("full-database formal training only allows lr_scheduler in optimizer_pilot configs")
     if config["train"].get("checkpointing_enabled") is not True:
         raise ValueError("full-database formal training requires checkpointing_enabled=true")
     if config["train"].get("checkpoint_scope") != FORMAL_FULL_DATABASE_CHECKPOINT_SCOPE:
@@ -429,6 +459,39 @@ def _allowed_split_path(path: Path) -> bool:
     return len(relative.parts) == 3 and relative.parts[-2:] == ("random_seed0", "split.json")
 
 
+def _validate_optimizer_pilot_config(config: dict[str, Any], optimizer_name: str, learning_rate: float) -> None:
+    if config["data"].get("split_type") != "random":
+        raise ValueError("optimizer pilot configs are limited to the cached random split")
+    if int(config["experiment"]["seed"]) != 0:
+        raise ValueError("optimizer pilot configs are limited to seed0")
+    if config["corruption"]["mode"] not in {"harmonic_prior", "hybrid_harmonic_stiffness_v1"}:
+        raise ValueError("optimizer pilot configs are limited to harmonic_prior and hybrid_harmonic_stiffness_v1")
+    allowed_lrs = {
+        "SGD": {1.0e-2, 3.0e-3, 1.0e-3},
+        "AdamW": {1.0e-3, 3.0e-4, 1.0e-4},
+    }
+    if optimizer_name not in allowed_lrs:
+        raise ValueError("optimizer pilot optimizer must be SGD or AdamW")
+    if not any(abs(learning_rate - value) <= 1.0e-12 for value in allowed_lrs[optimizer_name]):
+        raise ValueError(f"optimizer pilot learning_rate is not allowed for {optimizer_name}")
+    weight_decay = float(config["train"].get("optimizer_weight_decay", 0.0))
+    if optimizer_name == "SGD" and weight_decay != 0.0:
+        raise ValueError("optimizer pilot SGD configs must keep optimizer_weight_decay=0.0")
+    if weight_decay < 0.0:
+        raise ValueError("optimizer_weight_decay must be non-negative")
+    scheduler = config["train"].get("lr_scheduler")
+    if scheduler is None or scheduler is False:
+        return
+    if not isinstance(scheduler, dict):
+        raise ValueError("optimizer pilot lr_scheduler must be a mapping when provided")
+    if scheduler.get("name") != "ReduceLROnPlateau":
+        raise ValueError("optimizer pilot only supports ReduceLROnPlateau")
+    if float(scheduler.get("factor", 0.5)) <= 0.0 or float(scheduler.get("factor", 0.5)) >= 1.0:
+        raise ValueError("ReduceLROnPlateau factor must be in (0, 1)")
+    if int(scheduler.get("patience", 50)) < 1:
+        raise ValueError("ReduceLROnPlateau patience must be positive")
+
+
 def _run_name(
     corruption_mode: str,
     seed: int,
@@ -454,12 +517,23 @@ def _run_name(
     return f"geom_formal_full_database{split_label}_train_{label}_steps{int(max_steps)}_seed{seed}"
 
 
+def _run_name_suffix(config: dict[str, Any]) -> str:
+    suffix = str(config.get("experiment", {}).get("run_name_suffix", "")).strip()
+    if not suffix:
+        return ""
+    allowed = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_")
+    if any(char not in allowed for char in suffix):
+        raise ValueError("experiment.run_name_suffix may only contain letters, numbers, and underscores")
+    return suffix
+
+
 def _hybrid_strength(corruption_config: dict[str, Any] | None, key: str) -> float:
     if corruption_config is None or key not in corruption_config:
         raise ValueError(f"{key} is required to build hybrid full-database run names")
     value = float(corruption_config[key])
-    if value < 0.0 or value > 1.0:
-        raise ValueError(f"{key} must be in [0, 1]")
+    upper_bound = 50.0 if key == "modulation_strength" else 1.0
+    if value < 0.0 or value > upper_bound:
+        raise ValueError(f"{key} must be in [0, {upper_bound:g}]")
     return value
 
 
@@ -483,15 +557,20 @@ def _hybrid_source_strength_key(corruption_config: dict[str, Any]) -> str | None
     return None
 
 
-def _formal_full_database_notes(max_steps: int, split_type: str) -> list[str]:
+def _formal_full_database_notes(max_steps: int, split_type: str, optimizer_pilot: bool = False) -> list[str]:
     split_note = (
         "a 90/5/5 random split"
         if split_type == "random"
         else "a cached full-database Bemis-Murcko scaffold split with 90/5/5 target fractions"
     )
+    training_note = (
+        "The run is an optimizer/LR pilot: model, source construction, checkpoint/reload behavior, one-step sampling diagnostic, validation-driven checkpoint selection, patience, min_delta, and hard cap are frozen; optimizer, learning rate, and optional scheduler are controlled by config."
+        if optimizer_pilot
+        else f"The run reuses the frozen formal design from the 10000-molecule phase: same model, optimizer, learning rate, checkpoint/reload behavior, one-step sampling diagnostic, validation-driven checkpoint selection, patience, min_delta, and hard cap of {int(max_steps)} steps."
+    )
     return [
         "First full-database GEOM-Drugs formal training path, not a benchmark result.",
-        f"The run reuses the frozen formal design from the 10000-molecule phase: same model, optimizer, learning rate, checkpoint/reload behavior, one-step sampling diagnostic, validation-driven checkpoint selection, patience, min_delta, and hard cap of {int(max_steps)} steps.",
+        training_note,
         f"The data scope is the full available GEOM-Drugs one-conformer processed artifact with {split_note}.",
         "No raw-data modification, environment mutation, benchmark evaluation, or unbounded training is part of this path.",
     ]

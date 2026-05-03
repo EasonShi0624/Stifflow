@@ -108,8 +108,9 @@ class HarmonicStiffnessResidualV1Corruptor(HarmonicPriorCorruptor):
 
 def _bounded_strength(corruption: dict[str, Any], field: str) -> float:
     value = float(corruption[field])
-    if value < 0.0 or value > 1.0:
-        raise ValueError(f"{field} must be in [0, 1]")
+    upper_bound = 50.0 if field == "modulation_strength" else 1.0
+    if value < 0.0 or value > upper_bound:
+        raise ValueError(f"{field} must be in [0, {upper_bound:g}]")
     return value
 
 

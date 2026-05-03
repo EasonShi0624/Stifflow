@@ -15,8 +15,8 @@ from _stifflow_runtime import ensure_stifflow_python
 
 ensure_stifflow_python()
 
-os.environ.setdefault("MPLCONFIGDIR", "/tmp/stifflow_matplotlib")
-os.environ.setdefault("XDG_CACHE_HOME", "/tmp/stifflow_cache")
+os.environ.setdefault("MPLCONFIGDIR", str(Path("experiments/cache/matplotlib")))
+os.environ.setdefault("XDG_CACHE_HOME", str(Path("experiments/cache/xdg")))
 Path(os.environ["MPLCONFIGDIR"]).mkdir(parents=True, exist_ok=True)
 Path(os.environ["XDG_CACHE_HOME"]).mkdir(parents=True, exist_ok=True)
 
@@ -31,7 +31,10 @@ ROOT = Path(__file__).resolve().parents[1]
 RESULTS_DIR = ROOT / "experiments" / "results"
 FIGURES_DIR = ROOT / "reports" / "figures"
 TABLE_PATH = ROOT / "reports" / "tables" / "full_database_presentation_key_table.md"
+AMR_COV_TABLE_PATH = ROOT / "reports" / "tables" / "full_database_amr_cov_metric_availability.md"
 REPORT_PATH = ROOT / "reports" / "full_database_results_report.md"
+SUMMARY_PATH = RESULTS_DIR / "geom_full_database_presentation_results_summary.json"
+AMR_COV_FULL_TEST_SUMMARY_PATH = RESULTS_DIR / "geom_full_database_amr_cov_full_test_abde_seed0.json"
 
 INPUT_PATHS = {
     "formal_random": RESULTS_DIR / "geom_formal_full_database_multiseed_summary.json",
@@ -43,6 +46,9 @@ INPUT_PATHS = {
     "physical": RESULTS_DIR / "geom_full_database_physical_validity_summary.json",
     "rotatable": RESULTS_DIR / "geom_full_database_rotatable_bond_stratified_summary.json",
     "claims": RESULTS_DIR / "geom_full_database_claim_and_limitation_summary.json",
+    "processed_manifest": ROOT / "data" / "processed" / "geom_drugs_full_database" / "manifest.json",
+    "random_split_manifest": ROOT / "data" / "splits" / "geom_drugs_full_database" / "random_seed0" / "manifest.json",
+    "scaffold_split_manifest": ROOT / "data" / "splits" / "geom_drugs_full_database" / "scaffold_seed0" / "manifest.json",
 }
 
 CORE_METRICS = (
@@ -85,19 +91,36 @@ METHOD_COLORS = {
 METHOD_ORDER = ("harmonic_prior", "stiffness_structured", "isotropic", "torsion_only")
 CORE_PAIR_ORDER = ("isotropic", "stiffness_structured")
 ROTATABLE_BINS = ("0", "1-3", "4-6", "7+")
+REQUESTED_ENSEMBLE_METRICS = ("AMR-R", "COV-R", "AMR-P", "COV-P")
+SUPPORTED_PRESENTATION_METRICS = (
+    "best_validation_loss",
+    "reloaded_validation_loss",
+    "sampled_rmsd_to_target_overall_mean",
+    "sampled_rmsd_to_target_train_mean",
+    "sampled_rmsd_to_target_val_mean",
+    "sampled_rmsd_to_target_test_mean",
+    "finite_coordinate_rate",
+    "sampled_mean_abs_bond_length_delta",
+    "rotatable_bond_stratified_sampled_rmsd_to_target",
+)
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--figures-dir", default=str(FIGURES_DIR))
     parser.add_argument("--table-path", default=str(TABLE_PATH))
+    parser.add_argument("--amr-cov-table-path", default=str(AMR_COV_TABLE_PATH))
     parser.add_argument("--report-path", default=str(REPORT_PATH))
+    parser.add_argument("--summary-path", default=str(SUMMARY_PATH))
     args = parser.parse_args()
 
     payloads = {name: load_json(path) for name, path in INPUT_PATHS.items()}
+    amr_cov_full_test = load_optional_json(AMR_COV_FULL_TEST_SUMMARY_PATH)
     figures_dir = Path(args.figures_dir)
     table_path = Path(args.table_path)
+    amr_cov_table_path = Path(args.amr_cov_table_path)
     report_path = Path(args.report_path)
+    summary_path = Path(args.summary_path)
 
     figure_paths = {
         "core": figures_dir / "full_database_core_random_vs_scaffold.png",
@@ -107,6 +130,7 @@ def main() -> None:
         "rotatable": figures_dir / "full_database_rotatable_bond_stratified.png",
         "seed_level": figures_dir / "full_database_seed_level_comparison.png",
     }
+    metric_availability = build_metric_availability(payloads, amr_cov_full_test)
 
     set_style()
     plot_core_random_vs_scaffold(
@@ -120,13 +144,32 @@ def main() -> None:
         payloads["formal_random"], payloads["formal_scaffold"], figure_paths["seed_level"]
     )
 
-    write_text(table_path, build_key_table(payloads))
-    write_text(report_path, build_report(payloads, figure_paths, table_path))
+    write_text(amr_cov_table_path, build_amr_cov_table(metric_availability))
+    write_text(table_path, build_key_table(payloads, metric_availability))
+    write_json(
+        summary_path,
+        build_presentation_summary(
+            payloads=payloads,
+            metric_availability=metric_availability,
+            amr_cov_full_test=amr_cov_full_test,
+            figure_paths=figure_paths,
+            table_path=table_path,
+            amr_cov_table_path=amr_cov_table_path,
+            report_path=report_path,
+            summary_path=summary_path,
+        ),
+    )
+    write_text(
+        report_path,
+        build_report(payloads, figure_paths, table_path, amr_cov_table_path, summary_path, metric_availability),
+    )
 
     for label, path in figure_paths.items():
         print(f"{label}_figure: {relative(path)}")
         print(f"{label}_figure_pdf: {relative(path.with_suffix('.pdf'))}")
+    print(f"summary_json: {relative(summary_path)}")
     print(f"key_table: {relative(table_path)}")
+    print(f"amr_cov_table: {relative(amr_cov_table_path)}")
     print(f"report: {relative(report_path)}")
     print("note: generated from existing JSON summaries only; no training, preprocessing, sampling, jobs, or environment changes.")
 
@@ -157,9 +200,20 @@ def load_json(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def load_optional_json(path: Path) -> dict[str, Any] | None:
+    if not path.exists():
+        return None
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
 def write_text(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text, encoding="utf-8")
+
+
+def write_json(path: Path, payload: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
 def save_figure(fig: plt.Figure, path: Path) -> None:
@@ -446,7 +500,343 @@ def plot_seed_level_comparison(
     save_figure(fig, output_path)
 
 
-def build_key_table(payloads: dict[str, dict[str, Any]]) -> str:
+def build_metric_availability(
+    payloads: dict[str, dict[str, Any]],
+    amr_cov_full_test: dict[str, Any] | None,
+) -> dict[str, Any]:
+    processed_manifest = payloads["processed_manifest"]
+    attribution_master = payloads["attribution_master"]
+    if amr_cov_full_test is not None:
+        metric_rows = [
+            {
+                "metric": metric,
+                "status": "present",
+                "computable_from_existing_completed_outputs": True,
+                "reason": (
+                    "Computed by the reporting-only AMR/COV evaluator from existing checkpoints, "
+                    "cached splits, and raw GEOM reference conformer pickles."
+                ),
+            }
+            for metric in REQUESTED_ENSEMBLE_METRICS
+        ]
+        return {
+            "requested_metrics_status": "available_from_full_test_current_protocol",
+            "requested_metrics": metric_rows,
+            "amr_name_note": (
+                "AMR is treated here as the average-minimum-RMSD ensemble metric; the repository docs also "
+                "refer to the same family as MAT-R/MAT-P."
+            ),
+            "can_compute_honestly_without_rerunning_training": True,
+            "can_compute_honestly_from_current_completed_outputs": True,
+            "full_test_summary_path": relative(AMR_COV_FULL_TEST_SUMMARY_PATH),
+            "full_test_coverage": amr_cov_full_test.get("coverage"),
+            "full_test_output_paths": amr_cov_full_test.get("output_paths", {}),
+            "full_test_evaluation": amr_cov_full_test.get("evaluation", {}),
+            "processed_artifact_evidence": {
+                "artifact_path": processed_manifest["artifact_path"],
+                "molecule_count": processed_manifest["molecule_count"],
+                "conformer_count": processed_manifest["conformer_count"],
+                "max_conformers_per_mol": processed_manifest["bounds"]["max_conformers_per_mol"],
+                "one_conformer_per_molecule": processed_manifest["bounds"]["one_conformer_per_molecule"],
+            },
+            "supported_current_metrics": list(SUPPORTED_PRESENTATION_METRICS) + list(REQUESTED_ENSEMBLE_METRICS),
+            "minimum_future_artifacts_needed": [],
+            "future_reporting_path": [
+                "Run additional seeds or a stronger sampler if needed; do not reinterpret this as broader than the current one-step protocol.",
+            ],
+        }
+    sample_fields_observed = [
+        "atom_count",
+        "molecule_id",
+        "predicted_velocity_norm",
+        "rotatable_bond_count",
+        "sample_step_count",
+        "sample_step_size",
+        "sampled_bond_count_checked",
+        "sampled_finite_coordinate",
+        "sampled_mean_abs_bond_length_delta",
+        "sampled_rmsd_to_target",
+        "split",
+    ]
+    missing_artifacts = [
+        "multiple generated conformers per molecule, with generated coordinate arrays retained",
+        "multiple reference conformers per molecule, with reference coordinate arrays retained",
+        "a pairwise generated-vs-reference RMSD matrix or enough coordinates to reconstruct it",
+        "thresholds and split-specific denominators for recall and precision coverage",
+    ]
+    metric_rows = []
+    for metric in REQUESTED_ENSEMBLE_METRICS:
+        metric_rows.append(
+            {
+                "metric": metric,
+                "status": "not_present",
+                "computable_from_existing_completed_outputs": False,
+                "reason": (
+                    "Current full-database outputs are one-conformer-per-molecule and store one scalar "
+                    "sampled_rmsd_to_target per molecule, not generated/reference conformer ensembles."
+                ),
+            }
+        )
+    return {
+        "requested_metrics_status": "unavailable",
+        "requested_metrics": metric_rows,
+        "amr_name_note": (
+            "AMR is treated here as the average-minimum-RMSD ensemble metric; the repository docs also "
+            "refer to the same family as MAT-R/MAT-P. Neither AMR/MAT nor COV recall/precision is present "
+            "for the full-database outputs."
+        ),
+        "can_compute_honestly_without_rerunning_training": False,
+        "can_compute_honestly_from_current_completed_outputs": False,
+        "why_not_computable": [
+            "The processed full-database artifact uses one conformer per molecule.",
+            "The completed result JSONs store sampled scalar diagnostics, not generated coordinate ensembles.",
+            "Recall and precision directions require reference and generated conformer sets per molecule.",
+            "A thresholded COV number could be fabricated from sampled_rmsd_to_target, but it would be a degenerate one-sample proxy, not AMR/COV-R/P.",
+        ],
+        "processed_artifact_evidence": {
+            "artifact_path": processed_manifest["artifact_path"],
+            "molecule_count": processed_manifest["molecule_count"],
+            "conformer_count": processed_manifest["conformer_count"],
+            "max_conformers_per_mol": processed_manifest["bounds"]["max_conformers_per_mol"],
+            "one_conformer_per_molecule": processed_manifest["bounds"]["one_conformer_per_molecule"],
+        },
+        "completed_output_evidence": {
+            "full_database_attribution_raw_result_count": len(attribution_master["input_result_paths"]),
+            "full_database_attribution_matrix_complete": attribution_master["coverage"]["complete_expected_matrix"],
+            "split_types": attribution_master["split_types"],
+            "seed_set": attribution_master["seed_set"],
+            "modes": attribution_master["attribution_modes"],
+            "sampled_molecule_fields_observed_in_raw_result_audit": sample_fields_observed,
+        },
+        "supported_current_metrics": list(SUPPORTED_PRESENTATION_METRICS),
+        "minimum_future_artifacts_needed": missing_artifacts,
+        "future_reporting_path": [
+            "Persist generated conformer coordinates for each evaluated molecule and seed.",
+            "Persist or reference the full GEOM conformer ensemble for each evaluated molecule.",
+            "Add a reporting-only evaluator that computes pairwise RMSD matrices and writes AMR-R, COV-R, AMR-P, and COV-P by split/method/seed.",
+            "Aggregate those metric JSONs with the existing presentation bundle without changing the trained checkpoints.",
+        ],
+    }
+
+
+def build_amr_cov_table(metric_availability: dict[str, Any]) -> str:
+    if metric_availability["requested_metrics_status"] == "available_from_full_test_current_protocol":
+        output_paths = metric_availability.get("full_test_output_paths", {})
+        lines = [
+            "# Full-Database AMR/COV Metric Status",
+            "",
+            "AMR/COV is available from the reporting-only full test-set current-protocol evaluator. No training was rerun.",
+            "",
+            "| Requested metric | Present | Source |",
+            "|---|---|---|",
+        ]
+        for row in metric_availability["requested_metrics"]:
+            lines.append(f"| {row['metric']} | yes | {row['reason']} |")
+        lines.extend(
+            [
+                "",
+                "## AMR/COV Artifacts",
+                "",
+                f"- Summary JSON: `{metric_availability['full_test_summary_path']}`",
+                f"- Combined table: `{output_paths.get('combined_report')}`",
+                f"- Random table: `{output_paths.get('random_report')}`",
+                f"- Scaffold table: `{output_paths.get('scaffold_report')}`",
+                f"- Combined figure: `{output_paths.get('combined_figure')}`",
+                f"- Random figure: `{output_paths.get('random_figure')}`",
+                f"- Scaffold figure: `{output_paths.get('scaffold_figure')}`",
+                "",
+            ]
+        )
+        return "\n".join(lines)
+    lines = [
+        "# Full-Database AMR/COV Metric Availability",
+        "",
+        "This audit is generated from existing completed outputs only. No training, sampling, preprocessing, scheduler jobs, or environment changes were run.",
+        "",
+        "| Requested metric | Present in current full-database summaries/results | Computable honestly from current completed outputs | Reason |",
+        "|---|---|---|---|",
+    ]
+    for row in metric_availability["requested_metrics"]:
+        lines.append(
+            f"| {row['metric']} | no | no | {row['reason']} |"
+        )
+    evidence = metric_availability["processed_artifact_evidence"]
+    lines.extend(
+        [
+            "",
+            "## Audit Evidence",
+            "",
+            f"- Processed artifact: `{evidence['artifact_path']}`",
+            f"- Molecules/conformers: `{evidence['molecule_count']}` / `{evidence['conformer_count']}`",
+            f"- Max conformers per molecule: `{evidence['max_conformers_per_mol']}`",
+            f"- One conformer per molecule: `{evidence['one_conformer_per_molecule']}`",
+            "- Raw result sampled fields audited: "
+            + ", ".join(f"`{field}`" for field in metric_availability["completed_output_evidence"]["sampled_molecule_fields_observed_in_raw_result_audit"]),
+            "",
+            "## Minimal Future Path",
+            "",
+        ]
+    )
+    for item in metric_availability["future_reporting_path"]:
+        lines.append(f"- {item}")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def build_presentation_summary(
+    payloads: dict[str, dict[str, Any]],
+    metric_availability: dict[str, Any],
+    amr_cov_full_test: dict[str, Any] | None,
+    figure_paths: dict[str, Path],
+    table_path: Path,
+    amr_cov_table_path: Path,
+    report_path: Path,
+    summary_path: Path,
+) -> dict[str, Any]:
+    core = payloads["core"]
+    random_core = core["formal_AE_multiseed"]["random"]["metrics"]
+    scaffold_core = core["formal_AE_multiseed"]["scaffold"]["metrics"]
+    random_attr = core["attribution_ABDE_multiseed"]["random"]["metric_table"]
+    scaffold_attr = core["attribution_ABDE_multiseed"]["scaffold"]["metric_table"]
+    return {
+        "summary_name": "geom_full_database_presentation_results_summary",
+        "result_kind": "geom_drugs_full_database_presentation_bundle_summary_not_benchmark",
+        "benchmark_result": False,
+        "execution_mode": "local_reporting_only_presentation_bundle",
+        "hardware": "reporting_only",
+        "gpu_used_by_summary": False,
+        "scheduler": None,
+        "slurm_account": None,
+        "training_executed_by_summary": False,
+        "sampling_executed_by_summary": False,
+        "preprocessing_executed_by_summary": False,
+        "environment_modified": False,
+        "raw_data_modified": False,
+        "dataset_scope": core["dataset_scope"],
+        "seed_set": core["seed_set"],
+        "metric_availability": metric_availability,
+        "amr_cov_full_test_summary": amr_cov_full_test,
+        "input_paths": {name: relative(path) for name, path in INPUT_PATHS.items()},
+        "generated_artifacts": {
+            "summary_json": relative(summary_path),
+            "report": relative(report_path),
+            "key_table": relative(table_path),
+            "amr_cov_table": relative(amr_cov_table_path),
+            "figures": {
+                label: {"png": relative(path), "pdf": relative(path.with_suffix(".pdf"))}
+                for label, path in figure_paths.items()
+            },
+        },
+        "supported_key_results": {
+            "formal_AE_multiseed": {
+                "random": {
+                    "best_validation_loss": random_core["best_validation_loss"],
+                    "sampled_rmsd_to_target_overall_mean": random_core["sampled_rmsd_to_target_overall_mean"],
+                    "directional_verdict": core["formal_AE_multiseed"]["random"]["directional_verdict"],
+                },
+                "scaffold": {
+                    "best_validation_loss": scaffold_core["best_validation_loss"],
+                    "sampled_rmsd_to_target_overall_mean": scaffold_core["sampled_rmsd_to_target_overall_mean"],
+                    "directional_verdict": core["formal_AE_multiseed"]["scaffold"]["directional_verdict"],
+                },
+            },
+            "attribution_ABDE_multiseed": {
+                "random_ordering": ordering_text(random_attr, CORE_METRICS),
+                "scaffold_ordering": ordering_text(scaffold_attr, CORE_METRICS),
+            },
+        },
+        "headline_findings": [
+            amr_cov_headline(metric_availability),
+            "The current supported result hierarchy on tracked loss/RMSD diagnostics is harmonic > stiffness_structured > isotropic > torsion_only.",
+            "stiffness_structured is consistently better than isotropic and torsion_only on the tracked full-database diagnostics.",
+            "harmonic remains stronger than stiffness_structured on the tracked current diagnostics.",
+        ],
+        "notes": [
+            "This bundle reuses existing result JSONs and summaries only.",
+            "The current full-database setup is one-conformer-per-molecule with one-step sampled RMSD diagnostics.",
+            amr_cov_note(metric_availability),
+        ],
+    }
+
+
+def amr_cov_available(metric_availability: dict[str, Any]) -> bool:
+    return metric_availability["requested_metrics_status"] == "available_from_full_test_current_protocol"
+
+
+def amr_cov_headline(metric_availability: dict[str, Any]) -> str:
+    if amr_cov_available(metric_availability):
+        return "AMR-R, COV-R, AMR-P, and COV-P are available from the full test-set current-protocol evaluator."
+    return "AMR-R, COV-R, AMR-P, and COV-P are not present and are not computable honestly from the current completed outputs."
+
+
+def amr_cov_note(metric_availability: dict[str, Any]) -> str:
+    if amr_cov_available(metric_availability):
+        return "AMR/COV ensemble metrics are sourced from the separate full test-set current-protocol evaluation summary."
+    return "AMR/COV ensemble metrics require future generated/reference conformer ensemble artifacts."
+
+
+def amr_cov_audit_paragraph(metric_availability: dict[str, Any], processed_evidence: dict[str, Any]) -> str:
+    if amr_cov_available(metric_availability):
+        paths = metric_availability["full_test_output_paths"]
+        return (
+            "The requested AMR/COV ensemble metrics are available from a separate full test-set "
+            "current-protocol evaluation that reloads existing checkpoints, reads raw GEOM reference "
+            "conformer pickles, and writes presentation artifacts. "
+            f"Combined table: `{paths.get('combined_report')}`. "
+            f"Combined figure: `{paths.get('combined_figure')}`."
+        )
+    return (
+        "The requested AMR/COV ensemble metrics are unavailable in the completed full-database outputs. "
+        f"The current processed artifact records `{processed_evidence['molecule_count']}` molecules and "
+        f"`{processed_evidence['conformer_count']}` conformers with "
+        f"`max_conformers_per_mol={processed_evidence['max_conformers_per_mol']}` and "
+        f"`one_conformer_per_molecule={processed_evidence['one_conformer_per_molecule']}`. The completed "
+        "result JSONs store one scalar `sampled_rmsd_to_target` per sampled molecule plus proxy validity "
+        "fields, not generated coordinate ensembles or full reference conformer sets."
+    )
+
+
+def amr_cov_report_lines(metric_availability: dict[str, Any]) -> list[str]:
+    if not amr_cov_available(metric_availability):
+        return []
+    paths = metric_availability["full_test_output_paths"]
+    return [
+        "### 2.2 AMR/COV full test-set figures",
+        "",
+        f"![AMR/COV combined comparison]({relative_to_report(ROOT / paths['combined_figure'])})",
+        "",
+        f"Caption: Full test-set AMR/COV comparison across random and scaffold splits under the current one-step sampler protocol. Source file: `{paths['combined_figure']}`.",
+        "",
+        f"![AMR/COV random comparison]({relative_to_report(ROOT / paths['random_figure'])})",
+        "",
+        f"Caption: Random split A/B/D/E comparison for AMR-R, COV-R, AMR-P, and COV-P. Source file: `{paths['random_figure']}`.",
+        "",
+        f"![AMR/COV scaffold comparison]({relative_to_report(ROOT / paths['scaffold_figure'])})",
+        "",
+        f"Caption: Scaffold split A/B/D/E comparison for AMR-R, COV-R, AMR-P, and COV-P. Source file: `{paths['scaffold_figure']}`.",
+        "",
+    ]
+
+
+def amr_cov_limitation(metric_availability: dict[str, Any]) -> str:
+    if amr_cov_available(metric_availability):
+        return (
+            "- AMR/COV metrics are full test-set current-protocol results, but they still use the repository's "
+            "one-step checkpoint sampler and configured reference-conformer cap."
+        )
+    return (
+        "- AMR-R, COV-R, AMR-P, and COV-P are not present in the supplied summary/result files and are not "
+        "computable from the current one-conformer/one-sample artifacts."
+    )
+
+
+def amr_cov_presentation_bullet(metric_availability: dict[str, Any]) -> str:
+    if amr_cov_available(metric_availability):
+        return "- Present AMR/COV as full test-set current-protocol ensemble metrics, separate from broader benchmark claims."
+    return "- Separate supported results from unavailable metrics: AMR/COV, COV/MAT, and full physical-validity checks are not in the current summaries."
+
+
+def build_key_table(payloads: dict[str, dict[str, Any]], metric_availability: dict[str, Any]) -> str:
     core = payloads["core"]
     physical = payloads["physical"]
     random_core = core["formal_AE_multiseed"]["random"]["metrics"]
@@ -464,6 +854,17 @@ def build_key_table(payloads: dict[str, dict[str, Any]]) -> str:
         "| Comparison | Metric or ordering | Random split | Scaffold split | Verdict |",
         "|---|---|---:|---:|---|",
     ]
+    if amr_cov_available(metric_availability):
+        lines.append(
+            "| AMR/COV full test-set | AMR-R, COV-R, AMR-P, COV-P | "
+            f"available in `{metric_availability['full_test_output_paths'].get('random_report')}` | "
+            f"available in `{metric_availability['full_test_output_paths'].get('scaffold_report')}` | "
+            "full test-set current protocol; see AMR/COV summary JSON |"
+        )
+    else:
+        lines.append(
+            "| AMR/COV availability | AMR-R, COV-R, AMR-P, COV-P | not present; not computable from one-conformer/one-sample outputs | not present; not computable from one-conformer/one-sample outputs | future ensemble artifacts required |"
+        )
     for metric in CORE_METRICS:
         r = random_core[metric]
         s = scaffold_core[metric]
@@ -512,7 +913,12 @@ def build_key_table(payloads: dict[str, dict[str, Any]]) -> str:
 
 
 def build_report(
-    payloads: dict[str, dict[str, Any]], figure_paths: dict[str, Path], table_path: Path
+    payloads: dict[str, dict[str, Any]],
+    figure_paths: dict[str, Path],
+    table_path: Path,
+    amr_cov_table_path: Path,
+    summary_path: Path,
+    metric_availability: dict[str, Any],
 ) -> str:
     core = payloads["core"]
     physical = payloads["physical"]
@@ -540,6 +946,7 @@ def build_report(
         ["sampled_mean_abs_bond_length_delta"],
     )
     rot_range = rotatable_ranges(rotatable)
+    processed_evidence = metric_availability["processed_artifact_evidence"]
 
     lines = [
         "# Full-Database Results Report: Source-Corruption Comparisons for Molecular Conformation Flow Matching",
@@ -553,6 +960,7 @@ def build_report(
         f"- In attribution, the random split ordering is {random_order}; the scaffold split ordering is {scaffold_order}.",
         "- Harmonic is stronger than stiffness_structured on the tracked loss and sampled RMSD metrics, so the evidence does not support a stiffness-wins-overall claim.",
         "- The qualitative ordering does not flip between random and scaffold splits.",
+        f"- {amr_cov_headline(metric_availability)}",
         "- Physical-validity evidence is currently proxy-level: finite-coordinate rates and mean absolute bond-length deltas are available, but PoseBusters, MMFF/UFF, xTB, and COV/MAT are not present in the supplied summaries.",
         "",
         "## 2. Experimental scope",
@@ -565,7 +973,16 @@ def build_report(
         "- Tracked core metrics: best validation loss, reloaded validation loss, sampled RMSD overall, and sampled RMSD on train/val/test.",
         "- Reporting scope: this bundle reads existing summaries only. It does not run training, preprocessing, sampling, scheduler jobs, or environment modification.",
         f"- Compact numeric table: `{relative(table_path)}`.",
+        f"- AMR/COV availability table: `{relative(amr_cov_table_path)}`.",
+        f"- Machine-readable presentation summary: `{relative(summary_path)}`.",
         "",
+        "### 2.1 AMR/COV availability audit",
+        "",
+        amr_cov_audit_paragraph(metric_availability, processed_evidence),
+        "",
+        f"See `{relative(amr_cov_table_path)}` for the explicit metric-by-metric AMR/COV status.",
+        "",
+        *amr_cov_report_lines(metric_availability),
         "## 3. Main results",
         "",
         "### 3.1 Random split: isotropic vs stiffness_structured",
@@ -626,7 +1043,7 @@ def build_report(
         "",
         "- The source artifacts are explicitly labeled non-benchmark/reporting-only; this report preserves that label.",
         "- The full-database outputs use a one-conformer-per-molecule setup and one-step sampled RMSD diagnostics, not a full conformer-ensemble benchmark.",
-        "- COV-R, COV-P, MAT-R, and MAT-P are not present in the supplied summary files.",
+        amr_cov_limitation(metric_availability),
         "- PoseBusters, MMFF/UFF energies, MMFF/UFF force norms, and xTB/GFN2-xTB checks are not present in the supplied summary files.",
         "- Physical validity is limited to finite-coordinate coverage and mean absolute bond-length delta proxies.",
         "- The rotatable-bond analysis is a stratified RMSD diagnostic, not a diversity or coverage analysis.",
@@ -640,7 +1057,7 @@ def build_report(
         "- State that stiffness_structured beats isotropic on all tracked random and scaffold A/E seed-metric comparisons.",
         "- State that stiffness_structured beats torsion_only in the attribution setting on both splits.",
         "- State that harmonic is stronger than stiffness_structured on the tracked loss/RMSD metrics.",
-        "- Separate supported results from unavailable metrics: COV/MAT and full physical-validity checks are not in the current summaries.",
+        amr_cov_presentation_bullet(metric_availability),
         "",
     ]
     return "\n".join(lines)

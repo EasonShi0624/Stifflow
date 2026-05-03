@@ -91,6 +91,9 @@ def run_validation_checkpoint_training(
     checkpoint_scope: str = "reusable_validation_selected_checkpoint",
     device: str = "cpu",
     require_cuda: bool = False,
+    optimizer_name: str = "SGD",
+    optimizer_weight_decay: float = 0.0,
+    lr_scheduler: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Train, select a reusable checkpoint by validation loss, reload it, and sample once."""
 
@@ -123,7 +126,14 @@ def run_validation_checkpoint_training(
     )
     model = torch.nn.Linear(4, 3)
     model.to(device)
-    optimizer = torch.optim.SGD(model.parameters(), lr=float(learning_rate))
+    optimizer = _make_optimizer(
+        torch=torch,
+        parameters=model.parameters(),
+        optimizer_name=optimizer_name,
+        learning_rate=float(learning_rate),
+        weight_decay=float(optimizer_weight_decay),
+    )
+    scheduler = _make_lr_scheduler(torch=torch, optimizer=optimizer, config=lr_scheduler)
     loss_fn = torch.nn.MSELoss()
 
     train_steps = []
@@ -131,12 +141,14 @@ def run_validation_checkpoint_training(
     best_step = 0
     best_model_state = copy.deepcopy(model.state_dict())
     best_optimizer_state = copy.deepcopy(optimizer.state_dict())
+    best_scheduler_state = None if scheduler is None else copy.deepcopy(scheduler.state_dict())
     stale_steps = 0
     stopped_early = False
     stop_reason = "hard_cap_reached"
 
     for step_index in range(int(max_steps)):
         optimizer.zero_grad(set_to_none=True)
+        learning_rate_before_step = _current_learning_rate(optimizer)
         train_prediction = model(train_features)
         train_loss = loss_fn(train_prediction, train_targets)
         train_loss.backward()
@@ -146,10 +158,15 @@ def run_validation_checkpoint_training(
         with torch.no_grad():
             validation_loss = loss_fn(model(validation_features), validation_targets)
             validation_loss_value = float(validation_loss.detach().cpu().item())
+        if scheduler is not None:
+            scheduler.step(validation_loss_value)
+        learning_rate_after_step = _current_learning_rate(optimizer)
         train_steps.append(
             {
                 "step_index": step_index,
                 "optimizer_step": step_index + 1,
+                "learning_rate_before_step": learning_rate_before_step,
+                "learning_rate_after_step": learning_rate_after_step,
                 "train_loss_before_step": train_loss_value,
                 "validation_loss_after_step": validation_loss_value,
                 "gradient_l2_norm": grad_norm,
@@ -161,6 +178,7 @@ def run_validation_checkpoint_training(
             best_step = step_index + 1
             best_model_state = copy.deepcopy(model.state_dict())
             best_optimizer_state = copy.deepcopy(optimizer.state_dict())
+            best_scheduler_state = None if scheduler is None else copy.deepcopy(scheduler.state_dict())
             train_steps[-1]["checkpoint_selected"] = True
             stale_steps = 0
         else:
@@ -184,11 +202,16 @@ def run_validation_checkpoint_training(
         "model_name": "single_linear_velocity_smoke",
         "model_state_dict": model.state_dict(),
         "optimizer_state_dict": optimizer.state_dict(),
+        "scheduler_state_dict": None if scheduler is None else scheduler.state_dict(),
         "seed": int(seed),
         "max_steps": int(max_steps),
         "hard_max_steps": int(hard_max_steps),
         "executed_train_steps": int(executed_steps),
+        "optimizer_name": str(optimizer_name),
         "learning_rate": float(learning_rate),
+        "optimizer_weight_decay": float(optimizer_weight_decay),
+        "final_learning_rate": _current_learning_rate(optimizer),
+        "lr_scheduler": _scheduler_config_for_output(lr_scheduler),
         "sample_step_size": float(sample_step_size),
         "early_stop": early_stop_settings,
         "stopped_early": bool(stopped_early),
@@ -203,6 +226,7 @@ def run_validation_checkpoint_training(
         "checkpoint_role": "best_validation",
         "model_state_dict": best_model_state,
         "optimizer_state_dict": best_optimizer_state,
+        "scheduler_state_dict": best_scheduler_state,
         "selected_checkpoint_step": int(best_step),
         "best_validation_loss": float(best_validation_loss),
     }
@@ -234,8 +258,12 @@ def run_validation_checkpoint_training(
         "forward_pass_count": executed_steps * 2 + 2 + len(sampling_samples),
         "backward_pass_count": executed_steps,
         "optimizer_step_count": executed_steps,
-        "optimizer_name": "SGD",
+        "optimizer_name": str(optimizer_name),
         "learning_rate": float(learning_rate),
+        "optimizer_weight_decay": float(optimizer_weight_decay),
+        "final_learning_rate": _current_learning_rate(optimizer),
+        "lr_scheduler": _scheduler_config_for_output(lr_scheduler),
+        "lr_scheduler_name": None if lr_scheduler is None else str(lr_scheduler.get("name")),
         "sample_step_size": float(sample_step_size),
         "training_sample_count": len(samples),
         "validation_sample_count": len(validation_samples),
@@ -290,6 +318,51 @@ def run_validation_checkpoint_training(
         ),
         "note": "Validation-selected formal-training metrics only; bounded non-benchmark output.",
     }
+
+
+def _make_optimizer(
+    torch: Any,
+    parameters: Any,
+    optimizer_name: str,
+    learning_rate: float,
+    weight_decay: float,
+) -> Any:
+    name = str(optimizer_name)
+    if name == "SGD":
+        if weight_decay != 0.0:
+            raise ValueError("SGD optimizer sweep currently requires optimizer_weight_decay=0.0")
+        return torch.optim.SGD(parameters, lr=float(learning_rate))
+    if name == "AdamW":
+        return torch.optim.AdamW(parameters, lr=float(learning_rate), weight_decay=float(weight_decay))
+    raise ValueError("optimizer_name must be SGD or AdamW")
+
+
+def _make_lr_scheduler(torch: Any, optimizer: Any, config: dict[str, Any] | None) -> Any | None:
+    if not config or str(config.get("name", "none")).lower() in {"none", "null", "disabled"}:
+        return None
+    name = str(config["name"])
+    if name != "ReduceLROnPlateau":
+        raise ValueError("Only ReduceLROnPlateau is supported for the optimizer pilot")
+    return torch.optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer,
+        mode=str(config.get("mode", "min")),
+        factor=float(config.get("factor", 0.5)),
+        patience=int(config.get("patience", 50)),
+        threshold=float(config.get("threshold", 1.0e-6)),
+        threshold_mode=str(config.get("threshold_mode", "abs")),
+        cooldown=int(config.get("cooldown", 0)),
+        min_lr=float(config.get("min_lr", 1.0e-6)),
+    )
+
+
+def _current_learning_rate(optimizer: Any) -> float:
+    return float(optimizer.param_groups[0]["lr"])
+
+
+def _scheduler_config_for_output(config: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not config or str(config.get("name", "none")).lower() in {"none", "null", "disabled"}:
+        return None
+    return copy.deepcopy(config)
 
 
 def sample_existing_checkpoint(

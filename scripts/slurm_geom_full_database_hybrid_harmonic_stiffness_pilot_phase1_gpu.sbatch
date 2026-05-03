@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=geom_hybrid_p1
 #SBATCH --nodes=1
-#SBATCH --cpus-per-task=64
+#SBATCH --cpus-per-task=32
 #SBATCH --gres=gpu:1
 #SBATCH --mem=128GB
 #SBATCH --time=12:00:00

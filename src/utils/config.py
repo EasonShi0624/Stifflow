@@ -92,8 +92,8 @@ def validate_config(config: dict[str, Any]) -> None:
 
     if mode == "hybrid_harmonic_stiffness_v1":
         value = _require(config, "corruption.modulation_strength", (int, float))
-        if value < 0 or value > 1:
-            raise ConfigError("corruption.modulation_strength must be in [0, 1]")
+        if value < 0 or value > 50:
+            raise ConfigError("corruption.modulation_strength must be in [0, 50]")
     if mode == "harmonic_stiffness_residual_v1":
         value = _require(config, "corruption.residual_strength", (int, float))
         if value < 0 or value > 1:

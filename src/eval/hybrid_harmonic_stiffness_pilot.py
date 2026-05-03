@@ -52,6 +52,13 @@ CORE_LOWER_IS_BETTER_METRICS = (
     "sampled_rmsd_to_target_val_mean",
     "sampled_rmsd_to_target_test_mean",
 )
+VALIDATION_LOSS_METRICS = ("best_validation_loss", "reloaded_validation_loss")
+RMSD_METRICS = (
+    "sampled_rmsd_to_target_overall_mean",
+    "sampled_rmsd_to_target_train_mean",
+    "sampled_rmsd_to_target_val_mean",
+    "sampled_rmsd_to_target_test_mean",
+)
 OPTIONAL_PHYSICAL_LOWER_IS_BETTER_METRICS = ("sampled_mean_abs_bond_length_delta",)
 TIE_TOLERANCE = 1.0e-12
 
@@ -291,6 +298,7 @@ def _build_summary(
             )
         )
     physical_rows = [row for row in rows if row["physical_validity"]["status"] == "available_from_sampled_molecules"]
+    directional_verdict = _directional_verdict(hybrid_comparisons, missing_baselines)
     summary = {
         "summary_name": "geom_full_database_hybrid_harmonic_stiffness_pilot_summary",
         "result_kind": HYBRID_PILOT_SUMMARY_RESULT_KIND,
@@ -341,6 +349,7 @@ def _build_summary(
         "rows": rows,
         "baseline_metric_table": _baseline_metric_table(baseline_rows),
         "hybrid_comparisons": hybrid_comparisons,
+        "best_hybrid": _best_hybrid_by_core_rank(hybrid_comparisons),
         "physical_proxy_diagnostics": {
             "status": "available" if physical_rows else "not_available_in_input_results",
             "available_row_count": len(physical_rows),
@@ -350,7 +359,8 @@ def _build_summary(
             },
             "note": "Available physical proxies are sampled finite-coordinate rate and sampled mean absolute bond-length delta only. This is not PoseBusters/MMFF/UFF/xTB.",
         },
-        "directional_verdict": _directional_verdict(hybrid_comparisons, missing_baselines),
+        "directional_verdict": directional_verdict,
+        "scaffold_seed0_followup": directional_verdict["scaffold_seed0_followup"],
         "safety_labels": {
             "benchmark_result": False,
             "non_benchmark": True,
@@ -367,6 +377,7 @@ def _build_summary(
             "Success is not claimed unless at least one hybrid beats harmonic_prior on all tracked core loss/RMSD metrics.",
             "The summary compares hybrids against the existing harmonic_prior, stiffness_structured, isotropic, and torsion_only full-database random seed0 results when available.",
             "Missing hybrid result JSONs are reported as pending rather than treated as wins, losses, or ties.",
+            "Decision rules are applied to best validation loss, reloaded validation loss, and sampled RMSD overall/train/val/test.",
             "No training, sampling, preprocessing, scheduler action, GPU use, PoseBusters, MMFF/UFF benchmark, xTB, raw-data mutation, or environment change is performed by this summary.",
         ],
     }
@@ -394,27 +405,50 @@ def _hybrid_comparison(
             "source_strength": strength,
             "status": "missing_hybrid_result",
             "result_available": False,
+            "executed_train_steps": None,
+            "stop_reason": None,
+            "metrics": {},
             "core_metrics": {},
+            "baseline_core_summary": {},
             "optional_physical_metrics": {},
             "beats_harmonic_prior_on_all_core_metrics": False,
+            "beats_harmonic_prior_on_validation_losses": False,
+            "beats_harmonic_prior_on_rmsd_metrics": False,
+            "partial_success_validation_loss_only_vs_harmonic": False,
+            "beats_stiffness_structured_on_all_core_metrics": False,
+            "beats_isotropic_on_all_core_metrics": False,
+            "beats_torsion_only_on_all_core_metrics": False,
+            "beats_isotropic_and_torsion_only_on_all_core_metrics": False,
             "preserves_or_improves_stiffness_advantage_over_isotropic_torsion": False,
             "failure_modes": ["missing_hybrid_result_json"],
         }
     core = _comparison_table(hybrid_row, baseline_rows, CORE_LOWER_IS_BETTER_METRICS)
     optional = _comparison_table(hybrid_row, baseline_rows, OPTIONAL_PHYSICAL_LOWER_IS_BETTER_METRICS)
-    harmonic_core = core.get("harmonic_prior", {})
-    isotropic_core = core.get("isotropic", {})
-    torsion_core = core.get("torsion_only", {})
-    beats_harmonic = bool(harmonic_core) and all(item["outcome"] == "better" for item in harmonic_core.values())
+    baseline_core_summary = {
+        baseline_mode: _baseline_core_summary(core.get(baseline_mode, {}))
+        for baseline_mode in BASELINE_MODES
+    }
+    harmonic_summary = baseline_core_summary["harmonic_prior"]
+    stiffness_summary = baseline_core_summary["stiffness_structured"]
+    isotropic_summary = baseline_core_summary["isotropic"]
+    torsion_summary = baseline_core_summary["torsion_only"]
+    beats_harmonic = harmonic_summary["all_core_better"]
+    beats_stiffness = stiffness_summary["all_core_better"]
+    beats_isotropic = isotropic_summary["all_core_better"]
+    beats_torsion = torsion_summary["all_core_better"]
+    beats_isotropic_and_torsion = beats_isotropic and beats_torsion
+    partial_success = harmonic_summary["validation_losses_better"] and not harmonic_summary["rmsd_metrics_better"]
     preserves_stiffness_advantage = (
-        bool(isotropic_core)
-        and bool(torsion_core)
-        and all(item["outcome"] in {"better", "tied"} for item in isotropic_core.values())
-        and all(item["outcome"] in {"better", "tied"} for item in torsion_core.values())
+        isotropic_summary["all_core_better_or_tied"]
+        and torsion_summary["all_core_better_or_tied"]
     )
     failure_modes = []
     if not beats_harmonic:
         failure_modes.append("does_not_beat_harmonic_prior_on_all_tracked_core_metrics")
+    if partial_success:
+        failure_modes.append("partial_success_validation_loss_only_vs_harmonic")
+    if not beats_stiffness:
+        failure_modes.append("does_not_beat_stiffness_structured_on_all_tracked_core_metrics")
     if not preserves_stiffness_advantage:
         failure_modes.append("does_not_preserve_stiffness_advantage_over_isotropic_and_torsion_only")
     physical = hybrid_row["physical_validity"]
@@ -429,13 +463,58 @@ def _hybrid_comparison(
         "source_path": hybrid_row["source_path"],
         "status": "available",
         "result_available": True,
+        "executed_train_steps": hybrid_row["executed_train_steps"],
+        "stop_reason": hybrid_row["stop_reason"],
         "metrics": {metric: hybrid_row.get(metric) for metric in CORE_LOWER_IS_BETTER_METRICS},
         "physical_proxy_diagnostics": physical,
         "core_metrics": core,
+        "baseline_core_summary": baseline_core_summary,
         "optional_physical_metrics": optional,
         "beats_harmonic_prior_on_all_core_metrics": beats_harmonic,
+        "beats_harmonic_prior_on_validation_losses": harmonic_summary["validation_losses_better"],
+        "beats_harmonic_prior_on_rmsd_metrics": harmonic_summary["rmsd_metrics_better"],
+        "partial_success_validation_loss_only_vs_harmonic": partial_success,
+        "beats_stiffness_structured_on_all_core_metrics": beats_stiffness,
+        "beats_isotropic_on_all_core_metrics": beats_isotropic,
+        "beats_torsion_only_on_all_core_metrics": beats_torsion,
+        "beats_isotropic_and_torsion_only_on_all_core_metrics": beats_isotropic_and_torsion,
         "preserves_or_improves_stiffness_advantage_over_isotropic_torsion": preserves_stiffness_advantage,
         "failure_modes": failure_modes,
+    }
+
+
+def _baseline_core_summary(metric_rows: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    if not metric_rows:
+        return {
+            "status": "not_available",
+            "all_core_better": False,
+            "all_core_better_or_tied": False,
+            "validation_losses_better": False,
+            "rmsd_metrics_better": False,
+            "worse_on_all_core_metrics": False,
+            "win_count": 0,
+            "tie_count": 0,
+            "loss_count": 0,
+            "metric_count": 0,
+        }
+    outcomes = {metric: metric_rows[metric]["outcome"] for metric in metric_rows}
+    core_outcomes = [outcomes[metric] for metric in CORE_LOWER_IS_BETTER_METRICS if metric in outcomes]
+    validation_outcomes = [outcomes[metric] for metric in VALIDATION_LOSS_METRICS if metric in outcomes]
+    rmsd_outcomes = [outcomes[metric] for metric in RMSD_METRICS if metric in outcomes]
+    complete_core = len(core_outcomes) == len(CORE_LOWER_IS_BETTER_METRICS)
+    complete_validation = len(validation_outcomes) == len(VALIDATION_LOSS_METRICS)
+    complete_rmsd = len(rmsd_outcomes) == len(RMSD_METRICS)
+    return {
+        "status": "available",
+        "all_core_better": complete_core and all(outcome == "better" for outcome in core_outcomes),
+        "all_core_better_or_tied": complete_core and all(outcome in {"better", "tied"} for outcome in core_outcomes),
+        "validation_losses_better": complete_validation and all(outcome == "better" for outcome in validation_outcomes),
+        "rmsd_metrics_better": complete_rmsd and all(outcome == "better" for outcome in rmsd_outcomes),
+        "worse_on_all_core_metrics": complete_core and all(outcome == "worse" for outcome in core_outcomes),
+        "win_count": sum(1 for outcome in core_outcomes if outcome == "better"),
+        "tie_count": sum(1 for outcome in core_outcomes if outcome == "tied"),
+        "loss_count": sum(1 for outcome in core_outcomes if outcome == "worse"),
+        "metric_count": len(core_outcomes),
     }
 
 
@@ -481,29 +560,110 @@ def _lower_is_better(metric: str, baseline_value: float, hybrid_value: float) ->
 def _directional_verdict(comparisons: list[dict[str, Any]], missing_baselines: list[str]) -> dict[str, Any]:
     available = [row for row in comparisons if row["result_available"]]
     harmonic_winners = [row for row in available if row["beats_harmonic_prior_on_all_core_metrics"]]
+    partial_success_rows = [
+        row for row in available if row["partial_success_validation_loss_only_vs_harmonic"]
+    ]
+    stiffness_winners = [row for row in available if row["beats_stiffness_structured_on_all_core_metrics"]]
     stiffness_advantage_rows = [
         row for row in available if row["preserves_or_improves_stiffness_advantage_over_isotropic_torsion"]
     ]
+    all_underperform_harmonic_and_stiffness = bool(available) and all(
+        row["baseline_core_summary"]["harmonic_prior"]["worse_on_all_core_metrics"]
+        and row["baseline_core_summary"]["stiffness_structured"]["worse_on_all_core_metrics"]
+        for row in available
+    )
+    best_harmonic_winner = _best_hybrid_by_core_rank(harmonic_winners)
     if missing_baselines:
         verdict = "missing_required_baseline_results"
+        decision_rule = "missing_required_baseline_results"
     elif not available:
         verdict = "hybrid_results_not_available"
+        decision_rule = "hybrid_results_not_available"
     elif harmonic_winners:
         verdict = "at_least_one_hybrid_beats_harmonic_prior_on_tracked_core_metrics"
+        decision_rule = "recommend_scaffold_seed0_followup"
+    elif partial_success_rows:
+        verdict = "partial_success_validation_loss_only_do_not_proceed"
+        decision_rule = "partial_success_do_not_automatically_proceed"
+    elif stiffness_winners:
+        verdict = "hybridization_improves_stiffness_but_does_not_close_harmonic_gap"
+        decision_rule = "do_not_proceed_until_review"
+    elif all_underperform_harmonic_and_stiffness:
+        verdict = "all_hybrids_underperform_harmonic_and_stiffness_likely_disrupts_prior"
+        decision_rule = "recommend_stopping_or_reducing_lambda"
     elif stiffness_advantage_rows:
         verdict = "hybrids_preserve_stiffness_advantage_but_do_not_beat_harmonic_prior"
+        decision_rule = "do_not_proceed_until_review"
     else:
         verdict = "hybrid_modulation_mixed_or_harmful"
+        decision_rule = "do_not_proceed_until_review"
+    scaffold_followup = {
+        "supported": bool(best_harmonic_winner),
+        "recommendation": None,
+        "reason": "No hybrid beats harmonic_prior on all tracked core metrics.",
+        "requires_user_approval_before_submission": True,
+    }
+    if best_harmonic_winner:
+        scaffold_followup["recommendation"] = {
+            "corruption_mode": best_harmonic_winner["corruption_mode"],
+            "source_strength": best_harmonic_winner["source_strength"],
+            "selection_basis": best_harmonic_winner["selection_basis"],
+        }
+        scaffold_followup["reason"] = (
+            "This hybrid beats harmonic_prior on best validation loss, reloaded validation loss, "
+            "and sampled RMSD overall/train/val/test."
+        )
     return {
         "verdict": verdict,
+        "decision_rule": decision_rule,
         "success_claim_supported": bool(harmonic_winners),
+        "partial_success_present": bool(partial_success_rows),
         "best_harmonic_beating_hybrids": [
             {"corruption_mode": row["corruption_mode"], "source_strength": row["source_strength"]}
             for row in harmonic_winners
         ],
+        "best_harmonic_beating_hybrid": best_harmonic_winner,
+        "hybrids_beating_stiffness_structured": [
+            {"corruption_mode": row["corruption_mode"], "source_strength": row["source_strength"]}
+            for row in stiffness_winners
+        ],
+        "partial_success_validation_loss_only_hybrids": [
+            {"corruption_mode": row["corruption_mode"], "source_strength": row["source_strength"]}
+            for row in partial_success_rows
+        ],
+        "all_underperform_harmonic_and_stiffness": all_underperform_harmonic_and_stiffness,
+        "scaffold_seed0_followup": scaffold_followup,
         "available_hybrid_result_count": len(available),
         "missing_baselines": missing_baselines,
         "direction": "lower_is_better",
+    }
+
+
+def _best_hybrid_by_core_rank(comparisons: list[dict[str, Any]]) -> dict[str, Any] | None:
+    available = [row for row in comparisons if row.get("result_available")]
+    if not available:
+        return None
+    ranks = {id(row): 0.0 for row in available}
+    for metric in CORE_LOWER_IS_BETTER_METRICS:
+        sorted_rows = sorted(available, key=lambda row: float(row["metrics"][metric]))
+        for rank, row in enumerate(sorted_rows, start=1):
+            ranks[id(row)] += float(rank)
+    best = min(
+        available,
+        key=lambda row: (
+            ranks[id(row)] / len(CORE_LOWER_IS_BETTER_METRICS),
+            float(row["metrics"]["best_validation_loss"]),
+            float(row["metrics"]["sampled_rmsd_to_target_overall_mean"]),
+        ),
+    )
+    return {
+        "corruption_mode": best["corruption_mode"],
+        "source_strength": best["source_strength"],
+        "selection_basis": "lowest_average_rank_across_tracked_core_metrics",
+        "average_core_metric_rank": ranks[id(best)] / len(CORE_LOWER_IS_BETTER_METRICS),
+        "metrics": dict(best["metrics"]),
+        "beats_harmonic_prior_on_all_core_metrics": best["beats_harmonic_prior_on_all_core_metrics"],
+        "beats_stiffness_structured_on_all_core_metrics": best["beats_stiffness_structured_on_all_core_metrics"],
     }
 
 
@@ -513,6 +673,8 @@ def _baseline_metric_table(baseline_rows: dict[str, dict[str, Any] | None]) -> d
         if row is None:
             continue
         table[mode] = {metric: row[metric] for metric in CORE_LOWER_IS_BETTER_METRICS}
+        table[mode]["executed_train_steps"] = row["executed_train_steps"]
+        table[mode]["stop_reason"] = row["stop_reason"]
         if row.get("sampled_mean_abs_bond_length_delta") is not None:
             table[mode]["sampled_mean_abs_bond_length_delta"] = row["sampled_mean_abs_bond_length_delta"]
     return table
@@ -594,7 +756,10 @@ def _markdown_report(summary: dict[str, Any]) -> str:
         f"- Dataset scope: `{summary['dataset_scope']}`",
         f"- Molecule count: `{summary['dataset'].get('molecule_count', 'NA')}`",
         f"- Verdict: `{summary['directional_verdict']['verdict']}`",
+        f"- Decision rule: `{summary['directional_verdict']['decision_rule']}`",
         f"- Success claim supported: `{summary['directional_verdict']['success_claim_supported']}`",
+        f"- Scaffold seed0 follow-up supported: `{summary['scaffold_seed0_followup']['supported']}`",
+        f"- Best hybrid: `{summary['best_hybrid']}`",
         "",
         "## Coverage",
         "",
@@ -605,13 +770,14 @@ def _markdown_report(summary: dict[str, Any]) -> str:
         "",
         "## Existing Reference Metrics",
         "",
-        "| Mode | Best val loss | Reloaded val loss | RMSD overall | RMSD train | RMSD val | RMSD test | Bond delta |",
-        "|---|---:|---:|---:|---:|---:|---:|---:|",
+        "| Mode | Steps | Stop reason | Best val loss | Reloaded val loss | RMSD overall | RMSD train | RMSD val | RMSD test | Bond delta |",
+        "|---|---:|---|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for mode in BASELINE_MODES:
         row = summary["baseline_metric_table"].get(mode, {})
         lines.append(
-            f"| {mode} | {_fmt(row.get('best_validation_loss'))} | {_fmt(row.get('reloaded_validation_loss'))} | "
+            f"| {mode} | {_fmt_int(row.get('executed_train_steps'))} | {row.get('stop_reason', 'NA')} | "
+            f"{_fmt(row.get('best_validation_loss'))} | {_fmt(row.get('reloaded_validation_loss'))} | "
             f"{_fmt(row.get('sampled_rmsd_to_target_overall_mean'))} | "
             f"{_fmt(row.get('sampled_rmsd_to_target_train_mean'))} | "
             f"{_fmt(row.get('sampled_rmsd_to_target_val_mean'))} | "
@@ -623,22 +789,39 @@ def _markdown_report(summary: dict[str, Any]) -> str:
             "",
             "## Hybrid Comparisons",
             "",
-            "| Mode | Lambda | Status | Best val loss | RMSD overall | Beats harmonic? | Preserves A/D advantage? | Failure modes |",
-            "|---|---:|---|---:|---:|---|---|---|",
+            "| Mode | Lambda | Steps | Stop reason | Best val loss | Reloaded val loss | RMSD overall | RMSD train | RMSD val | RMSD test | Beats harmonic | Beats stiffness | Beats isotropic | Beats torsion | Partial success | Failure modes |",
+            "|---|---:|---:|---|---:|---:|---:|---:|---:|---:|---|---|---|---|---|---|",
         ]
     )
     for row in summary["hybrid_comparisons"]:
         metrics = row.get("metrics", {})
         lines.append(
-            f"| {row['corruption_mode']} | {row['source_strength']} | {row['status']} | "
+            f"| {row['corruption_mode']} | {row['source_strength']} | "
+            f"{_fmt_int(row.get('executed_train_steps'))} | {row.get('stop_reason') or 'NA'} | "
             f"{_fmt(metrics.get('best_validation_loss'))} | "
+            f"{_fmt(metrics.get('reloaded_validation_loss'))} | "
             f"{_fmt(metrics.get('sampled_rmsd_to_target_overall_mean'))} | "
+            f"{_fmt(metrics.get('sampled_rmsd_to_target_train_mean'))} | "
+            f"{_fmt(metrics.get('sampled_rmsd_to_target_val_mean'))} | "
+            f"{_fmt(metrics.get('sampled_rmsd_to_target_test_mean'))} | "
             f"{row['beats_harmonic_prior_on_all_core_metrics']} | "
-            f"{row['preserves_or_improves_stiffness_advantage_over_isotropic_torsion']} | "
+            f"{row['beats_stiffness_structured_on_all_core_metrics']} | "
+            f"{row['beats_isotropic_on_all_core_metrics']} | "
+            f"{row['beats_torsion_only_on_all_core_metrics']} | "
+            f"{row['partial_success_validation_loss_only_vs_harmonic']} | "
             f"{', '.join(row['failure_modes']) or 'none'} |"
         )
     lines.extend(
         [
+            "",
+            "## Follow-Up Decision",
+            "",
+            f"- Verdict: `{summary['directional_verdict']['verdict']}`",
+            f"- Decision rule: `{summary['directional_verdict']['decision_rule']}`",
+            f"- Scaffold seed0 follow-up supported: `{summary['scaffold_seed0_followup']['supported']}`",
+            f"- Scaffold recommendation: `{summary['scaffold_seed0_followup']['recommendation']}`",
+            f"- Reason: {summary['scaffold_seed0_followup']['reason']}",
+            "- No scaffold jobs were submitted by this summary.",
             "",
             "## Physical Proxies",
             "",
@@ -667,3 +850,9 @@ def _fmt(value: float | None) -> str:
     if value is None:
         return "NA"
     return f"{float(value):.8g}"
+
+
+def _fmt_int(value: Any) -> str:
+    if value is None:
+        return "NA"
+    return str(int(value))
