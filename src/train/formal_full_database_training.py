@@ -307,6 +307,7 @@ def run_formal_full_database_training(
             max_steps=max_steps,
             split_type=configured_split_type,
             optimizer_pilot=bool(config["train"].get("optimizer_pilot", False)),
+            final_optimized_followup=bool(config["train"].get("final_optimized_followup", False)),
         ),
     }
     results = {
@@ -333,6 +334,7 @@ def run_formal_full_database_training(
             max_steps=max_steps,
             split_type=configured_split_type,
             optimizer_pilot=bool(config["train"].get("optimizer_pilot", False)),
+            final_optimized_followup=bool(config["train"].get("final_optimized_followup", False)),
         ),
     }
 
@@ -395,10 +397,19 @@ def validate_formal_full_database_config(config: dict[str, Any]) -> None:
     if int(config["train"]["hard_max_steps"]) != FORMAL_10000_HARD_MAX_STEPS:
         raise ValueError(f"full-database hard_max_steps must remain fixed at {FORMAL_10000_HARD_MAX_STEPS}")
     optimizer_pilot = bool(config["train"].get("optimizer_pilot", False))
+    final_optimized_followup = bool(config["train"].get("final_optimized_followup", False))
+    if optimizer_pilot and final_optimized_followup:
+        raise ValueError("optimizer_pilot and final_optimized_followup are mutually exclusive")
     optimizer_name = str(config["train"].get("optimizer", "SGD"))
     learning_rate = float(config["train"]["learning_rate"])
     if optimizer_pilot:
         _validate_optimizer_pilot_config(config, optimizer_name=optimizer_name, learning_rate=learning_rate)
+    elif final_optimized_followup:
+        _validate_final_optimized_followup_config(
+            config,
+            optimizer_name=optimizer_name,
+            learning_rate=learning_rate,
+        )
     else:
         if learning_rate != FORMAL_10000_LEARNING_RATE:
             raise ValueError("full-database formal training must keep the existing SGD learning rate")
@@ -492,6 +503,41 @@ def _validate_optimizer_pilot_config(config: dict[str, Any], optimizer_name: str
         raise ValueError("ReduceLROnPlateau patience must be positive")
 
 
+def _validate_final_optimized_followup_config(
+    config: dict[str, Any],
+    optimizer_name: str,
+    learning_rate: float,
+) -> None:
+    if config["data"].get("split_type") not in {"random", "scaffold"}:
+        raise ValueError("final optimized follow-up configs are limited to random or scaffold splits")
+    if int(config["experiment"]["seed"]) not in FORMAL_FULL_DATABASE_SEED_SET:
+        raise ValueError("final optimized follow-up configs are limited to seeds 0, 1, and 2")
+    if config["corruption"]["mode"] not in {
+        "isotropic",
+        "harmonic_prior",
+        "torsion_only",
+        "stiffness_structured",
+        "hybrid_harmonic_stiffness_v1",
+    }:
+        raise ValueError(
+            "final optimized follow-up configs are limited to isotropic, harmonic_prior, torsion_only, "
+            "stiffness_structured, and hybrid_harmonic_stiffness_v1"
+        )
+    if optimizer_name != "AdamW":
+        raise ValueError("final optimized follow-up configs must use optimizer=AdamW")
+    if abs(learning_rate - 1.0e-3) > 1.0e-12:
+        raise ValueError("final optimized follow-up configs must use learning_rate=1.0e-3")
+    if float(config["train"].get("optimizer_weight_decay", 0.0)) != 0.0:
+        raise ValueError("final optimized follow-up configs must keep optimizer_weight_decay=0.0")
+    scheduler = config["train"].get("lr_scheduler")
+    if scheduler is not None and scheduler is not False:
+        raise ValueError("final optimized follow-up configs must not use an LR scheduler")
+    if config["corruption"]["mode"] == "hybrid_harmonic_stiffness_v1":
+        strength = float(config["corruption"].get("modulation_strength"))
+        if abs(strength - 5.0) > 1.0e-12:
+            raise ValueError("final optimized hybrid follow-up must use modulation_strength=5.0")
+
+
 def _run_name(
     corruption_mode: str,
     seed: int,
@@ -557,17 +603,23 @@ def _hybrid_source_strength_key(corruption_config: dict[str, Any]) -> str | None
     return None
 
 
-def _formal_full_database_notes(max_steps: int, split_type: str, optimizer_pilot: bool = False) -> list[str]:
+def _formal_full_database_notes(
+    max_steps: int,
+    split_type: str,
+    optimizer_pilot: bool = False,
+    final_optimized_followup: bool = False,
+) -> list[str]:
     split_note = (
         "a 90/5/5 random split"
         if split_type == "random"
         else "a cached full-database Bemis-Murcko scaffold split with 90/5/5 target fractions"
     )
-    training_note = (
-        "The run is an optimizer/LR pilot: model, source construction, checkpoint/reload behavior, one-step sampling diagnostic, validation-driven checkpoint selection, patience, min_delta, and hard cap are frozen; optimizer, learning rate, and optional scheduler are controlled by config."
-        if optimizer_pilot
-        else f"The run reuses the frozen formal design from the 10000-molecule phase: same model, optimizer, learning rate, checkpoint/reload behavior, one-step sampling diagnostic, validation-driven checkpoint selection, patience, min_delta, and hard cap of {int(max_steps)} steps."
-    )
+    if optimizer_pilot:
+        training_note = "The run is an optimizer/LR pilot: model, source construction, checkpoint/reload behavior, one-step sampling diagnostic, validation-driven checkpoint selection, patience, min_delta, and hard cap are frozen; optimizer, learning rate, and optional scheduler are controlled by config."
+    elif final_optimized_followup:
+        training_note = f"The run is a final optimized follow-up: model, source construction, checkpoint/reload behavior, one-step sampling diagnostic, validation-driven checkpoint selection, patience, min_delta, and hard cap of {int(max_steps)} steps are frozen; optimizer is AdamW with lr=1e-3 based on the completed optimizer/LR pilot."
+    else:
+        training_note = f"The run reuses the frozen formal design from the 10000-molecule phase: same model, optimizer, learning rate, checkpoint/reload behavior, one-step sampling diagnostic, validation-driven checkpoint selection, patience, min_delta, and hard cap of {int(max_steps)} steps."
     return [
         "First full-database GEOM-Drugs formal training path, not a benchmark result.",
         training_note,
