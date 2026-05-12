@@ -69,12 +69,6 @@ Use [docs/reproduce.md](docs/reproduce.md) for final-state verification and repo
 - `reports/tables/`
 - `reports/figures/`
 
-The clean presentation bundle is under:
-
-- `reports/presentation_bundle/final_closure/`
-
-Historical reports remain in `reports/tables/` and `reports/figures/`, but final presentations should prefer the bundle and final summaries listed above.
-
 ## Future Directions
 
 A natural next step is to move beyond stiffness-aware source design and explore **stiffness-aware flow-matching paths**. In the current project, stiffness information is used to shape the source distribution, while the flow-matching interpolation path remains fixed. Future work could incorporate local chemical stiffness directly into the path construction, so that rigid regions such as rings, amides, and conjugated fragments move more conservatively, while flexible torsional regions are allowed greater displacement. This may help balance local geometric stability with conformational diversity and further clarify how stiffness information should enter molecular flow matching.
