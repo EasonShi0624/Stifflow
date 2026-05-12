@@ -183,3 +183,5 @@ scratch/
 !docs/
 !docs/**/*.md
 !TASKS.md
+data/processed/
+data/splits/
