@@ -2,8 +2,6 @@
 
 This repository contains a fixed-topology molecular conformer-generation study on GEOM-Drugs. The implementation is now beyond the bootstrap stage: full-database optimized training summaries and complete val/test COV/AMR evaluations have been generated for the current final reporting bundle.
 
-For agent-specific rules, priorities, and constraints, read [AGENTS.md](AGENTS.md) first. For the current closure state, read [docs/current_status.md](docs/current_status.md).
-
 ## Current Conclusion
 
 The final interpretation is a precision-recall Pareto frontier, not a single universally best hybrid lambda.
@@ -60,18 +58,6 @@ The full val/test COV/AMR evaluations use:
 - cached processed artifacts, splits, checkpoints, and result JSONs
 
 Train partition COV/AMR is intentionally excluded from the default complete run because it is much larger and was not needed for the final closure question.
-
-## What Is Not Claimed
-
-Do not claim:
-
-- one hybrid lambda is universally best;
-- `lambda=5.0` is ensemble-optimal;
-- stiffness alone beats harmonic overall;
-- any tested hybrid dominates harmonic on both precision and recall;
-- PoseBusters/MMFF/UFF/xTB or other physical benchmark validation supports final superiority.
-
-Physical benchmark jobs and xTB-style checks require separate approval under [AGENTS.md](AGENTS.md) and [docs/slurm.md](docs/slurm.md).
 
 ## Reproducibility
 
