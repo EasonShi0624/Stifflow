@@ -1,0 +1,238 @@
+{
+  "benchmark_result": false,
+  "claim_strength": {
+    "limitations": [
+      "This is still labeled non-benchmark reporting.",
+      "COV/AMR evaluates ensemble matching, while the training selection originally used validation loss and single-sample RMSD.",
+      "The final narrative must distinguish harmonic-vs-hybrid conclusions from torsion_only's recall-biased but precision-poor behavior."
+    ],
+    "not_supported": [
+      "A single hybrid lambda is universally best.",
+      "lambda=5.0 is ensemble-optimal.",
+      "Any tested hybrid lambda dominates harmonic_prior on both precision and recall COV/AMR metrics."
+    ],
+    "supported": [
+      "hybrid_harmonic_stiffness_v1 lambda=5.0 improves validation loss, single-sample RMSD, and AMR-P precision relative to harmonic_prior.",
+      "hybrid_harmonic_stiffness_v1 lambda=0.025 is the best tested hybrid lambda for recall/balanced COV/AMR.",
+      "The hybrid lambda sweep forms a precision-recall Pareto frontier."
+    ]
+  },
+  "claim_summary_rows": [
+    {
+      "final_interpretation": "Recall anchor for the harmonic/hybrid family; not dominated by hybrid on ensemble metrics.",
+      "method_or_lambda": "harmonic prior",
+      "precision_role": "AMR-P weaker than all tested hybrid lambdas in the lambda comparison.",
+      "recall_role": "Best AMR-R within the harmonic-vs-hybrid lambda comparison.",
+      "validation_rmsd_role": "Strong global-prior baseline; weaker than hybrid lambda=5.0 on optimized loss/RMSD."
+    },
+    {
+      "final_interpretation": "Best hybrid recall/balanced setting, but not a full dominance result over harmonic.",
+      "method_or_lambda": "hybrid lambda=0.025",
+      "precision_role": "Small AMR-P improvement over harmonic, far weaker than lambda=5.0.",
+      "recall_role": "Best hybrid COV-R and AMR-R; balanced by rank aggregation.",
+      "validation_rmsd_role": "Low-modulation hybrid; not selected by RMSD/validation loss."
+    },
+    {
+      "final_interpretation": "RMSD/precision-favorable setting; not ensemble-optimal.",
+      "method_or_lambda": "hybrid lambda=5.0",
+      "precision_role": "Precision-optimal by AMR-P; COV-P tied at 1.0.",
+      "recall_role": "Worse COV-R and AMR-R than harmonic and low-lambda hybrids.",
+      "validation_rmsd_role": "Strongest optimized validation loss and single-sample RMSD among harmonic/hybrid settings."
+    },
+    {
+      "final_interpretation": "Local stiffness alone helps precision but does not replace harmonic/global prior.",
+      "method_or_lambda": "stiffness structured",
+      "precision_role": "Improves AMR-P over harmonic but not as strongly as hybrid lambda=5.0.",
+      "recall_role": "Does not beat harmonic on AMR-R in the all-method COV/AMR summary.",
+      "validation_rmsd_role": "Better than isotropic/torsion-only on tracked RMSD, weaker than harmonic/hybrid."
+    },
+    {
+      "final_interpretation": "Naive Cartesian source baseline remains weaker.",
+      "method_or_lambda": "isotropic",
+      "precision_role": "Poor AMR-P relative to harmonic and hybrids.",
+      "recall_role": "Not recall-leading in the final comparison.",
+      "validation_rmsd_role": "Weak optimized baseline on loss/RMSD."
+    },
+    {
+      "final_interpretation": "Diversity/recall-favorable but precision-poor; useful as a tradeoff contrast.",
+      "method_or_lambda": "torsion only",
+      "precision_role": "Poor AMR-P and lower COV-P, indicating weak precision.",
+      "recall_role": "Recall-biased COV-R/AMR-R behavior, but not balanced.",
+      "validation_rmsd_role": "Very weak optimized loss/RMSD."
+    }
+  ],
+  "environment_modified": false,
+  "figure_paths": {
+    "claim_summary_table": "reports/figures/geom_full_database_final_claim_summary_table.png",
+    "lambda_tradeoff": "reports/figures/geom_full_database_hybrid_lambda_cov_amr_tradeoff.png",
+    "method_comparison": "reports/figures/geom_full_database_final_method_comparison_rmsd_cov_amr.png",
+    "precision_recall_pareto": "reports/figures/geom_full_database_hybrid_lambda_precision_recall_pareto.png"
+  },
+  "interpretation_source": "geom_full_database_final_hybrid_lambda_cov_amr_interpretation_summary",
+  "method_comparison": {
+    "method_order": [
+      "harmonic_prior",
+      "hybrid_lambda0025",
+      "hybrid_lambda500",
+      "stiffness_structured",
+      "isotropic",
+      "torsion_only"
+    ],
+    "notes": [
+      "lambda=0.025 RMSD values are aggregated directly from its AdamW result JSON sampled_molecules fields.",
+      "COV/AMR values for harmonic and lambda=5 are taken from the complete lambda comparison for lambda-specific plots and from the all-method COV/AMR summary for baseline comparison; values match within numerical noise.",
+      "torsion_only has strong recall-like AMR-R/COV-R but poor precision and tracked RMSD, so it is interpreted as recall-biased rather than balanced."
+    ],
+    "rows": {
+      "harmonic_prior": {
+        "cov_amr_metrics_mean": {
+          "amr_p": 0.09604124405243102,
+          "amr_r": 1.4898573138830302,
+          "cov_p": 1.0,
+          "cov_r": 0.18484062716889033
+        },
+        "cov_amr_metrics_median": {
+          "amr_p": 0.09592082624052628,
+          "amr_r": 1.5084738878682382,
+          "cov_p": 1.0,
+          "cov_r": 0.1111111111111111
+        },
+        "display_label": "harmonic",
+        "record_count": 182604,
+        "training_metrics": {
+          "best_validation_loss": 0.01840163581073284,
+          "reloaded_validation_loss": 0.01840163581073284,
+          "sampled_rmsd_to_target_overall_mean": 0.11630121087549139,
+          "sampled_rmsd_to_target_test_mean": 0.11661298266074095,
+          "sampled_rmsd_to_target_train_mean": 0.11624768458232186,
+          "sampled_rmsd_to_target_val_mean": 0.11695290884976095
+        }
+      },
+      "hybrid_lambda0025": {
+        "cov_amr_metrics_mean": {
+          "amr_p": 0.09511050764880791,
+          "amr_r": 1.4900735597348704,
+          "cov_p": 1.0,
+          "cov_r": 0.18488987622845177
+        },
+        "cov_amr_metrics_median": {
+          "amr_p": 0.0950030299751993,
+          "amr_r": 1.5083434116618584,
+          "cov_p": 1.0,
+          "cov_r": 0.1111111111111111
+        },
+        "display_label": "hybrid lambda 0.025",
+        "record_count": 182604,
+        "training_metrics": {
+          "best_validation_loss": 0.018206116743385792,
+          "reloaded_validation_loss": 0.018206116743385792,
+          "sampled_rmsd_to_target_overall_mean": 0.11556875558309625,
+          "sampled_rmsd_to_target_test_mean": 0.11593151064182182,
+          "sampled_rmsd_to_target_train_mean": 0.11550727163491378,
+          "sampled_rmsd_to_target_val_mean": 0.11631270755117731
+        }
+      },
+      "hybrid_lambda500": {
+        "cov_amr_metrics_mean": {
+          "amr_p": 0.059748273478853926,
+          "amr_r": 1.4988076131247887,
+          "cov_p": 1.0,
+          "cov_r": 0.1841108275887776
+        },
+        "cov_amr_metrics_median": {
+          "amr_p": 0.058385813043076315,
+          "amr_r": 1.5178611895548753,
+          "cov_p": 1.0,
+          "cov_r": 0.1111111111111111
+        },
+        "display_label": "hybrid lambda 5.0",
+        "record_count": 182604,
+        "training_metrics": {
+          "best_validation_loss": 0.011979321483522654,
+          "reloaded_validation_loss": 0.011979321483522654,
+          "sampled_rmsd_to_target_overall_mean": 0.089909180975145,
+          "sampled_rmsd_to_target_test_mean": 0.09161198966269851,
+          "sampled_rmsd_to_target_train_mean": 0.08963085023087893,
+          "sampled_rmsd_to_target_val_mean": 0.09321630739360431
+        }
+      },
+      "isotropic": {
+        "cov_amr_metrics_mean": {
+          "amr_p": 0.20486370622229727,
+          "amr_r": 1.491433347066178,
+          "cov_p": 1.0,
+          "cov_r": 0.18336781968619872
+        },
+        "cov_amr_metrics_median": {
+          "amr_p": 0.20468054241205158,
+          "amr_r": 1.5095491299207322,
+          "cov_p": 1.0,
+          "cov_r": 0.1111111111111111
+        },
+        "display_label": "isotropic",
+        "record_count": 182604,
+        "training_metrics": {
+          "best_validation_loss": 0.062205890814463295,
+          "reloaded_validation_loss": 0.062205890814463295,
+          "sampled_rmsd_to_target_overall_mean": 0.21591521861581345,
+          "sampled_rmsd_to_target_test_mean": 0.2159036607410085,
+          "sampled_rmsd_to_target_train_mean": 0.21590209489750278,
+          "sampled_rmsd_to_target_val_mean": 0.21616300255777257
+        }
+      },
+      "stiffness_structured": {
+        "cov_amr_metrics_mean": {
+          "amr_p": 0.08441110941085184,
+          "amr_r": 1.498109551964087,
+          "cov_p": 1.0,
+          "cov_r": 0.18415321049454497
+        },
+        "cov_amr_metrics_median": {
+          "amr_p": 0.08410899480185925,
+          "amr_r": 1.5174192572173548,
+          "cov_p": 1.0,
+          "cov_r": 0.1111111111111111
+        },
+        "display_label": "stiffness",
+        "record_count": 182604,
+        "training_metrics": {
+          "best_validation_loss": 0.04710366949439049,
+          "reloaded_validation_loss": 0.04710366949439049,
+          "sampled_rmsd_to_target_overall_mean": 0.1826625939729125,
+          "sampled_rmsd_to_target_test_mean": 0.18423057079174301,
+          "sampled_rmsd_to_target_train_mean": 0.18235861563254127,
+          "sampled_rmsd_to_target_val_mean": 0.18656620730453208
+        }
+      },
+      "torsion_only": {
+        "cov_amr_metrics_mean": {
+          "amr_p": 0.3059492185401173,
+          "amr_r": 1.362339488818469,
+          "cov_p": 0.9597004994414142,
+          "cov_r": 0.2025094785992365
+        },
+        "cov_amr_metrics_median": {
+          "amr_p": 0.30176733075286977,
+          "amr_r": 1.3751512955644989,
+          "cov_p": 1.0,
+          "cov_r": 0.125
+        },
+        "display_label": "torsion only",
+        "record_count": 182604,
+        "training_metrics": {
+          "best_validation_loss": 4.016191124916077,
+          "reloaded_validation_loss": 4.016191124916077,
+          "sampled_rmsd_to_target_overall_mean": 1.8041939778592706,
+          "sampled_rmsd_to_target_test_mean": 1.733753563331743,
+          "sampled_rmsd_to_target_train_mean": 1.8139433992597869,
+          "sampled_rmsd_to_target_val_mean": 1.6991454478702446
+        }
+      }
+    }
+  },
+  "raw_data_modified": false,
+  "result_kind": "geom_drugs_full_database_final_claims_and_limitations_not_benchmark",
+  "scheduler": null,
+  "summary_name": "geom_full_database_final_claims_and_limitations_summary",
+  "training_executed_by_summary": false
+}

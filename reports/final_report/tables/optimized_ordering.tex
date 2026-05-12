@@ -1,0 +1,17 @@
+\begin{table}[t]
+\centering
+\small
+\caption{Final optimized tracked-metric ordering under AdamW with learning rate $10^{-3}$. Values are cross-split means over random and scaffold splits and seeds 0, 1, and 2. Lower is better for validation loss and RMSD.}
+\label{tab:optimized-ordering}
+\begin{tabular}{lrrrr}
+\toprule
+Method & Best val. loss & Reloaded val. loss & RMSD overall & RMSD test \\
+\midrule
+Hybrid $\lambda=5.0$ & 0.01198 & 0.01198 & 0.08991 & 0.09161 \\
+Harmonic prior & 0.01840 & 0.01840 & 0.11630 & 0.11661 \\
+Stiffness structured & 0.04710 & 0.04710 & 0.18266 & 0.18423 \\
+Isotropic & 0.06221 & 0.06221 & 0.21592 & 0.21590 \\
+Torsion only & 4.01619 & 4.01619 & 1.80419 & 1.73375 \\
+\bottomrule
+\end{tabular}
+\end{table}
