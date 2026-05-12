@@ -18,25 +18,6 @@ The clean claim is:
 
 > Stiffness-modulated harmonic source priors improve precision-oriented metrics and create a tunable precision-recall frontier, but the optimized hybrid does not uniformly dominate harmonic_prior on ensemble COV/AMR metrics.
 
-## Final Evidence
-
-Core final summaries:
-
-- [Final optimized all-method summary](reports/tables/geom_full_database_final_optimized_all_methods_summary.md)
-- [Complete val/test all-method COV/AMR summary](reports/tables/geom_full_database_final_cov_amr_complete_valtest_summary.md)
-- [Complete val/test hybrid-lambda COV/AMR summary](reports/tables/geom_full_database_hybrid_lambda_complete_cov_amr_summary.md)
-- [Final hybrid lambda interpretation](reports/tables/geom_full_database_final_hybrid_lambda_cov_amr_interpretation_summary.md)
-- [Final claims and limitations](reports/tables/geom_full_database_final_claims_and_limitations_summary.md)
-- [Concise results and discussion narrative](reports/tables/geom_full_database_final_results_discussion_narrative.md)
-- [Project closure audit](reports/tables/geom_full_database_project_closure_audit.md)
-
-Presentation-ready figures:
-
-- [Lambda COV/AMR tradeoff](reports/figures/geom_full_database_hybrid_lambda_cov_amr_tradeoff.png)
-- [Precision-recall Pareto plot](reports/figures/geom_full_database_hybrid_lambda_precision_recall_pareto.png)
-- [Final method comparison](reports/figures/geom_full_database_final_method_comparison_rmsd_cov_amr.png)
-- [Claim summary table](reports/figures/geom_full_database_final_claim_summary_table.png)
-
 ## Methods In The Final Matrix
 
 The optimized all-method matrix uses:
@@ -107,3 +88,9 @@ The clean presentation bundle is under:
 - `reports/presentation_bundle/final_closure/`
 
 Historical reports remain in `reports/tables/` and `reports/figures/`, but final presentations should prefer the bundle and final summaries listed above.
+
+## Future Directions
+
+A natural next step is to move beyond stiffness-aware source design and explore **stiffness-aware flow-matching paths**. In the current project, stiffness information is used to shape the source distribution, while the flow-matching interpolation path remains fixed. Future work could incorporate local chemical stiffness directly into the path construction, so that rigid regions such as rings, amides, and conjugated fragments move more conservatively, while flexible torsional regions are allowed greater displacement. This may help balance local geometric stability with conformational diversity and further clarify how stiffness information should enter molecular flow matching.
+
+Wish to have a chance to develop it~
