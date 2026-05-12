@@ -1,0 +1,32 @@
+{
+  "bundle_name": "final_closure",
+  "generated_on": "2026-05-11",
+  "benchmark_result": false,
+  "training_executed_by_bundle": false,
+  "sampling_executed_by_bundle": false,
+  "raw_data_modified": false,
+  "environment_modified": false,
+  "scheduler_submitted": false,
+  "final_interpretation": "precision-recall Pareto frontier; lambda=5.0 is RMSD/precision-favorable, lambda=0.025 is best tested hybrid recall/balanced, harmonic_prior remains AMR-R recall anchor",
+  "reports": [
+    "geom_full_database_final_hybrid_lambda_cov_amr_interpretation_summary.md",
+    "geom_full_database_final_claims_and_limitations_summary.md",
+    "geom_full_database_final_results_discussion_narrative.md",
+    "geom_full_database_project_closure_audit.md"
+  ],
+  "json_summaries": [
+    "geom_full_database_final_hybrid_lambda_cov_amr_interpretation_summary.json",
+    "geom_full_database_final_claims_and_limitations_summary.json",
+    "geom_full_database_project_closure_audit.json"
+  ],
+  "figures": [
+    "geom_full_database_hybrid_lambda_cov_amr_tradeoff.png",
+    "geom_full_database_hybrid_lambda_cov_amr_tradeoff.pdf",
+    "geom_full_database_hybrid_lambda_precision_recall_pareto.png",
+    "geom_full_database_hybrid_lambda_precision_recall_pareto.pdf",
+    "geom_full_database_final_method_comparison_rmsd_cov_amr.png",
+    "geom_full_database_final_method_comparison_rmsd_cov_amr.pdf",
+    "geom_full_database_final_claim_summary_table.png",
+    "geom_full_database_final_claim_summary_table.pdf"
+  ]
+}

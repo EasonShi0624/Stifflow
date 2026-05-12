@@ -1,831 +1,156 @@
-# Reproducibility Plan
+# Reproducibility And Final-State Verification
 
-## Goal
+This document records how to verify and regenerate the current final reporting state without launching training, evaluation chunks, scheduler jobs, or environment changes.
 
-The immediate goal is not yet full-benchmark reproduction.
+## Final Scope
 
-The immediate reproducibility goal is:
+The closure-state results cover:
 
-> given a config, a code snapshot, and a data snapshot, reproduce the same smoke-test run and regenerate the same machine-readable outputs.
+- full-database random and scaffold splits;
+- seeds `0,1,2`;
+- optimized AdamW lr `1e-3` training summaries;
+- complete val/test COV/AMR, excluding train partition;
+- `K=20` generated conformers per molecule;
+- RMSD threshold `delta=0.75`;
+- non-benchmark reporting only.
 
----
+Final interpretation:
 
-## Minimum reproducibility contract
+- `hybrid_harmonic_stiffness_v1 lambda=5.0` is validation/RMSD and AMR-P precision-favorable.
+- `hybrid_harmonic_stiffness_v1 lambda=0.025` is the best tested hybrid recall/balanced setting.
+- `harmonic_prior` remains the AMR-R recall anchor.
+- No tested hybrid lambda dominates harmonic on both precision and recall.
 
-Every meaningful run should record:
-- git commit hash if available
-- config path
-- config contents or a frozen config snapshot
-- random seed
-- dataset subset identifier
-- split type
-- backbone name
-- corruption mode
-- output directory
-- checkpoint path if training occurs
-- metrics JSON path
-- execution mode: local smoke test vs scheduled cluster job
-- SLURM account if a scheduled job is used
+## Key Final Artifacts
 
----
-
-## Output locations
-
-The intended output structure is:
+JSON summaries:
 
 ```text
-experiments/
-├── manifests/
-├── logs/
-├── checkpoints/
-└── results/
+experiments/results/geom_full_database_final_optimized_all_methods_summary.json
+experiments/results/geom_full_database_final_cov_amr_complete_valtest_summary.json
+experiments/results/geom_full_database_hybrid_lambda_complete_cov_amr_summary.json
+experiments/results/geom_full_database_final_hybrid_lambda_cov_amr_interpretation_summary.json
+experiments/results/geom_full_database_final_claims_and_limitations_summary.json
+experiments/results/geom_full_database_project_closure_audit.json
 ```
 
-A typical run should generate:
-- `experiments/manifests/<run_name>.json`
-- `experiments/logs/<run_name>.log`
-- `experiments/results/<run_name>.json`
-- optionally `experiments/checkpoints/<run_name>.pt`
+Markdown reports:
 
-Current smoke command:
+```text
+reports/tables/geom_full_database_final_optimized_all_methods_summary.md
+reports/tables/geom_full_database_final_cov_amr_complete_valtest_summary.md
+reports/tables/geom_full_database_hybrid_lambda_complete_cov_amr_summary.md
+reports/tables/geom_full_database_final_hybrid_lambda_cov_amr_interpretation_summary.md
+reports/tables/geom_full_database_final_claims_and_limitations_summary.md
+reports/tables/geom_full_database_final_results_discussion_narrative.md
+reports/tables/geom_full_database_project_closure_audit.md
+```
+
+Figures:
+
+```text
+reports/figures/geom_full_database_hybrid_lambda_cov_amr_tradeoff.png
+reports/figures/geom_full_database_hybrid_lambda_precision_recall_pareto.png
+reports/figures/geom_full_database_final_method_comparison_rmsd_cov_amr.png
+reports/figures/geom_full_database_final_claim_summary_table.png
+```
+
+Presentation bundle:
+
+```text
+reports/presentation_bundle/final_closure/
+```
+
+## Verify Final Summary Consistency
 
 ```bash
-python scripts/train.py --config configs/train/tiny_smoke.yaml --dry-run
+python - <<'PY'
+import json
+
+paths = [
+    "experiments/results/geom_full_database_final_hybrid_lambda_cov_amr_interpretation_summary.json",
+    "experiments/results/geom_full_database_final_claims_and_limitations_summary.json",
+    "experiments/results/geom_full_database_hybrid_lambda_complete_cov_amr_summary.json",
+    "experiments/results/geom_full_database_final_cov_amr_complete_valtest_summary.json",
+    "experiments/results/geom_full_database_final_optimized_all_methods_summary.json",
+    "experiments/results/geom_full_database_project_closure_audit.json",
+]
+
+for path in paths:
+    data = json.load(open(path))
+    print(path)
+    print("  benchmark_result:", data.get("benchmark_result"))
+    print("  raw_data_modified:", data.get("raw_data_modified"))
+    print("  environment_modified:", data.get("environment_modified"))
+    coverage = data.get("coverage") or {}
+    if coverage:
+        print("  coverage:", coverage)
+PY
 ```
 
-This validates config/data/split/corruption/evaluation wiring and writes manifest/results/log files. It does **not** run neural model training. Smoke entry points re-exec through `/scratch/ys6132/programs/miniforge3/envs/stifflow/bin/python` when launched from another interpreter.
+Expected high-level checks:
 
-Current paired smoke pipeline:
+- final COV/AMR all-method coverage is complete;
+- hybrid-lambda COV/AMR coverage is complete;
+- final reports are marked `benchmark_result: false`;
+- no final reporting artifact claims raw-data or environment modification.
+
+## Verify Figures Exist
 
 ```bash
-python scripts/run_smoke_pipeline.py
+for f in \
+  reports/figures/geom_full_database_hybrid_lambda_cov_amr_tradeoff.png \
+  reports/figures/geom_full_database_hybrid_lambda_precision_recall_pareto.png \
+  reports/figures/geom_full_database_final_method_comparison_rmsd_cov_amr.png \
+  reports/figures/geom_full_database_final_claim_summary_table.png
+do
+  test -s "$f" && echo "ok $f"
+done
 ```
 
-This runs `configs/train/tiny_smoke.yaml` and `configs/train/tiny_smoke_stiffness.yaml` locally on the synthetic fixture, then writes aggregate files:
-- `experiments/manifests/smoke_pair_synthetic_seed0.json`
-- `experiments/results/smoke_pair_synthetic_seed0.json`
-- `experiments/logs/smoke_pair_synthetic_seed0.log`
+## Regenerate Final Reporting Bundle
 
-All outputs are labeled `smoke_only_not_benchmark`, `benchmark_result: false`, `hardware: cpu_only`, `training_executed: false`, and `slurm_account: null`.
-
-Current RDKit smoke baseline:
+This command refreshes reporting-only final summaries and figures from existing results. It does not run training, submit jobs, mutate raw data, or modify the environment.
 
 ```bash
-python scripts/run_rdkit_smoke.py
+python scripts/summarize_geom_full_database_final_reporting_bundle.py
 ```
 
-This runs RDKit ETKDGv3 embedding plus MMFF optimization on the same synthetic fixture, if RDKit is available in the active environment. It writes:
-- `experiments/manifests/smoke_random_rdkit_etkdg_mmff_seed0.json`
-- `experiments/results/smoke_random_rdkit_etkdg_mmff_seed0.json`
-- `experiments/logs/smoke_random_rdkit_etkdg_mmff_seed0.log`
+Expected refreshed outputs:
 
-These outputs are also labeled `smoke_only_not_benchmark`, `benchmark_result: false`, `hardware: cpu_only`, `training_executed: false`, and `slurm_account: null`. The manifest and result JSON record `python_executable`, `python_version`, and `rdkit_version`. If RDKit is not importable, the script writes a clear `execution_status: import_failure` smoke report and does not fabricate RDKit metrics. If a successful RDKit smoke result already exists, an import failure will not overwrite it; a `*.preflight_failure.log` diagnostic is written instead. Per-molecule failures are categorized as `fixture`, `etkdg`, `mmff`, `alignment`, or `runtime`.
+```text
+experiments/results/geom_full_database_final_hybrid_lambda_cov_amr_interpretation_summary.json
+reports/tables/geom_full_database_final_hybrid_lambda_cov_amr_interpretation_summary.md
+experiments/results/geom_full_database_final_claims_and_limitations_summary.json
+reports/tables/geom_full_database_final_claims_and_limitations_summary.md
+reports/tables/geom_full_database_final_results_discussion_narrative.md
+reports/figures/geom_full_database_hybrid_lambda_cov_amr_tradeoff.png
+reports/figures/geom_full_database_hybrid_lambda_precision_recall_pareto.png
+reports/figures/geom_full_database_final_method_comparison_rmsd_cov_amr.png
+reports/figures/geom_full_database_final_claim_summary_table.png
+```
 
-Current smoke comparison report:
+## Stale-Claim Scan
 
 ```bash
-python scripts/compare_smoke_results.py
+rg -n -i \
+  "universally best|lambda=5.*ensemble-optimal|stiffness beats harmonic|physical benchmark supports|dominates harmonic" \
+  README.md TASKS.md docs reports/tables --glob '*.md'
 ```
 
-This reads the isotropic smoke result, stiffness-structured smoke result, and RDKit smoke baseline result, validates that all inputs are labeled smoke-only, and writes:
-- `experiments/results/smoke_comparison_summary.json`
-- `reports/tables/smoke_comparison_summary.md`
+Allowed hits should be limited to explicit limitations, not-supported claims, or clearly historical/superseded reports.
 
-The summary and markdown report are labeled as smoke-only synthetic-fixture diagnostics, not benchmark results.
+## Do Not Run Without New Approval
 
-Current GEOM-Drugs raw-data preflight:
+Do not run:
 
-```bash
-python scripts/prepare_geom.py --dry-run
-```
+- training jobs;
+- scheduler submissions;
+- COV/AMR evaluation chunks;
+- PoseBusters jobs;
+- MMFF/UFF sweeps;
+- xTB/GFN2-xTB checks;
+- raw-data preprocessing or mutation;
+- environment installation or modification.
 
-This read-only command inspects `data/raw/geom_drugs` and writes:
-- `experiments/manifests/geom_drugs_preflight.json`
-- `reports/tables/geom_drugs_preflight.md`
-
-The output is labeled `preflight_not_benchmark`, `benchmark_result: false`, `raw_data_modified: false`, `processed_data_written: false`, and `preprocessing_executed: false`. When `rdkit_folder/drugs/*.pickle` is present, it additionally reads a tiny bounded subset of raw pickle metadata and records `preprocessing_dry_run_executed: true`; this remains metadata-only and does not write processed records.
-
-Current tiny GEOM-Drugs processed-output dry-run:
-
-```bash
-python scripts/prepare_geom.py --dry-run --write-tiny-processed-output
-```
-
-This is still not real preprocessing. It writes only:
-- `data/processed/geom_drugs_subset/tiny_real_dry_run/molecules.json`
-- `data/processed/geom_drugs_subset/tiny_real_dry_run/manifest.json`
-
-The artifact is capped by explicit molecule, conformer, pickle-size, and atom-count bounds. By default it writes at most three molecules and one conformer per molecule. It is labeled `processed_output_dry_run_not_benchmark`, `benchmark_result: false`, `hardware: cpu_only`, `training_executed: false`, `raw_data_modified: false`, and `full_processed_data_written: false`.
-
-Current tiny GEOM-Drugs split dry-run:
-
-```bash
-python scripts/make_geom_tiny_split.py
-```
-
-This reads the tiny processed-output dry-run artifact and writes only:
-- `data/splits/geom_drugs_tiny_real_dry_run/random_seed0/split.json`
-- `data/splits/geom_drugs_tiny_real_dry_run/random_seed0/manifest.json`
-
-The artifact is labeled `split_dry_run_not_benchmark`, `benchmark_result: false`, `hardware: cpu_only`, `training_executed: false`, `raw_data_modified: false`, `processed_data_modified: false`, and `full_split_written: false`. With the default three-molecule processed dry-run it is non-degenerate; if the tiny input contains fewer than three molecules, the split is explicitly marked `degenerate_tiny_split: true`.
-
-Current micro-pilot processed-output and split dry-run:
-
-```bash
-python scripts/prepare_geom.py --dry-run --write-micro-pilot-output
-python scripts/make_geom_tiny_split.py --micro-pilot
-```
-
-This writes only:
-- `data/processed/geom_drugs_subset/micro_pilot/molecules.json`
-- `data/processed/geom_drugs_subset/micro_pilot/manifest.json`
-- `data/splits/geom_drugs_micro_pilot/random_seed0/split.json`
-- `data/splits/geom_drugs_micro_pilot/random_seed0/manifest.json`
-
-The micro-pilot processed artifact is still labeled `processed_output_dry_run_not_benchmark` and `benchmark_result: false`, with `subset_scope: micro_pilot_processed_dry_run`, `max_molecules: 6`, `hard_max_molecules: 6`, and one conformer per molecule by default. The split dry-run is labeled `split_dry_run_not_benchmark`; with six molecules it writes four train IDs, one validation ID, and one test ID. This is not a real processed training subset or benchmark split.
-
-Current tiny real-data RDKit baseline dry-run:
-
-```bash
-python scripts/run_rdkit_tiny_real.py
-```
-
-This reads only the three-molecule tiny processed artifact and tiny split dry-run, then runs RDKit ETKDGv3 + MMFF locally on CPU if RDKit is importable. It writes:
-- `experiments/manifests/geom_tiny_real_rdkit_etkdg_mmff_seed0.json`
-- `experiments/results/geom_tiny_real_rdkit_etkdg_mmff_seed0.json`
-- `experiments/logs/geom_tiny_real_rdkit_etkdg_mmff_seed0.log`
-
-The outputs are labeled `tiny_real_data_dry_run_not_benchmark`, `benchmark_result: false`, `hardware: cpu_only`, `training_executed: false`, and `slurm_account: null`. This is not the real GEOM-scale RDKit baseline.
-
-Current tiny real-data model-side dry-runs:
-
-```bash
-python scripts/run_tiny_real_model_dry_runs.py
-```
-
-This reads only:
-- `data/processed/geom_drugs_subset/tiny_real_dry_run/molecules.json`
-- `data/splits/geom_drugs_tiny_real_dry_run/random_seed0/split.json`
-
-It runs the isotropic and stiffness-structured source-corruption paths locally on CPU for the bounded three-molecule artifact, constructs flow-matching sample tensors, and writes:
-- `experiments/manifests/geom_tiny_real_model_isotropic_seed0.json`
-- `experiments/results/geom_tiny_real_model_isotropic_seed0.json`
-- `experiments/logs/geom_tiny_real_model_isotropic_seed0.log`
-- `experiments/manifests/geom_tiny_real_model_stiffness_seed0.json`
-- `experiments/results/geom_tiny_real_model_stiffness_seed0.json`
-- `experiments/logs/geom_tiny_real_model_stiffness_seed0.log`
-
-The outputs are labeled `tiny_real_data_model_dry_run_not_benchmark`, `benchmark_result: false`, `hardware: cpu_only`, `training_executed: false`, `model_training_started: false`, `sampling_executed: false`, and `slurm_account: null`. They are model-side plumbing checks only, not model training, model sampling, or benchmark results.
-
-Current tiny real-data model execution smoke:
-
-```bash
-python scripts/run_tiny_real_execution_smoke.py
-```
-
-This reads the same three-molecule tiny processed artifact and tiny split dry-run, then runs one parameter-free CPU forward/loss-style execution pass for both isotropic and stiffness-structured source configurations. It writes:
-- `experiments/manifests/geom_tiny_real_execution_isotropic_seed0.json`
-- `experiments/results/geom_tiny_real_execution_isotropic_seed0.json`
-- `experiments/logs/geom_tiny_real_execution_isotropic_seed0.log`
-- `experiments/manifests/geom_tiny_real_execution_stiffness_seed0.json`
-- `experiments/results/geom_tiny_real_execution_stiffness_seed0.json`
-- `experiments/logs/geom_tiny_real_execution_stiffness_seed0.log`
-
-The outputs are labeled `tiny_real_data_model_execution_smoke_not_benchmark`, `benchmark_result: false`, `hardware: cpu_only`, `gpu_used: false`, `training_executed: false`, `model_training_started: false`, `training_loop_executed: false`, `optimizer_created: false`, `backward_executed: false`, `checkpoint_written: false`, `sampling_executed: false`, and `slurm_account: null`. This validates forward/loss plumbing only and is not model training, model sampling, or a benchmark result.
-
-Current tiny real-data single-step training smoke:
-
-```bash
-python scripts/run_tiny_real_single_step_smoke.py
-```
-
-This reads the same three-molecule tiny processed artifact and tiny split dry-run, then runs exactly one CPU-only forward/loss/backward/optimizer step for both isotropic and stiffness-structured source configurations. It writes:
-- `experiments/manifests/geom_tiny_real_single_step_isotropic_seed0.json`
-- `experiments/results/geom_tiny_real_single_step_isotropic_seed0.json`
-- `experiments/logs/geom_tiny_real_single_step_isotropic_seed0.log`
-- `experiments/manifests/geom_tiny_real_single_step_stiffness_seed0.json`
-- `experiments/results/geom_tiny_real_single_step_stiffness_seed0.json`
-- `experiments/logs/geom_tiny_real_single_step_stiffness_seed0.log`
-
-The outputs are labeled `tiny_real_data_single_step_training_smoke_not_benchmark`, `benchmark_result: false`, `hardware: cpu_only`, `gpu_used: false`, `training_executed: true`, `model_training_started: true`, `training_loop_executed: false`, `single_step_training_smoke_executed: true`, `max_steps: 1`, `optimizer_created: true`, `optimizer_step_count: 1`, `backward_executed: true`, `backward_pass_count: 1`, `checkpoint_written: false`, `sampling_executed: false`, and `slurm_account: null`. This validates one bounded training step only and is not a real training run or benchmark result.
-
-Current tiny real-data bounded multi-step training smoke:
-
-```bash
-python scripts/run_tiny_real_multi_step_smoke.py
-```
-
-This reads the same three-molecule tiny processed artifact and tiny split dry-run, then runs a very short CPU-only training sequence for both isotropic and stiffness-structured source configurations. The default is three optimizer steps, with a hard cap of five steps. It writes:
-- `experiments/manifests/geom_tiny_real_multistep_isotropic_steps3_seed0.json`
-- `experiments/results/geom_tiny_real_multistep_isotropic_steps3_seed0.json`
-- `experiments/logs/geom_tiny_real_multistep_isotropic_steps3_seed0.log`
-- `experiments/manifests/geom_tiny_real_multistep_stiffness_steps3_seed0.json`
-- `experiments/results/geom_tiny_real_multistep_stiffness_steps3_seed0.json`
-- `experiments/logs/geom_tiny_real_multistep_stiffness_steps3_seed0.log`
-
-The outputs are labeled `tiny_real_data_bounded_multistep_training_smoke_not_benchmark`, `benchmark_result: false`, `hardware: cpu_only`, `gpu_used: false`, `training_executed: true`, `bounded_training_smoke_executed: true`, `larger_real_training_run_started: false`, `max_steps: 3`, `hard_max_steps: 5`, `optimizer_step_count: 3`, `backward_pass_count: 3`, `checkpoint_written: false`, `sampling_executed: false`, and `slurm_account: null`. They include per-step loss and gradient metadata only; this is not a benchmark result or larger real training run.
-
-Current tiny real-data checkpoint-and-sampling smoke:
-
-```bash
-python scripts/run_tiny_real_checkpoint_sampling_smoke.py
-```
-
-This reads the same three-molecule tiny processed artifact and tiny split dry-run, runs a bounded CPU-only mini training smoke for both isotropic and stiffness-structured source configurations, writes disposable smoke checkpoints, reloads them, and runs one bounded sampling update per molecule. It writes:
-- `experiments/manifests/geom_tiny_real_ckpt_sample_isotropic_steps3_seed0.json`
-- `experiments/results/geom_tiny_real_ckpt_sample_isotropic_steps3_seed0.json`
-- `experiments/logs/geom_tiny_real_ckpt_sample_isotropic_steps3_seed0.log`
-- `experiments/checkpoints/geom_tiny_real_ckpt_sample_isotropic_steps3_seed0.pt`
-- `experiments/manifests/geom_tiny_real_ckpt_sample_stiffness_steps3_seed0.json`
-- `experiments/results/geom_tiny_real_ckpt_sample_stiffness_steps3_seed0.json`
-- `experiments/logs/geom_tiny_real_ckpt_sample_stiffness_steps3_seed0.log`
-- `experiments/checkpoints/geom_tiny_real_ckpt_sample_stiffness_steps3_seed0.pt`
-
-The outputs are labeled `tiny_real_data_checkpoint_sampling_smoke_not_benchmark`, `benchmark_result: false`, `hardware: cpu_only`, `gpu_used: false`, `bounded_training_smoke_executed: true`, `larger_real_training_run_started: false`, `checkpoint_written: true`, `checkpoint_reloaded: true`, `checkpoint_scope: disposable_smoke_only`, `sampling_executed: true`, `sample_step_count: 1`, and `slurm_account: null`. The checkpoints are disposable smoke artifacts, not reusable research checkpoints, and the sampled coordinates are plumbing diagnostics only, not benchmark samples.
-
-Current bounded tiny real-data pilot:
-
-```bash
-python scripts/run_tiny_real_pilot.py
-```
-
-This reads the same three-molecule tiny processed artifact and tiny split dry-run, then runs a strictly bounded CPU-only pilot training loop for both isotropic and stiffness-structured source configurations. Each pilot trains only the one train-split molecule, records validation/test losses on the one-molecule validation/test splits as interface diagnostics, and writes no checkpoints or samples. It writes:
-- `experiments/manifests/geom_tiny_real_pilot_isotropic_steps6_seed0.json`
-- `experiments/results/geom_tiny_real_pilot_isotropic_steps6_seed0.json`
-- `experiments/logs/geom_tiny_real_pilot_isotropic_steps6_seed0.log`
-- `experiments/manifests/geom_tiny_real_pilot_stiffness_steps6_seed0.json`
-- `experiments/results/geom_tiny_real_pilot_stiffness_steps6_seed0.json`
-- `experiments/logs/geom_tiny_real_pilot_stiffness_steps6_seed0.log`
-
-The outputs are labeled `tiny_real_data_bounded_pilot_not_benchmark`, `benchmark_result: false`, `hardware: cpu_only`, `gpu_used: false`, `pilot_run: true`, `bounded_pilot: true`, `training_executed: true`, `training_loop_executed: true`, `bounded_real_training_loop_executed: true`, `larger_real_training_run_started: false`, `max_steps: 6`, `hard_max_steps: 8`, `checkpoint_written: false`, `sampling_executed: false`, and `slurm_account: null`. This is the first bounded pilot training loop on the tiny real artifact, not a benchmark result or evidence of model quality.
-
-Current bounded micro-pilot run:
-
-```bash
-python scripts/run_tiny_real_pilot.py --micro-pilot
-```
-
-This reads the six-molecule micro-pilot processed artifact and split dry-run, then runs the same bounded CPU-only pilot loop for isotropic and stiffness-structured source configurations. It writes:
-- `experiments/manifests/geom_micro_pilot_isotropic_mols6_steps6_seed0.json`
-- `experiments/results/geom_micro_pilot_isotropic_mols6_steps6_seed0.json`
-- `experiments/logs/geom_micro_pilot_isotropic_mols6_steps6_seed0.log`
-- `experiments/manifests/geom_micro_pilot_stiffness_mols6_steps6_seed0.json`
-- `experiments/results/geom_micro_pilot_stiffness_mols6_steps6_seed0.json`
-- `experiments/logs/geom_micro_pilot_stiffness_mols6_steps6_seed0.log`
-
-The outputs remain labeled `tiny_real_data_bounded_pilot_not_benchmark`, `benchmark_result: false`, `hardware: cpu_only`, `gpu_used: false`, `micro_pilot_run: true`, `bounded_pilot: true`, `larger_real_training_run_started: false`, `checkpoint_written: false`, `sampling_executed: false`, and `slurm_account: null`. This is a bounded micro-pilot only, not a larger real training run or benchmark result.
-
-Current bounded micro-pilot comparison report:
-
-```bash
-python scripts/compare_tiny_real_pilot.py --micro-pilot
-```
-
-This reads the two current bounded six-molecule micro-pilot result JSON files and writes a reporting-only comparison of subset metadata, train/validation/test counts, final losses, per-step loss traces, and safety labels. It writes:
-- `experiments/results/geom_micro_pilot_summary.json`
-- `reports/tables/geom_micro_pilot_summary.md`
-
-The summary is labeled `tiny_real_data_bounded_micro_pilot_comparison_not_benchmark`, `comparison_scope: micro_pilot`, `benchmark_result: false`, `hardware: cpu_only`, `gpu_used: false`, `training_executed_by_summary: false`, `sampling_executed_by_summary: false`, `larger_real_training_run_started: false`, and `slurm_account: null`. It does not read raw data, start training, run sampling, write checkpoints, use GPUs, submit jobs, or modify the environment.
-
-Current bounded multi-seed micro-pilot:
-
-```bash
-python scripts/run_micro_pilot_multiseed.py
-```
-
-This runs the bounded six-molecule micro-pilot for isotropic and stiffness-structured source configurations over the fixed tiny seed set `0,1`, then writes one multi-seed summary. It writes per-seed pilot outputs such as:
-- `experiments/manifests/geom_micro_pilot_isotropic_mols6_steps6_seed0.json`
-- `experiments/results/geom_micro_pilot_isotropic_mols6_steps6_seed0.json`
-- `experiments/logs/geom_micro_pilot_isotropic_mols6_steps6_seed0.log`
-- `experiments/manifests/geom_micro_pilot_isotropic_mols6_steps6_seed1.json`
-- `experiments/results/geom_micro_pilot_isotropic_mols6_steps6_seed1.json`
-- `experiments/logs/geom_micro_pilot_isotropic_mols6_steps6_seed1.log`
-- matching `stiffness` files for seeds `0` and `1`
-
-It also writes:
-- `experiments/results/geom_micro_pilot_multiseed_summary.json`
-- `reports/tables/geom_micro_pilot_multiseed_summary.md`
-
-The per-seed outputs remain labeled `tiny_real_data_bounded_pilot_not_benchmark`, `benchmark_result: false`, `hardware: cpu_only`, `gpu_used: false`, `micro_pilot_run: true`, `bounded_pilot: true`, `larger_real_training_run_started: false`, `checkpoint_written: false`, `sampling_executed: false`, and `slurm_account: null`. The summary is labeled `tiny_real_data_bounded_micro_pilot_multiseed_summary_not_benchmark`, with `seed_set: [0, 1]`. This is a bounded micro-pilot stability diagnostic only, not a benchmark result.
-
-Current bounded micro-pilot checkpoint-and-sampling pilot:
-
-```bash
-python scripts/run_micro_pilot_checkpoint_sampling.py
-```
-
-This reads the existing six-molecule micro-pilot processed artifact and split, runs a single fixed seed for both isotropic and stiffness-structured source configurations, trains only the four-molecule train split for five CPU optimizer steps, writes a disposable pilot-only checkpoint, reloads it, and runs one bounded sampling step across the six-molecule artifact. It writes:
-- `experiments/manifests/geom_micro_pilot_ckpt_sample_isotropic_mols6_steps5_seed0.json`
-- `experiments/results/geom_micro_pilot_ckpt_sample_isotropic_mols6_steps5_seed0.json`
-- `experiments/logs/geom_micro_pilot_ckpt_sample_isotropic_mols6_steps5_seed0.log`
-- `experiments/checkpoints/geom_micro_pilot_ckpt_sample_isotropic_mols6_steps5_seed0.pt`
-- `experiments/manifests/geom_micro_pilot_ckpt_sample_stiffness_mols6_steps5_seed0.json`
-- `experiments/results/geom_micro_pilot_ckpt_sample_stiffness_mols6_steps5_seed0.json`
-- `experiments/logs/geom_micro_pilot_ckpt_sample_stiffness_mols6_steps5_seed0.log`
-- `experiments/checkpoints/geom_micro_pilot_ckpt_sample_stiffness_mols6_steps5_seed0.pt`
-
-The outputs are labeled `tiny_real_data_bounded_micro_pilot_checkpoint_sampling_not_benchmark`, `benchmark_result: false`, `hardware: cpu_only`, `gpu_used: false`, `pilot_run: true`, `bounded_pilot: true`, `micro_pilot_run: true`, `larger_real_training_run_started: false`, `checkpoint_written: true`, `checkpoint_reloaded: true`, `checkpoint_scope: disposable_micro_pilot_checkpoint_sampling_only`, `sampling_executed: true`, `sample_step_count: 1`, and `slurm_account: null`. The checkpoints are disposable pilot artifacts, not reusable research checkpoints, and the sampled coordinates are plumbing diagnostics only, not benchmark samples.
-
-Current bounded micro-pilot checkpoint-and-sampling comparison:
-
-```bash
-python scripts/compare_micro_pilot_checkpoint_sampling.py
-```
-
-This reads the current isotropic and stiffness-structured bounded micro-pilot checkpoint/sampling result JSON files and writes:
-- `experiments/results/geom_micro_pilot_ckpt_sample_summary.json`
-- `reports/tables/geom_micro_pilot_ckpt_sample_summary.md`
-
-The summary is labeled `tiny_real_data_bounded_micro_pilot_checkpoint_sampling_comparison_not_benchmark`, `benchmark_result: false`, `hardware: cpu_only`, `gpu_used: false`, `training_executed_by_summary: false`, `sampling_executed_by_summary: false`, `larger_real_training_run_started: false`, and `slurm_account: null`. It compares `reloaded_loss`, overall and split-wise `sampled_rmsd_to_target`, per-molecule sampled RMSD, and runtime fields. Older checkpoint/sampling outputs that measured one-time PyTorch import/runtime warm-up in only the first mode are flagged as runtime-inconsistent until regenerated with the fixed `runtime_scope`.
-
-Current bounded micro-pilot checkpoint-and-sampling multi-seed run:
-
-```bash
-python scripts/run_micro_pilot_checkpoint_sampling_multiseed.py
-```
-
-This runs the same bounded six-molecule checkpoint/sampling pilot for isotropic and stiffness-structured source configurations over seeds `0,1,2`. It does not change the artifact, split, molecule count, model, optimizer, five-step cap, or one-step sampling settings. It writes per-mode/per-seed manifest, result, log, and disposable checkpoint files named like:
-- `experiments/results/geom_micro_pilot_ckpt_sample_isotropic_mols6_steps5_seed0.json`
-- `experiments/results/geom_micro_pilot_ckpt_sample_isotropic_mols6_steps5_seed1.json`
-- `experiments/results/geom_micro_pilot_ckpt_sample_isotropic_mols6_steps5_seed2.json`
-- matching `stiffness` files for seeds `0`, `1`, and `2`
-
-It also writes:
-- `experiments/results/geom_micro_pilot_ckpt_sample_multiseed_summary.json`
-- `reports/tables/geom_micro_pilot_ckpt_sample_multiseed_summary.md`
-
-The per-run outputs are labeled `tiny_real_data_bounded_micro_pilot_checkpoint_sampling_not_benchmark`, `benchmark_result: false`, `hardware: cpu_only`, `gpu_used: false`, `pilot_run: true`, `bounded_pilot: true`, `micro_pilot_run: true`, `checkpoint_scope: disposable_micro_pilot_checkpoint_sampling_only`, `sampling_executed: true`, and `slurm_account: null`. The multi-seed summary is labeled `tiny_real_data_bounded_micro_pilot_checkpoint_sampling_multiseed_summary_not_benchmark` and reports per-seed winners, aggregate means, stiffness consistency, and runtime metadata for accounting only.
-
-Current bounded 30-molecule data-scale checkpoint-and-sampling check:
-
-```bash
-python scripts/run_data_scale_check_checkpoint_sampling.py
-```
-
-This writes a bounded 30-molecule processed dry-run artifact and 28/1/1 random split, then runs the same CPU-only checkpoint/sampling pilot settings for isotropic and stiffness-structured source configurations at seed `0`. It writes:
-- `data/processed/geom_drugs_subset/data_scale_check/molecules.json`
-- `data/splits/geom_drugs_data_scale_check/random_seed0/split.json`
-- `experiments/results/geom_data_scale_check_ckpt_sample_isotropic_mols30_steps5_seed0.json`
-- `experiments/results/geom_data_scale_check_ckpt_sample_stiffness_mols30_steps5_seed0.json`
-- `experiments/results/geom_data_scale_check_ckpt_sample_comparison_mols30_steps5_seed0.json`
-
-The per-run outputs are labeled `tiny_real_data_bounded_data_scale_check_checkpoint_sampling_not_benchmark`, `benchmark_result: false`, `hardware: cpu_only`, `gpu_used: false`, `pilot_run: true`, `bounded_pilot: true`, `data_scale_check_run: true`, `checkpoint_scope: disposable_data_scale_check_checkpoint_sampling_only`, `sampling_executed: true`, and `slurm_account: null`. The comparison is labeled `tiny_real_data_bounded_data_scale_check_checkpoint_sampling_comparison_not_benchmark` and reports whether the seed-0 directional signal is preserved. This is still a bounded non-benchmark data-scale check, not a larger real training run.
-
-Current bounded 30-molecule data-scale checkpoint-and-sampling multi-seed run:
-
-```bash
-python scripts/run_data_scale_check_checkpoint_sampling_multiseed.py
-```
-
-This reads the existing bounded 30-molecule processed artifact and fixed 28/1/1 split through the data-scale-check configs, then runs the same CPU-only checkpoint/sampling pilot settings for isotropic and stiffness-structured source configurations over seeds `0,1,2`. It does not rebuild the processed artifact or split, and it does not change the molecule count, split logic, model, optimizer, five-step cap, or one-step sampling settings. It writes per-mode/per-seed manifest, result, log, and disposable checkpoint files named like:
-- `experiments/results/geom_data_scale_check_ckpt_sample_isotropic_mols30_steps5_seed0.json`
-- `experiments/results/geom_data_scale_check_ckpt_sample_isotropic_mols30_steps5_seed1.json`
-- `experiments/results/geom_data_scale_check_ckpt_sample_isotropic_mols30_steps5_seed2.json`
-- matching `stiffness` files for seeds `0`, `1`, and `2`
-
-It also writes:
-- `experiments/results/geom_data_scale_check_ckpt_sample_multiseed_summary.json`
-- `reports/tables/geom_data_scale_check_ckpt_sample_multiseed_summary.md`
-
-The per-run outputs remain labeled `tiny_real_data_bounded_data_scale_check_checkpoint_sampling_not_benchmark`, `benchmark_result: false`, `hardware: cpu_only`, `gpu_used: false`, `pilot_run: true`, `bounded_pilot: true`, `data_scale_check_run: true`, `checkpoint_scope: disposable_data_scale_check_checkpoint_sampling_only`, `sampling_executed: true`, and `slurm_account: null`. The multi-seed summary is labeled `tiny_real_data_bounded_data_scale_check_checkpoint_sampling_multiseed_summary_not_benchmark` and reports per-seed winners, aggregate means, stiffness consistency, and runtime metadata for accounting only. This is still a bounded non-benchmark data-scale check, not a larger real training run.
-
-Current bounded 500-molecule data-scale checkpoint-and-sampling check:
-
-```bash
-python scripts/run_data_scale_check_500_checkpoint_sampling.py
-```
-
-This writes a bounded 500-molecule processed dry-run artifact and nondegenerate 450/25/25 random split, then runs the same CPU-only checkpoint/sampling pilot settings used by the 30-molecule check for isotropic and stiffness-structured source configurations at seed `0`. It preserves the processed-output schema, one-conformer-per-molecule policy, model, optimizer, five-step cap, checkpoint/reload path, and one-step sampling settings. It writes:
-- `data/processed/geom_drugs_subset/data_scale_check_500/molecules.json`
-- `data/splits/geom_drugs_data_scale_check_500/random_seed0/split.json`
-- `experiments/results/geom_data_scale_check_ckpt_sample_isotropic_mols500_steps5_seed0.json`
-- `experiments/results/geom_data_scale_check_ckpt_sample_stiffness_mols500_steps5_seed0.json`
-- `experiments/results/geom_data_scale_check_ckpt_sample_comparison_mols500_steps5_seed0.json`
-
-The per-run outputs are labeled `tiny_real_data_bounded_data_scale_check_checkpoint_sampling_not_benchmark`, `benchmark_result: false`, `hardware: cpu_only`, `gpu_used: false`, `pilot_run: true`, `bounded_pilot: true`, `data_scale_check_run: true`, `data_scale_check_500_run: true`, `checkpoint_scope: disposable_data_scale_check_500_checkpoint_sampling_only`, `sampling_executed: true`, and `slurm_account: null`. The comparison is labeled `tiny_real_data_bounded_data_scale_check_checkpoint_sampling_comparison_not_benchmark` and reports whether the seed-0 directional signal is preserved. This is a bounded non-benchmark 500-molecule data-scale check, not a benchmark result or larger real training run.
-
-Current bounded 500-molecule data-scale checkpoint-and-sampling multi-seed run:
-
-```bash
-python scripts/run_data_scale_check_500_checkpoint_sampling_multiseed.py
-```
-
-This reads the existing bounded 500-molecule processed artifact and fixed 450/25/25 split through the data-scale-check configs, then runs the same CPU-only checkpoint/sampling pilot settings for isotropic and stiffness-structured source configurations over seeds `0,1,2`. It does not rebuild the processed artifact or split, and it does not change the molecule count, split logic, model, optimizer, five-step cap, checkpoint/reload path, or one-step sampling settings. It writes per-mode/per-seed manifest, result, log, and disposable checkpoint files named like:
-- `experiments/results/geom_data_scale_check_ckpt_sample_isotropic_mols500_steps5_seed0.json`
-- `experiments/results/geom_data_scale_check_ckpt_sample_isotropic_mols500_steps5_seed1.json`
-- `experiments/results/geom_data_scale_check_ckpt_sample_isotropic_mols500_steps5_seed2.json`
-- matching `stiffness` files for seeds `0`, `1`, and `2`
-
-It also writes:
-- `experiments/results/geom_data_scale_check_ckpt_sample_multiseed_summary_mols500.json`
-- `reports/tables/geom_data_scale_check_ckpt_sample_multiseed_summary_mols500.md`
-
-The per-run outputs remain labeled `tiny_real_data_bounded_data_scale_check_checkpoint_sampling_not_benchmark`, `benchmark_result: false`, `hardware: cpu_only`, `gpu_used: false`, `pilot_run: true`, `bounded_pilot: true`, `data_scale_check_run: true`, `data_scale_check_500_run: true`, `checkpoint_scope: disposable_data_scale_check_500_checkpoint_sampling_only`, `sampling_executed: true`, and `slurm_account: null`. The multi-seed summary is labeled `tiny_real_data_bounded_data_scale_check_checkpoint_sampling_multiseed_summary_not_benchmark` and reports per-seed winners, aggregate means, stiffness consistency, and runtime metadata for accounting only. This is a bounded non-benchmark 500-molecule data-scale check, not a larger real training run.
-
-Current bounded 10000-molecule data-scale checkpoint-and-sampling check:
-
-```bash
-python scripts/run_data_scale_check_10000_checkpoint_sampling.py
-```
-
-For cluster execution, use the prepared SLURM script:
-
-```bash
-sbatch scripts/slurm_data_scale_check_10000_checkpoint_sampling.sbatch
-```
-
-This bounded non-benchmark path writes a bounded 10000-molecule processed dry-run artifact and 9000/500/500 random split, then runs the same CPU-only checkpoint/sampling pilot settings used by the 500-molecule check for isotropic and stiffness-structured source configurations at seed `0`. It preserves the processed-output schema, one-conformer-per-molecule policy, model, optimizer, five-step cap, checkpoint/reload path, and one-step sampling settings. For cluster execution, use the prepared SLURM script and ask before submission. Outputs include:
-- `data/processed/geom_drugs_subset/data_scale_check_10000/molecules.json`
-- `data/splits/geom_drugs_data_scale_check_10000/random_seed0/split.json`
-- `experiments/results/geom_data_scale_check_ckpt_sample_isotropic_mols10000_steps5_seed0.json`
-- `experiments/results/geom_data_scale_check_ckpt_sample_stiffness_mols10000_steps5_seed0.json`
-- `experiments/results/geom_data_scale_check_ckpt_sample_comparison_mols10000_steps5_seed0.json`
-
-The per-run outputs are labeled `tiny_real_data_bounded_data_scale_check_checkpoint_sampling_not_benchmark`, `benchmark_result: false`, `hardware: cpu_only`, `gpu_used: false`, `pilot_run: true`, `bounded_pilot: true`, `data_scale_check_run: true`, `data_scale_check_10000_run: true`, `checkpoint_scope: disposable_data_scale_check_10000_checkpoint_sampling_only`, and `sampling_executed: true`. This is a bounded non-benchmark 10000-molecule data-scale pilot, not a benchmark result or larger real training run.
-
-Prepared bounded 10000-molecule data-scale checkpoint-and-sampling multi-seed repeat:
-
-```bash
-python scripts/run_data_scale_check_10000_checkpoint_sampling_multiseed.py
-```
-
-For cluster execution, use the prepared SLURM script:
-
-```bash
-sbatch scripts/slurm_data_scale_check_10000_checkpoint_sampling_multiseed.sbatch
-```
-
-This path reuses the existing bounded 10000-molecule processed artifact and fixed 9000/500/500 split, then reruns the same CPU-only checkpoint/sampling pilot settings for isotropic and stiffness-structured source configurations over seeds `0,1,2`. It does not rebuild the processed artifact or split, and it does not change the molecule count, processed-output schema, model, optimizer, five-step cap, checkpoint/reload path, or one-step sampling settings. It writes per-mode/per-seed manifest, result, log, and disposable checkpoint files named like:
-- `experiments/results/geom_data_scale_check_ckpt_sample_isotropic_mols10000_steps5_seed0.json`
-- `experiments/results/geom_data_scale_check_ckpt_sample_isotropic_mols10000_steps5_seed1.json`
-- `experiments/results/geom_data_scale_check_ckpt_sample_isotropic_mols10000_steps5_seed2.json`
-- matching `stiffness` files for seeds `0`, `1`, and `2`
-
-It also writes:
-- `experiments/results/geom_data_scale_check_ckpt_sample_multiseed_summary_mols10000.json`
-- `reports/tables/geom_data_scale_check_ckpt_sample_multiseed_summary_mols10000.md`
-
-The per-run outputs remain labeled `tiny_real_data_bounded_data_scale_check_checkpoint_sampling_not_benchmark`, `benchmark_result: false`, `hardware: cpu_only`, `gpu_used: false`, `pilot_run: true`, `bounded_pilot: true`, `data_scale_check_run: true`, `data_scale_check_10000_run: true`, `checkpoint_scope: disposable_data_scale_check_10000_checkpoint_sampling_only`, `sampling_executed: true`, and `slurm_account: null`. The multi-seed summary is labeled `tiny_real_data_bounded_data_scale_check_checkpoint_sampling_multiseed_summary_not_benchmark` and reports per-seed winners, aggregate means, stiffness consistency, and runtime metadata for accounting only. This is a bounded non-benchmark 10000-molecule data-scale repeat, not a benchmark result or larger real training run, and it should not be submitted without explicit approval.
-
-Current bounded 10000-molecule checkpoint-and-sampling convergence repeat:
-
-```bash
-python scripts/run_data_scale_check_10000_checkpoint_sampling_convergence_multiseed.py
-```
-
-For cluster execution, use the prepared SLURM script:
-
-```bash
-sbatch scripts/slurm_data_scale_check_10000_checkpoint_sampling_convergence_multiseed.sbatch
-```
-
-This path reuses the existing bounded 10000-molecule processed artifact and fixed 9000/500/500 split, keeps the same model, optimizer, checkpoint/reload behavior, one-step sampling settings, processed-output schema, molecule count, and seed set `0,1,2`, and extends only the training horizon to a strict 200-step hard cap with patience-based stopping (`patience: 20`, `min_delta: 1.0e-6`, `monitor: train_loss_before_step`). It writes per-mode/per-seed manifest, result, log, and disposable checkpoint files named like:
-- `experiments/results/geom_data_scale_check_ckpt_sample_isotropic_mols10000_steps200_seed0.json`
-- `experiments/results/geom_data_scale_check_ckpt_sample_isotropic_mols10000_steps200_seed1.json`
-- `experiments/results/geom_data_scale_check_ckpt_sample_isotropic_mols10000_steps200_seed2.json`
-- matching `stiffness` files for seeds `0`, `1`, and `2`
-
-It also writes:
-- `experiments/results/geom_data_scale_check_ckpt_sample_multiseed_summary_mols10000_steps200_convergence.json`
-- `reports/tables/geom_data_scale_check_ckpt_sample_multiseed_summary_mols10000_steps200_convergence.md`
-
-The per-run outputs remain explicitly labeled `tiny_real_data_bounded_data_scale_check_checkpoint_sampling_not_benchmark`, `benchmark_result: false`, `hardware: cpu_only`, `gpu_used: false`, `pilot_run: true`, `bounded_pilot: true`, `data_scale_check_run: true`, `data_scale_check_10000_run: true`, `data_scale_check_10000_convergence_run: true`, `checkpoint_scope: disposable_data_scale_check_10000_checkpoint_sampling_only`, `sampling_executed: true`, and `slurm_account: null`. The summary adds early-stop accounting, including executed optimizer steps and stop reasons, and remains bounded pilot-only, not a benchmark result or larger real training run. Reruns should not be submitted without explicit approval.
-
-Current bounded 10000-molecule convergence diagnostics:
-
-```bash
-python scripts/summarize_data_scale_check_10000_convergence_diagnostics.py
-```
-
-This reads the six existing bounded steps200 checkpoint/sampling result JSON files for isotropic and stiffness-structured modes over seeds `0,1,2`. It does not run training, sampling, preprocessing, checkpoint loading, SLURM jobs, GPUs, or environment changes. It writes:
-- `experiments/results/geom_data_scale_check_ckpt_sample_convergence_diagnostics_mols10000_steps200.json`
-- `reports/tables/geom_data_scale_check_ckpt_sample_convergence_diagnostics_mols10000_steps200.md`
-
-The summary is labeled `tiny_real_data_bounded_data_scale_check_convergence_diagnostics_not_benchmark`, `benchmark_result: false`, `hardware: cpu_only`, `training_executed_by_summary: false`, `sampling_executed_by_summary: false`, and `larger_real_training_run_started: false`. It reports hard-cap hits, best-loss step, tail-window loss deltas, tail slopes, and whether the recorded traces are still trending downward near the 200-step hard cap.
-
-Prepared first formal bounded 10000-molecule training phase:
-
-```bash
-python scripts/run_data_scale_check_10000_formal_training_multiseed.py
-```
-
-For cluster execution, use the prepared SLURM script only after explicit approval:
-
-```bash
-sbatch --account=torch_pr_872_general scripts/slurm_data_scale_check_10000_formal_training_multiseed.sbatch
-```
-
-This path reuses the existing bounded 10000-molecule processed artifact and fixed 9000/500/500 split, keeps the same seed set `0,1,2`, model (`minimal_linear_velocity_pilot` / `single_linear_velocity_pilot`), optimizer (`SGD`, `learning_rate: 1.0e-2`), checkpoint save/reload pattern, and one-step sampling settings (`sample_step_count: 1`, `sample_step_size: 0.1`). It extends only the training horizon to `max_steps: 2000` with a strict hard cap and validation-driven checkpoint selection/stopping (`monitor: validation_loss_after_step`, `patience: 200`, `min_delta: 1.0e-6`).
-
-Per mode/seed it writes manifest/result/log files plus reusable best/latest checkpoints named like:
-- `experiments/results/geom_formal_10000_train_isotropic_mols10000_steps2000_seed0.json`
-- `experiments/checkpoints/geom_formal_10000_train_isotropic_mols10000_steps2000_seed0_best.pt`
-- `experiments/checkpoints/geom_formal_10000_train_isotropic_mols10000_steps2000_seed0_latest.pt`
-- matching `stiffness` files for seeds `0`, `1`, and `2`
-
-It also writes:
-- `experiments/results/geom_formal_10000_training_multiseed_summary.json`
-- `reports/tables/geom_formal_10000_training_multiseed_summary.md`
-
-The per-run outputs are labeled `tiny_real_data_formal_10000_training_not_benchmark`, `benchmark_result: false`, `hardware: cpu_only`, `gpu_used: false`, `formal_training_run: true`, `bounded_formal_training_run: true`, `checkpoint_reusable: true`, `checkpoint_selected_by_validation: true`, and `checkpoint_selection_metric: validation_loss_after_step`. The aggregate summary is reporting-only and not a benchmark result. This path does not modify raw data or the environment and should not be submitted without explicit approval.
-
-Prepared first full-database formal training path:
-
-```bash
-python scripts/run_geom_full_database_formal_training_seed0.py
-```
-
-For cluster execution, use the prepared SLURM script only after explicit approval:
-
-```bash
-sbatch --account=torch_pr_872_general scripts/slurm_geom_full_database_formal_training_seed0.sbatch
-```
-
-This path first scans the available GEOM-Drugs `rdkit_folder/drugs` raw tree read-only, writes one processed record and one conformer per extractable molecule, writes a 90/5/5 random split at seed `0`, and then runs the same formal training design for isotropic and stiffness-structured modes at seed `0`. It preserves the formal 10000-molecule model (`minimal_linear_velocity_pilot` / `single_linear_velocity_pilot`), optimizer (`SGD`, `learning_rate: 1.0e-2`), checkpoint/reload behavior, one-step sampling diagnostic (`sample_step_count: 1`, `sample_step_size: 0.1`), validation-selected checkpoint selection, and early-stop rule (`monitor: validation_loss_after_step`, `patience: 200`, `min_delta: 1.0e-6`, `max_steps: 2000`, `hard_max_steps: 2000`).
-
-It prepares:
-- `data/processed/geom_drugs_full_database/molecules.json`
-- `data/processed/geom_drugs_full_database/manifest.json`
-- `data/splits/geom_drugs_full_database/random_seed0/split.json`
-- `data/splits/geom_drugs_full_database/random_seed0/manifest.json`
-
-Per mode it writes manifest/result/log files plus reusable best/latest checkpoints named like:
-- `experiments/results/geom_formal_full_database_train_isotropic_steps2000_seed0.json`
-- `experiments/checkpoints/geom_formal_full_database_train_isotropic_steps2000_seed0_best.pt`
-- `experiments/checkpoints/geom_formal_full_database_train_isotropic_steps2000_seed0_latest.pt`
-- matching `stiffness` files for seed `0`
-
-The per-run outputs are labeled `geom_drugs_full_database_formal_training_not_benchmark`, `benchmark_result: false`, `hardware: cpu_only`, `gpu_used: false`, `formal_training_run: true`, `full_database_formal_training_run: true`, `checkpoint_reusable: true`, `checkpoint_selected_by_validation: true`, and `checkpoint_selection_metric: validation_loss_after_step`. This is a first formal full-database training path, not a benchmark result; it does not modify raw data or the environment and should not be submitted without explicit approval.
-
-Prepared parallel GPU full-database formal seed1/seed2 path:
-
-```bash
-python scripts/run_geom_full_database_formal_training_single.py --mode isotropic --seed 1 --device cuda --require-cuda
-```
-
-The single-job entry point runs one source mode and one training seed. It preserves the current full-database formal design and keeps the policy that each job regenerates its own processed artifact plus split by writing to run-specific paths such as:
-- `data/processed/geom_drugs_full_database_runs/isotropic_seed1/molecules.json`
-- `data/splits/geom_drugs_full_database_runs/isotropic_seed1/random_seed0/split.json`
-
-The split construction remains the same 90/5/5 random split with split seed `0`; the training seed is the only seed varied. Prepared GPU SLURM wrappers:
-- `scripts/slurm_geom_full_database_formal_training_isotropic_seed1_gpu.sbatch`
-- `scripts/slurm_geom_full_database_formal_training_stiffness_seed1_gpu.sbatch`
-- `scripts/slurm_geom_full_database_formal_training_isotropic_seed2_gpu.sbatch`
-- `scripts/slurm_geom_full_database_formal_training_stiffness_seed2_gpu.sbatch`
-
-Submit only after explicit approval, one job per mode/seed combination. The recommended account is `torch_pr_872_general`: these jobs request one standard GPU and a substantial CPU-side raw-tree preprocessing step, so faster queue turnaround is likely more valuable than A100-class hardware. `torch_pr_226_chemistry` may provide stronger GPUs such as A100, but queue time may be longer and the current minimal linear formal model is unlikely to benefit enough to justify that account by default.
-
-Prepared full-database scaffold-split formal seed0 path:
-
-```bash
-python scripts/prepare_geom_full_database_scaffold_split.py
-python scripts/run_geom_full_database_scaffold_formal_training_single.py --mode isotropic --seed 0 --device cuda --require-cuda
-python scripts/run_geom_full_database_scaffold_formal_training_single.py --mode stiffness_structured --seed 0 --device cuda --require-cuda
-python scripts/run_geom_full_database_scaffold_formal_training_single.py --mode isotropic --seed 1 --device cuda --require-cuda
-python scripts/run_geom_full_database_scaffold_formal_training_single.py --mode stiffness_structured --seed 1 --device cuda --require-cuda
-python scripts/run_geom_full_database_scaffold_formal_training_single.py --mode isotropic --seed 2 --device cuda --require-cuda
-python scripts/run_geom_full_database_scaffold_formal_training_single.py --mode stiffness_structured --seed 2 --device cuda --require-cuda
-```
-
-For cluster execution, use the prepared SLURM scripts only after explicit approval:
-
-```bash
-sbatch --account=torch_pr_872_general scripts/slurm_geom_full_database_scaffold_split.sbatch
-sbatch --account=torch_pr_872_general scripts/slurm_geom_full_database_scaffold_formal_training_isotropic_seed0_gpu.sbatch
-sbatch --account=torch_pr_872_general scripts/slurm_geom_full_database_scaffold_formal_training_stiffness_seed0_gpu.sbatch
-sbatch --account=torch_pr_872_general scripts/slurm_geom_full_database_scaffold_formal_training_isotropic_seed1_gpu.sbatch
-sbatch --account=torch_pr_872_general scripts/slurm_geom_full_database_scaffold_formal_training_stiffness_seed1_gpu.sbatch
-sbatch --account=torch_pr_872_general scripts/slurm_geom_full_database_scaffold_formal_training_isotropic_seed2_gpu.sbatch
-sbatch --account=torch_pr_872_general scripts/slurm_geom_full_database_scaffold_formal_training_stiffness_seed2_gpu.sbatch
-```
-
-The scaffold split command reads the cached full-database one-conformer processed artifact and writes only:
-- `data/splits/geom_drugs_full_database/scaffold_seed0/split.json`
-- `data/splits/geom_drugs_full_database/scaffold_seed0/manifest.json`
-
-The scaffold training commands require the cached processed artifact and cached scaffold split. They preserve the frozen full-database formal model, optimizer, learning rate, checkpoint/reload behavior, one-step sampling diagnostic, validation-selected checkpoint rule, early-stop rule, and hard step cap. Per mode they write outputs named like:
-- `experiments/results/geom_formal_full_database_scaffold_train_isotropic_steps2000_seed0.json`
-- `experiments/checkpoints/geom_formal_full_database_scaffold_train_isotropic_steps2000_seed0_best.pt`
-- `experiments/checkpoints/geom_formal_full_database_scaffold_train_isotropic_steps2000_seed0_latest.pt`
-- matching `stiffness` files for seed `0`
-- matching `isotropic` and `stiffness` files for seeds `1` and `2`
-
-These outputs are labeled `geom_drugs_full_database_formal_training_not_benchmark`, `benchmark_result: false`, `full_database_formal_training_run: true`, `checkpoint_reusable: true`, `checkpoint_selected_by_validation: true`, and `split_type: scaffold`. They are scaffold-split formal training artifacts, not benchmark results. GPU is more worthwhile here than in preprocessing-heavy per-run jobs because the processed artifact and split are reused, but the model is still small and the default account remains `torch_pr_872_general` for faster turnaround.
-
-Prepared full-database scaffold formal multiseed summary:
-
-```bash
-python scripts/compare_geom_full_database_scaffold_formal_multiseed.py
-```
-
-Run this after the scaffold-split formal outputs for seeds `0`, `1`, and `2` are present for both modes. It validates that all six inputs use the same full-database one-conformer scope, cached scaffold split, model-side formal settings, optimizer, learning rate, validation-selected checkpoint rule, one-step sampling diagnostic, and `2000`-step hard cap. It writes:
-- `experiments/results/geom_formal_full_database_scaffold_multiseed_summary.json`
-- `reports/tables/geom_formal_full_database_scaffold_multiseed_summary.md`
-
-The summary is labeled `geom_drugs_full_database_scaffold_formal_multiseed_summary_not_benchmark`, `benchmark_result: false`, `training_executed_by_summary: false`, `sampling_executed_by_summary: false`, `raw_data_modified: false`, `environment_modified: false`, and `gpu_used_by_summary: false`. It reports per-seed and aggregate best/reloaded validation losses, sampled RMSD means overall and by split, stop reasons, split counts, safety labels, and lower-is-better directional verdicts.
-
-Current full-database scaffold formal seed0 comparison:
-
-```bash
-python scripts/compare_geom_full_database_scaffold_formal_seed0.py
-```
-
-This reads the existing scaffold-split full-database formal seed0 result JSONs:
-- `experiments/results/geom_formal_full_database_scaffold_train_isotropic_steps2000_seed0.json`
-- `experiments/results/geom_formal_full_database_scaffold_train_stiffness_steps2000_seed0.json`
-
-It validates that both inputs use the same full-database one-conformer scope, cached scaffold split, seed, model-side formal settings, optimizer, learning rate, validation-selected checkpoint rule, one-step sampling diagnostic, and `2000`-step hard cap. It writes:
-- `experiments/results/geom_formal_full_database_scaffold_seed0_summary.json`
-- `reports/tables/geom_formal_full_database_scaffold_seed0_summary.md`
-
-The summary is labeled `geom_drugs_full_database_scaffold_formal_seed0_comparison_not_benchmark`, `benchmark_result: false`, `training_executed_by_summary: false`, `sampling_executed_by_summary: false`, `raw_data_modified: false`, `environment_modified: false`, and `gpu_used_by_summary: false`. It reports split counts, stop reasons, executed steps, best/reloaded validation losses, sampled RMSD means overall and by split, safety labels, and a lower-is-better directional verdict for stiffness vs isotropic.
-
-Current full-database formal seed0 comparison:
-
-```bash
-python scripts/compare_geom_full_database_formal_seed0.py
-```
-
-This reads the existing full-database formal seed0 result JSONs:
-- `experiments/results/geom_formal_full_database_train_isotropic_steps2000_seed0.json`
-- `experiments/results/geom_formal_full_database_train_stiffness_steps2000_seed0.json`
-
-It validates that both inputs use the same full-database one-conformer scope, random split, seed, model-side formal settings, optimizer, learning rate, validation-selected checkpoint rule, one-step sampling diagnostic, and `2000`-step hard cap. It writes:
-- `experiments/results/geom_formal_full_database_seed0_summary.json`
-- `reports/tables/geom_formal_full_database_seed0_summary.md`
-
-The summary is labeled `geom_drugs_full_database_formal_seed0_comparison_not_benchmark`, `benchmark_result: false`, `training_executed_by_summary: false`, `sampling_executed_by_summary: false`, `raw_data_modified: false`, `environment_modified: false`, and `gpu_used: false`. It reports split counts, stop reasons, best/reloaded validation losses, sampled RMSD means overall and by split, safety labels, and a lower-is-better directional verdict for stiffness vs isotropic.
-
-Current full-database formal multiseed summary:
-
-```bash
-python scripts/compare_geom_full_database_formal_multiseed.py
-```
-
-This reads the completed full-database formal result JSONs for isotropic and stiffness-structured modes over seeds `0`, `1`, and `2`. It validates that all inputs use the same full-database one-conformer scope, split counts, model-side formal settings, optimizer, learning rate, validation-selected checkpoint rule, one-step sampling diagnostic, and `2000`-step hard cap. It writes:
-- `experiments/results/geom_formal_full_database_multiseed_summary.json`
-- `reports/tables/geom_formal_full_database_multiseed_summary.md`
-
-The summary is labeled `geom_drugs_full_database_formal_multiseed_summary_not_benchmark`, `benchmark_result: false`, `training_executed_by_summary: false`, `sampling_executed_by_summary: false`, `raw_data_modified: false`, `environment_modified: false`, and `gpu_used_by_summary: false`. It reports split counts, stop reasons, best/reloaded validation losses, sampled RMSD means overall/train/val/test, per-seed outcomes, aggregate means, and a lower-is-better multiseed directional verdict for stiffness vs isotropic.
-
-Prepared full-database attribution phase:
-
-```bash
-python scripts/run_geom_full_database_attribution_formal_training_single.py --split-type random --mode harmonic_prior --seed 0 --device cuda --require-cuda
-python scripts/run_geom_full_database_attribution_formal_training_single.py --split-type random --mode torsion_only --seed 0 --device cuda --require-cuda
-python scripts/run_geom_full_database_attribution_formal_training_single.py --split-type scaffold --mode harmonic_prior --seed 0 --device cuda --require-cuda
-python scripts/run_geom_full_database_attribution_formal_training_single.py --split-type scaffold --mode torsion_only --seed 0 --device cuda --require-cuda
-```
-
-The same entry point supports modes `isotropic`, `harmonic_prior`, `torsion_only`, and `stiffness_structured`, split types `random` and `scaffold`, and seeds `0`, `1`, and `2`. It reuses:
-- `data/processed/geom_drugs_full_database/molecules.json`
-- `data/splits/geom_drugs_full_database/random_seed0/split.json`
-- `data/splits/geom_drugs_full_database/scaffold_seed0/split.json`
-
-It preserves the frozen formal model, optimizer, learning rate, checkpoint/reload behavior, validation-selected checkpoint rule, one-step sampling diagnostic, split logic, processed-output schema, and `2000`-step hard cap. It remains explicitly non-benchmark. Do not launch these commands on a login node as real training; use the prepared SLURM wrapper only after explicit approval.
-
-Prepared attribution SLURM wrapper:
-
-```bash
-STIFFLOW_ATTRIBUTION_SPLIT_TYPE=random \
-STIFFLOW_ATTRIBUTION_MODE=harmonic_prior \
-STIFFLOW_ATTRIBUTION_SEED=0 \
-sbatch --account=torch_pr_872_general scripts/slurm_geom_full_database_attribution_formal_training_gpu.sbatch
-```
-
-Use `torch_pr_872_general` by default because the jobs reuse cached preprocessing/splits, use the current modest GPU formal-training path, and should usually get faster turnaround than `torch_pr_226_chemistry`. The chemistry account may be appropriate only if there is a clear A100-class need, with likely longer queue time. Do not submit without explicit approval.
-
-Prepared full-database attribution summary:
-
-```bash
-python scripts/summarize_geom_full_database_attribution_phase.py
-```
-
-Run this only after the A/B/D/E result matrix exists for the requested split types and seeds. It writes:
-- `experiments/results/geom_formal_full_database_attribution_summary.json`
-- `reports/tables/geom_formal_full_database_attribution_summary.md`
-
-The summary is labeled `geom_drugs_full_database_attribution_phase_summary_not_benchmark`, `benchmark_result: false`, `training_executed_by_summary: false`, `sampling_executed_by_summary: false`, `raw_data_modified: false`, `environment_modified: false`, and `gpu_used_by_summary: false`. It compares isotropic, harmonic-prior, torsion-only, and stiffness-structured outputs, reports available sampled-coordinate physical diagnostics, and includes rotatable-bond-count stratification when sampled result rows contain `rotatable_bond_count`.
-
-Current bounded tiny real-data pilot comparison report:
-
-```bash
-python scripts/compare_tiny_real_pilot.py
-```
-
-This reads the two current bounded pilot result JSON files and writes a reporting-only comparison of pilot metadata, train/validation/test counts, final losses, per-step loss traces, and safety labels. It writes:
-- `experiments/results/geom_tiny_real_pilot_summary.json`
-- `reports/tables/geom_tiny_real_pilot_summary.md`
-
-The summary is labeled `tiny_real_data_bounded_pilot_comparison_not_benchmark`, `benchmark_result: false`, `hardware: cpu_only`, `gpu_used: false`, `training_executed_by_summary: false`, `sampling_executed_by_summary: false`, `larger_real_training_run_started: false`, and `slurm_account: null`. It does not read raw data, start training, run sampling, write checkpoints, use GPUs, submit jobs, or modify the environment.
-
-Current tiny real-data end-to-end smoke lifecycle summary:
-
-```bash
-python scripts/summarize_tiny_real_lifecycle.py
-```
-
-This reads the current tiny real-data result JSON files across the RDKit baseline, model dry-runs, execution smoke, single-step training smoke, bounded multi-step training smoke, and checkpoint/sampling smoke stages. It writes:
-- `experiments/results/geom_tiny_real_lifecycle_summary.json`
-- `reports/tables/geom_tiny_real_lifecycle_summary.md`
-
-The summary is labeled `tiny_real_data_lifecycle_smoke_summary_not_benchmark`, `benchmark_result: false`, `hardware: cpu_only`, `larger_real_training_run_started: false`, and `slurm_account: null`. It is a reporting-only aggregation of existing smoke artifacts; it does not read raw data, load checkpoint contents, start training, run sampling, or produce benchmark results.
-
-Current tiny real-data dry-run comparison report:
-
-```bash
-python scripts/compare_tiny_real_results.py
-```
-
-This reads the current tiny real-data RDKit baseline result plus the isotropic and stiffness-structured model-side dry-run results, then writes:
-- `experiments/results/geom_tiny_real_dry_run_summary.json`
-- `reports/tables/geom_tiny_real_dry_run_summary.md`
-
-The summary is labeled `tiny_real_data_comparison_dry_run_not_benchmark`, `benchmark_result: false`, `hardware: cpu_only`, `training_executed: false`, `model_training_started: false`, `sampling_executed: false`, and `slurm_account: null`. It is a reporting-only aggregation of dry-run artifacts, not a benchmark comparison.
-
----
-
-## Run naming
-
-Use informative names that encode at least:
-- split type
-- corruption mode
-- seed
-- dataset size or subset tag
-
-Example style:
-- `smoke_random_isotropic_seed0`
-- `smoke_random_stiffness_seed0`
-- `core_scaffold_torsion_only_seed1`
-
----
-
-## What counts as reproducible
-
-A run counts as reproducible if another person can:
-1. activate the same environment,
-2. locate the same data subset,
-3. use the same config,
-4. run the same entry point,
-5. recover the same key outputs and approximately the same metrics.
-
----
-
-## Early-stage policy
-
-Because this repository is still being bootstrapped, early scripts may be stubs.
-That is acceptable.
-
-However, every stub should make the future reproducibility path clearer, not blurrier.
-
-Good stub behavior:
-- validate config loading;
-- print or write a manifest;
-- fail clearly when a required file is missing.
-
-Bad stub behavior:
-- silently skip missing data;
-- write fake metrics;
-- claim to have executed training when nothing ran.
-
----
-
-## Cluster-job policy for reproducibility
-
-For any scheduled run, reproducibility also requires:
-- the SLURM script or launch command;
-- the chosen account;
-- requested resources (CPU, GPU, memory, wall time);
-- output and error log paths.
-
-Two accounts are available:
-- `torch_pr_872_general` for shorter, lighter, debugging, CPU, or modest-GPU jobs;
-- `torch_pr_226_chemistry` for chemistry-heavy or higher-end GPU jobs, including cases that may need A100-class resources.
-
-Account choice should be recorded in the manifest when a job is submitted.
-
----
-
-## Prompt behavior before expensive runs
-
-Before launching a nontrivial run, a coding agent should ask for approval and include:
-- what will be run;
-- whether it is a smoke test or real experiment;
-- whether it is CPU or GPU;
-- which account it recommends and why;
-- whether queue time may be longer because of the account / GPU class.
-
-Example:
-
-> This is a real GPU training run, not a tiny smoke test. I recommend `torch_pr_226_chemistry` because it may benefit from A100-class resources, but queue time may be longer. Do you want me to prepare or submit the SLURM job?
-
----
-
-## Later additions
-
-This file should later expand to include:
-- exact training entry points;
-- canonical SLURM launch examples;
-- expected runtime classes for smoke tests vs full runs;
-- evaluation aggregation conventions;
-- seed-averaging policy.
+Any future physical benchmark or additional evaluation phase requires a new explicit approval.

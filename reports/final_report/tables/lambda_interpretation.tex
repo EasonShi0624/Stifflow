@@ -1,0 +1,18 @@
+\begin{table}[t]
+\centering
+\small
+\caption{Hybrid-lambda COV/AMR interpretation. The harmonic prior is shown as the $\lambda=0$ reference. Higher is better for COV; lower is better for AMR.}
+\label{tab:lambda-interpretation}
+\begin{tabular}{lrrrrl}
+\toprule
+Entry & COV-R & COV-P & AMR-R & AMR-P & Interpretation \\
+\midrule
+Harmonic prior ($\lambda=0$) & 0.18484 & 1.00000 & 1.48986 & 0.09604 & Recall anchor \\
+Hybrid $\lambda=0.025$ & 0.18489 & 1.00000 & 1.49007 & 0.09511 & Best hybrid recall/balanced \\
+Hybrid $\lambda=0.1$ & 0.18481 & 1.00000 & 1.49059 & 0.09263 & Low-lambda frontier point \\
+Hybrid $\lambda=1.0$ & 0.18441 & 1.00000 & 1.49708 & 0.06537 & Mid-lambda frontier point \\
+Hybrid $\lambda=3.0$ & 0.18413 & 1.00000 & 1.49855 & 0.06052 & Precision-favorable \\
+Hybrid $\lambda=5.0$ & 0.18411 & 1.00000 & 1.49881 & 0.05975 & Precision/RMSD-favorable \\
+\bottomrule
+\end{tabular}
+\end{table}

@@ -398,14 +398,21 @@ def validate_formal_full_database_config(config: dict[str, Any]) -> None:
         raise ValueError(f"full-database hard_max_steps must remain fixed at {FORMAL_10000_HARD_MAX_STEPS}")
     optimizer_pilot = bool(config["train"].get("optimizer_pilot", False))
     final_optimized_followup = bool(config["train"].get("final_optimized_followup", False))
-    if optimizer_pilot and final_optimized_followup:
-        raise ValueError("optimizer_pilot and final_optimized_followup are mutually exclusive")
+    low_lambda_adamw_refinement = bool(config["train"].get("low_lambda_adamw_refinement", False))
+    if sum([optimizer_pilot, final_optimized_followup, low_lambda_adamw_refinement]) > 1:
+        raise ValueError("optimizer_pilot, final_optimized_followup, and low_lambda_adamw_refinement are mutually exclusive")
     optimizer_name = str(config["train"].get("optimizer", "SGD"))
     learning_rate = float(config["train"]["learning_rate"])
     if optimizer_pilot:
         _validate_optimizer_pilot_config(config, optimizer_name=optimizer_name, learning_rate=learning_rate)
     elif final_optimized_followup:
         _validate_final_optimized_followup_config(
+            config,
+            optimizer_name=optimizer_name,
+            learning_rate=learning_rate,
+        )
+    elif low_lambda_adamw_refinement:
+        _validate_low_lambda_adamw_refinement_config(
             config,
             optimizer_name=optimizer_name,
             learning_rate=learning_rate,
@@ -538,6 +545,32 @@ def _validate_final_optimized_followup_config(
             raise ValueError("final optimized hybrid follow-up must use modulation_strength=5.0")
 
 
+def _validate_low_lambda_adamw_refinement_config(
+    config: dict[str, Any],
+    optimizer_name: str,
+    learning_rate: float,
+) -> None:
+    if config["data"].get("split_type") not in {"random", "scaffold"}:
+        raise ValueError("low-lambda AdamW refinement configs are limited to random or scaffold splits")
+    if int(config["experiment"]["seed"]) not in FORMAL_FULL_DATABASE_SEED_SET:
+        raise ValueError("low-lambda AdamW refinement configs are limited to seeds 0, 1, and 2")
+    if config["corruption"]["mode"] != "hybrid_harmonic_stiffness_v1":
+        raise ValueError("low-lambda AdamW refinement configs are limited to hybrid_harmonic_stiffness_v1")
+    if optimizer_name != "AdamW":
+        raise ValueError("low-lambda AdamW refinement configs must use optimizer=AdamW")
+    if abs(learning_rate - 1.0e-3) > 1.0e-12:
+        raise ValueError("low-lambda AdamW refinement configs must use learning_rate=1e-3")
+    if float(config["train"].get("optimizer_weight_decay", 0.0)) != 0.0:
+        raise ValueError("low-lambda AdamW refinement configs must keep optimizer_weight_decay=0.0")
+    scheduler = config["train"].get("lr_scheduler")
+    if scheduler is not None and scheduler is not False:
+        raise ValueError("low-lambda AdamW refinement configs must not use an LR scheduler")
+    allowed_strengths = {0.025, 0.05, 0.1, 0.15, 0.2, 0.25, 0.5, 1.0, 3.0}
+    strength = float(config["corruption"].get("modulation_strength"))
+    if not any(abs(strength - value) <= 1.0e-12 for value in allowed_strengths):
+        raise ValueError("low-lambda AdamW refinement modulation_strength is not in the Stage 1 candidate set")
+
+
 def _run_name(
     corruption_mode: str,
     seed: int,
@@ -584,7 +617,11 @@ def _hybrid_strength(corruption_config: dict[str, Any] | None, key: str) -> floa
 
 
 def _lambda_label(value: float) -> str:
-    return f"lambda{int(round(float(value) * 100)):03d}"
+    value = float(value)
+    centi_value = value * 100.0
+    if abs(centi_value - round(centi_value)) <= 1.0e-9:
+        return f"lambda{int(round(centi_value)):03d}"
+    return f"lambda{int(round(value * 1000.0)):04d}"
 
 
 def _hybrid_source_strength(corruption_config: dict[str, Any]) -> float | None:
