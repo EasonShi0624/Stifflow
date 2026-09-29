@@ -10,8 +10,10 @@ set -euo pipefail
 : "${STIFFLOW_LABEL_MANIFEST:?Export the frozen split manifest path}"
 : "${STIFFLOW_LABEL_OUTPUT:?Export a fresh label output directory}"
 export ETFLOW_ENV="${ETFLOW_ENV:-$HOME/anaconda3/envs/etflow}"
+set +u
 source "$(dirname "$(dirname "$ETFLOW_ENV")")/etc/profile.d/conda.sh"
 conda activate "$ETFLOW_ENV"
+set -u
 export PYTHONPATH="$STIFFLOW_WORKSPACE/stifflow-v1:$STIFFLOW_WORKSPACE/stifflow-v1-alternative-A:$STIFFLOW_WORKSPACE/stifflow-v1-benchmark"
 export OMP_NUM_THREADS=8 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
 export PYTHONDONTWRITEBYTECODE=1

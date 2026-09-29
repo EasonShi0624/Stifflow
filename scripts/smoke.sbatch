@@ -9,8 +9,10 @@
 set -euo pipefail
 : "${STIFFLOW_WORKSPACE:?Export the absolute workspace path before sbatch}"
 export ETFLOW_ENV="${ETFLOW_ENV:-$HOME/anaconda3/envs/etflow}"
+set +u
 source "$(dirname "$(dirname "$ETFLOW_ENV")")/etc/profile.d/conda.sh"
 conda activate "$ETFLOW_ENV"
+set -u
 export PYTHONPATH="$STIFFLOW_WORKSPACE/stifflow-v1:$STIFFLOW_WORKSPACE/stifflow-v1-alternative-A:$STIFFLOW_WORKSPACE/stifflow-v1-benchmark"
 export OMP_NUM_THREADS=4
 export PYTHONDONTWRITEBYTECODE=1
