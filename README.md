@@ -100,7 +100,8 @@ python -m stifflow.smoke --help
 - `targets.py`：独立 Gaussian z 和 Haar proper rotation；同时旋转目标与两个采样向量，
   不对齐源噪声。时间只拒绝转换为 float32 后的精确 0/1，不裁掉固定端点区间。
 - `data.py`：冻结文件名顺序与分子级划分；保留 top-30 原始构象、原始权重/能量和稳定构象 ID。
-  清单仅验证当前原始 `glob` 顺序与官方测试隔离，不能独立证明历史 train/val 文件顺序。
+  清单冻结当前原始 `glob` 顺序；该顺序下官方 1000 测试分子与 `split.npy` 的 test 数组并不重合，
+  历史 train/val 文件顺序仍无法独立证明（见“数据与 MMFF94 审计命令”中的实测记录）。
 - `stiffness.py`：原目标的副本做 MMFF94 弛豫，再 proper-align 至原目标；能量 kcal/mol、长度 Å，
   epsilon_E=RT=0.5924849497，kappa_min=kappa_rot=epsilon_E/(1 Å)^2，是已选试运行尺度。
   梯度中心差分 h=1e-4 Å 并检查 h/2；每次 CalcGrad 前对同坐标 CalcEnergy，防止 RDKit 复用旧距离缓存。
@@ -136,7 +137,14 @@ python -m stifflow.stiffness --manifest cache/qm9-split-manifest.json \
   --output cache/qm9-mmff-audit-new --molecules 2 --conformers 1 --max-atoms 12
 ```
 
-清单计数 106586/13323/13323，官方 1000 测试分子全部隔离于 test。2026-09-21 的实际审计产物在
+清单计数 106586/13323/13323。2026-09-29 在 SHHPC 复跑同一 `stifflow.data` 命令：官方 1000 个测试
+分子（`test_smiles.csv` 与 `test_mols.pkl` 键一致）按官方 `prepare_data` 使用的 `rdkit_folder/qm9`
+glob 映射只有 87 个落在 `split.npy` 的 test 数组，806 落 train、107 落 val，隔离校验以 913 个失败
+分子退出；此前“官方 1000 测试分子全部隔离于 test”的结论无法在本机数据上复现。ET-Flow
+`prepare_data.py` 实际只用 `split.npy[0]/[1]`（train/val）和 `test_mols.pkl`（test），若按其训练，
+913/1000 官方测试分子会进入 train/val；确认官方划分口径前，不应把该 1000 分子视为已隔离评测集。
+原始数据未改动，证据存在本集群 `runs/etflow-ref-smoke/phase1-splits.json` 与
+`phase1-stifflow-data.log`（未入库）。2026-09-21 的实际审计产物在
 `cache/qm9-mmff-audit-20260921/`：乙炔 `C#C` 通过，旋转秩 2，差分步长减半相对误差
 5.97e-8，A_E 因子残差 2.03e-15；能量二次比值随位移减半由 1.00036 趋近 1.000022。
 `C#CC#C` 以残余梯度 3.07844e-4 超阈值失败，完整失败记录保留，命令退出 1。
