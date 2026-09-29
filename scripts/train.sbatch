@@ -1,13 +1,14 @@
 #!/bin/bash
 #SBATCH --job-name=stifflow-train
-#SBATCH --account=torch_pr_1034_general
+#SBATCH --account=wjg3
+#SBATCH --partition=rooster,chem
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=32G
 #SBATCH --time=02:00:00
 set -euo pipefail
 : "${STIFFLOW_WORKSPACE:?Export workspace path}"
-: "${ETFLOW_ENV:?Export existing etflow environment prefix}"
+export ETFLOW_ENV="${ETFLOW_ENV:-$HOME/anaconda3/envs/etflow}"
 : "${STIFFLOW_TRAIN_LABELS:?Export complete training label manifest}"
 : "${STIFFLOW_VAL_LABELS:?Export complete validation label manifest}"
 source "$(dirname "$(dirname "$ETFLOW_ENV")")/etc/profile.d/conda.sh"

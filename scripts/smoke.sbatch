@@ -1,13 +1,14 @@
 #!/bin/bash
 #SBATCH --job-name=etflow-smoke
-#SBATCH --account=torch_pr_1034_general
+#SBATCH --account=wjg3
+#SBATCH --partition=rooster,chem
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=24G
 #SBATCH --time=00:30:00
 set -euo pipefail
 : "${STIFFLOW_WORKSPACE:?Export the absolute workspace path before sbatch}"
-: "${ETFLOW_ENV:?Export the existing etflow conda prefix before sbatch}"
+export ETFLOW_ENV="${ETFLOW_ENV:-$HOME/anaconda3/envs/etflow}"
 source "$(dirname "$(dirname "$ETFLOW_ENV")")/etc/profile.d/conda.sh"
 conda activate "$ETFLOW_ENV"
 export PYTHONPATH="$STIFFLOW_WORKSPACE/stifflow-v1:$STIFFLOW_WORKSPACE/stifflow-v1-alternative-A:$STIFFLOW_WORKSPACE/stifflow-v1-benchmark"

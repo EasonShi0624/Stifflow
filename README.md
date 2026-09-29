@@ -146,6 +146,9 @@ python -m stifflow.stiffness --manifest cache/qm9-split-manifest.json \
 大于 4 个分子或 2 个构象的预处理必须在 Slurm 内；本轮未运行。完整训练缓存须覆盖每个入选
 分子的全部 retained top-30 构象，标记 audit_partial=false，且失败已通过明确共同清单解决。
 不要把 max-atoms 审计过滤直接沿用到正式 pilot。
+更大规模预处理提交 `scripts/labels.sbatch`（CPU，默认 partition `parallel,debug,chem,rooster`）：
+export `STIFFLOW_LABEL_MANIFEST` 与 `STIFFLOW_LABEL_OUTPUT`，其它参数透传，例如
+`sbatch scripts/labels.sbatch --molecules 128 --conformers 30 --split val`；该脚本不自动提交。
 
 ## 共享训练和生成入口（待运行）
 
@@ -200,6 +203,8 @@ git -C stifflow-v1 worktree add ../stifflow-v1-benchmark benchmark-harness
 # 使用只读参考代码（本次复用版本），不在其中开发。
 git clone https://github.com/shenoynikhil/ETFlow.git ETFlow-reference
 git -C ETFlow-reference checkout 80f82d7d142bc3872412d2966a8d71ed14462b18
+# editable 安装到目标环境；--no-deps 不改动现有依赖，preflight 要求 etflow 导入路径指向该目录。
+python -m pip install --no-deps -e ETFlow-reference
 
 export STIFFLOW_WORKSPACE="$PWD"
 # 激活目标集群已有、兼容的 etflow 环境后设置，不使用本集群的绝对路径。
@@ -208,9 +213,10 @@ export PYTHONPATH="$STIFFLOW_WORKSPACE/stifflow-v1:$STIFFLOW_WORKSPACE/stifflow-
 export PYTHONDONTWRITEBYTECODE=1
 ```
 
-目标环境的实际 `etflow` 导入路径需指向所核验的 `ETFlow-reference`；先在目标集群执行 preflight，
-不要假设两个集群安装相同。本次未新建环境或自动安装依赖。`scripts/*.sbatch` 是当前站点的
-Slurm 模板；目标集群必须替换 account/partition/GPU 资源参数，并按当地规则提交。
+目标环境的实际 `etflow` 导入路径需指向所核验的 `ETFlow-reference`（上面的 editable 安装即满足）；
+先在目标集群执行 preflight，不要假设两个集群安装相同。SHHPC/nyushc 的 `scripts/*.sbatch` 已配置
+account `wjg3`、GPU partition `rooster,chem`、CPU partition `parallel,debug,chem,rooster`，
+`ETFLOW_ENV` 默认 `$HOME/anaconda3/envs/etflow`；其它站点必须替换这些资源参数，并按当地规则提交。
 
 数据、checkpoint、缓存、运行结果和原先未跟踪的 formulation PDF/LaTeX **不随本次代码推送**。
 它们需由用户在目标集群提供；README 中 `cache/`、`runs/` 的既有验证记录只在当前工作区，
