@@ -33,11 +33,21 @@ def verified_path(record):
 
 def molecule_identity(smiles):
     mol = Chem.MolFromSmiles(smiles)
+    sanitized = mol is not None
+    if mol is None:
+        # GEOM summary keys include radicals/zwitterions that fail sanitization;
+        # fall back to an unsanitized parse and canonical string.
+        mol = Chem.MolFromSmiles(smiles, sanitize=False)
     if mol is None:
         raise ValueError(f"Unparseable inventory molecule: {smiles}")
     for atom in mol.GetAtoms():
         atom.SetAtomMapNum(0)
-    return Chem.MolToSmiles(Chem.RemoveHs(mol), isomericSmiles=True)
+    if sanitized:
+        return Chem.MolToSmiles(Chem.RemoveHs(mol), isomericSmiles=True)
+    try:
+        return Chem.MolToSmiles(mol, canonical=True, isomericSmiles=True)
+    except Exception:
+        return smiles
 
 
 class OfficialDataset:

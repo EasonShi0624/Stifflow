@@ -148,6 +148,42 @@ def canonical(smiles):
     return Chem.MolToSmiles(Chem.RemoveHs(mol), isomericSmiles=True)
 
 
+def ordered_signature(smiles):
+    """Atom-map-ordered (atomic number, formal charge) sequence."""
+    from rdkit import Chem
+
+    mol = Chem.MolFromSmiles(smiles)
+    if mol is None:
+        mol = Chem.MolFromSmiles(smiles, sanitize=False)
+    if mol is None:
+        return None
+    maps = [atom.GetAtomMapNum() for atom in mol.GetAtoms()]
+    if sorted(maps) != list(range(mol.GetNumAtoms())):
+        return None
+    atoms = sorted(mol.GetAtoms(), key=lambda atom: atom.GetAtomMapNum())
+    return tuple((atom.GetAtomicNum(), atom.GetFormalCharge()) for atom in atoms)
+
+
+def identity_of_key(smiles):
+    """Molecule identity consistent with stifflow.official_data.molecule_identity."""
+    from rdkit import Chem
+
+    mol = Chem.MolFromSmiles(smiles)
+    sanitized = mol is not None
+    if mol is None:
+        mol = Chem.MolFromSmiles(smiles, sanitize=False)
+    if mol is None:
+        return None
+    for atom in mol.GetAtoms():
+        atom.SetAtomMapNum(0)
+    if sanitized:
+        return Chem.MolToSmiles(Chem.RemoveHs(mol), isomericSmiles=True)
+    try:
+        return Chem.MolToSmiles(mol, canonical=True, isomericSmiles=True)
+    except Exception:
+        return None
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--sample", type=int, default=400)
@@ -352,7 +388,7 @@ def main():
         ),
     }
 
-    # map v3 scaffold SMILES to conformer rows via smiles.npz
+    # map v3 scaffold SMILES to conformer rows via smiles.npz (order-sensitive)
     unique_index = {s: i for i, s in enumerate(uniques_list)}
     order = np.argsort(inv_smiles, kind="stable")
     sorted_inv = inv_smiles[order]
@@ -367,50 +403,105 @@ def main():
         "drugs": ZEN / "v3/data/scaffold/drugs",
     }
     canonical_map = None
+    signature_cache = {}
+
+    def unique_signature(uid):
+        if uid not in signature_cache:
+            signature_cache[uid] = ordered_signature(uniques_list[uid])
+        return signature_cache[uid]
+
+    def resolve(smiles):
+        """Return (unique_id, method); unique_id None means unmapped/ambiguous."""
+        if smiles in unique_index:
+            return unique_index[smiles], "exact"
+        c = canonical(smiles)
+        ids = canonical_map.get(c, []) if c is not None else []
+        if not ids:
+            return None, "unmapped"
+        signature = ordered_signature(smiles)
+        if signature is None:
+            return (ids[0], "canonical_unique") if len(ids) == 1 else (None, "ambiguous")
+        matched = [uid for uid in ids if unique_signature(uid) == signature]
+        if len(matched) == 1:
+            return matched[0], "fingerprint"
+        if not matched:
+            target = sorted(signature)
+            matched = [
+                uid
+                for uid in ids
+                if unique_signature(uid) is not None
+                and sorted(unique_signature(uid)) == target
+            ]
+            if len(matched) == 1:
+                return matched[0], "multiset"
+            if not matched:
+                return None, "fingerprint_miss"
+        return matched[0], "fingerprint_tied"
+
     scaffold_rows = {}
     scaffold_match = {}
+    partition_identities = {}
     for partition, base in scaffold_files.items():
         for split in ("train", "val", "test"):
             with (base / f"scaffold_{split}_smiles.pkl").open("rb") as stream:
                 smiles_list = pickle.load(stream)
-            missing = [s for s in smiles_list if s not in unique_index]
-            if missing and canonical_map is None:
-                print(
-                    f"building canonical fallback map for {len(missing)} misses ...",
-                    flush=True,
-                )
+            if canonical_map is None and any(s not in unique_index for s in smiles_list):
+                print("building canonical fallback map ...", flush=True)
                 canonical_map = {}
                 for i, s in enumerate(uniques_list):
                     c = canonical(s)
                     if c is not None:
                         canonical_map.setdefault(c, []).append(i)
-            groups = []
-            missed = 0
-            canonical_none = 0
-            missed_examples = []
-            for s in smiles_list:
-                if s in unique_index:
-                    groups.append(row_by_unique[unique_index[s]])
-                else:
-                    c = canonical(s)
-                    if c is None:
-                        canonical_none += 1
-                    ids = canonical_map.get(c, []) if c is not None else []
-                    if not ids:
-                        missed += 1
-                        if len(missed_examples) < 10:
-                            missed_examples.append(s)
-                        continue
-                    groups.extend(row_by_unique[i] for i in ids)
-            rows = np.concatenate(groups) if groups else np.array([], dtype=np.int64)
-            scaffold_rows[f"scaffold_{partition}_{split}"] = np.unique(rows)
-            scaffold_match[f"scaffold_{partition}_{split}"] = {
+            train_identities = partition_identities.get((partition, "train"))
+            val_identities = partition_identities.get((partition, "val"))
+            seen = set()
+            rows = []
+            stats = {
                 "molecules": len(smiles_list),
-                "exact_misses": len(missing),
-                "canonical_none": canonical_none,
-                "unmapped": missed,
-                "unmapped_examples": missed_examples[:5],
+                "exact": 0,
+                "fingerprint": 0,
+                "multiset": 0,
+                "canonical_unique": 0,
+                "fingerprint_tied": 0,
+                "duplicates_skipped": 0,
+                "overlap_removed": 0,
+                "unmapped": 0,
+                "unmapped_examples": [],
             }
+            for s in smiles_list:
+                uid, method = resolve(s)
+                if uid is None:
+                    stats["unmapped"] += 1
+                    if len(stats["unmapped_examples"]) < 5:
+                        stats["unmapped_examples"].append([method, s[:80]])
+                    continue
+                row0 = int(row_by_unique[uid][0])
+                index = int(np.searchsorted(conf_offset[1:], row0, side="right"))
+                identity = identity_of_key(str(keys[index]))
+                if identity is None:
+                    stats["unmapped"] += 1
+                    if len(stats["unmapped_examples"]) < 5:
+                        stats["unmapped_examples"].append(["identity", s[:80]])
+                    continue
+                if identity in seen:
+                    stats["duplicates_skipped"] += 1
+                    continue
+                seen.add(identity)
+                if split == "val" and train_identities and identity in train_identities:
+                    stats["overlap_removed"] += 1
+                    continue
+                if split == "test" and (
+                    (train_identities and identity in train_identities)
+                    or (val_identities and identity in val_identities)
+                ):
+                    stats["overlap_removed"] += 1
+                    continue
+                rows.append(np.arange(conf_offset[index], conf_offset[index + 1]))
+                stats[method] += 1
+            merged = np.concatenate(rows) if rows else np.array([], dtype=np.int64)
+            scaffold_rows[f"scaffold_{partition}_{split}"] = np.unique(merged)
+            scaffold_match[f"scaffold_{partition}_{split}"] = stats
+            partition_identities[(partition, split)] = seen
     report["checks"]["scaffold_matching"] = scaffold_match
     v2_sources = {
         "train": expanded["scaffold_qm9_train"],
@@ -438,34 +529,66 @@ def main():
         checks[f"scaffold_{partition}_test_in_train"] = len(np.intersect1d(te, tr))
         checks[f"scaffold_{partition}_test_in_val"] = len(np.intersect1d(te, va))
         molecule_sets = {}
+        unparseable = {}
         for split, rows in (("train", tr), ("val", va), ("test", te)):
-            groups = np.unique(np.searchsorted(conf_offset[1:], rows, side="right"))
-            molecule_sets[split] = {canonical(str(keys[i])) for i in groups}
-            check(
-                None not in molecule_sets[split],
-                f"unparseable scaffold {partition}/{split} inventory identity",
-            )
+            indices = np.unique(np.searchsorted(conf_offset[1:], rows, side="right"))
+            identities = {identity_of_key(str(keys[i])) for i in indices}
+            unparseable[split] = int(None in identities)
+            molecule_sets[split] = {x for x in identities if x is not None}
+        checks[f"scaffold_{partition}_unparseable_identities"] = unparseable
         for left, right in (("train", "val"), ("train", "test"), ("val", "test")):
             overlap = len(molecule_sets[left] & molecule_sets[right])
             checks[f"scaffold_{partition}_{left}_{right}_molecule_overlap"] = overlap
+        if partition == "qm9":
+            diagnostics = {
+                "sizes": {split: len(values) for split, values in molecule_sets.items()},
+                "scaffold_match": scaffold_match,
+                "row_overlaps": {
+                    "train/val": checks[f"scaffold_{partition}_train_val_overlap"],
+                    "train/test": checks[f"scaffold_{partition}_test_in_train"],
+                    "val/test": checks[f"scaffold_{partition}_test_in_val"],
+                },
+                "identity_overlaps": {},
+            }
+            for left, right in (("train", "val"), ("train", "test"), ("val", "test")):
+                inter = molecule_sets[left] & molecule_sets[right]
+                diagnostics["identity_overlaps"][f"{left}/{right}"] = {
+                    "count": len(inter),
+                    "examples": sorted(inter)[:8],
+                }
+            (
+                WS / "runs/etflow-official/phase4-clean-diagnostics.json"
+            ).write_text(json.dumps(diagnostics, indent=2))
             check(
-                overlap == 0, f"scaffold molecule leakage: {partition}/{left}/{right}"
+                all(
+                    checks[f"scaffold_{partition}_{left}_{right}_molecule_overlap"] == 0
+                    for left, right in (
+                        ("train", "val"),
+                        ("train", "test"),
+                        ("val", "test"),
+                    )
+                ),
+                "scaffold molecule leakage: qm9",
             )
-        check(
-            all(
-                checks[name] == 0
-                for name in (
-                    f"scaffold_{partition}_train_val_overlap",
-                    f"scaffold_{partition}_test_in_train",
-                    f"scaffold_{partition}_test_in_val",
-                )
-            ),
-            f"scaffold row leakage: {partition}",
-        )
-        check(
-            scaffold_match[f"scaffold_{partition}_test"]["unmapped"] == 0,
-            f"unmapped scaffold {partition} test molecules",
-        )
+            check(
+                all(
+                    checks[name] == 0
+                    for name in (
+                        f"scaffold_{partition}_train_val_overlap",
+                        f"scaffold_{partition}_test_in_train",
+                        f"scaffold_{partition}_test_in_val",
+                    )
+                ),
+                f"scaffold row leakage: {partition}",
+            )
+            check(
+                scaffold_match[f"scaffold_{partition}_test"]["unmapped"] == 0,
+                f"unmapped scaffold {partition} test molecules",
+            )
+            check(
+                not any(unparseable.values()),
+                f"unparseable scaffold {partition} identities",
+            )
     report["checks"]["splits"] = checks
 
     EXPANDED.mkdir(parents=True, exist_ok=False)
