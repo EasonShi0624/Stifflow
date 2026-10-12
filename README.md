@@ -102,6 +102,29 @@ Ruff、Black、20 个 Python 文件语法和 5 个 Slurm 脚本语法通过；�
 这不包含真实 memmap 加载、128/32 完整标签、官方 GPU 生成、Lightning 恢复或 pilot；
 这些均标记为 **待 SHHPC 运行验证**。
 
+### 2026-10-13 SHHPC 执行记录（清洗变体 + pilot）
+
+官方 v3 scaffold QM9 列表核验（立体保留身份）：112744/9785/1000 字符串；train 内 155 个
+重复条目、val 内 7 个；train∩val 12 个分子（按骨架 45 个）；test 与 train/val 无重合。
+另有 592/45/2 个 summary key（自由基/两性离子）无法 sanitize。按用户确认执行清洗变体：
+按官方列表顺序去重、train∩val 保留 train、test 也移除与 train/val 的身份重合；同时用
+“原子序敏感指纹”重建 v3→memmap 映射（避免 canonical 回退的错映射），映射统一使用
+`molecule_identity` 的 sanitize=False 回退。清洗后 expanded 划分：train 111525 分子/
+1649352 行、val 9658/62652、test 993/8580，行级与分子级重合均为 0。官方 manifest 为
+`cache/qm9-v3-scaffold-new.json`（job 4171797）。
+
+标签与运行（全部通过）：train 128 分子/2126 行（3 个整分子剔除，job 4171820）、
+val 32/120（job 4171821，含 references）；smoke job 4171892（9m35s：preflight、官方
+val 生成、三方法 50 步 + 25 步中断恢复 verify_resume 全过）；pilot job 4172000（14m09s：
+三方法各 1000 步 + 32 分子生成/评测/汇总 `comparison.json`）。早期指标（不构成性能结论）：
+MAT-R mean precision/alternative_a/control = 1.588/0.835/0.880 Å，COV-R@0.5 = 0/0.031/0，
+四元手性一致率 2.5%/31.2%/27.2%。
+
+环境注意事项：GPU 节点首次 `import torch/etflow` 可能超过 preflight 探针 120s 超时；
+SHHPC 本地 wrapper 先做 import 预热（未改动上游脚本）后稳定通过。本次改动：
+`molecule_identity` 回退与 `validate_memmap.py` 重映射/清洗逻辑；旧校验/加载报告与旧
+expanded 划分以 `*-pre-clean` 保留。
+
 ## 历史 CPU 实现与验收记录
 
 按用户后续指示，暂缓 GPU 验收，先实现可在 CPU 检查的后续部分。
