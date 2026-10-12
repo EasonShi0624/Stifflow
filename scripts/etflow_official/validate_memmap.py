@@ -15,7 +15,7 @@ from pathlib import Path
 
 import numpy as np
 
-WS = Path(os.environ.get("STIFFLOW_WORKSPACE", "/gpfsnyu/scratch/ys6132/stifflow"))
+WS = Path(os.environ.get("STIFFLOW_WORKSPACE", Path(__file__).resolve().parents[3]))
 RAW = WS / "dataset/rdkit_folder"
 DEST = WS / "cache/etflow-official/geom-preprocessed"
 ZEN = WS / "cache/etflow-official/zenodo"
@@ -51,7 +51,6 @@ def compare_molecule(index):
     import datamol as dm
 
     key = str(_INVENTORY[0][index])
-    partition = str(_INVENTORY[1][index])
     atoms = int(_INVENTORY[2][index])
     confs = int(_INVENTORY[3][index])
     pickle_path = str(_INVENTORY[4][index])
@@ -67,15 +66,19 @@ def compare_molecule(index):
     with (RAW / pickle_path).open("rb") as stream:
         raw = pickle.load(stream)
     conf_list = raw["conformers"]
-    check(len(conf_list) == confs, f"{key}: conformer count {len(conf_list)} != {confs}")
+    check(
+        len(conf_list) == confs, f"{key}: conformer count {len(conf_list)} != {confs}"
+    )
     raw_pos = np.concatenate(
         [conf["rd_mol"].GetConformer().GetPositions() for conf in conf_list], axis=0
     ).astype(np.float32)
     expected_numbers = np.array(
-        [atom.GetAtomicNum() for atom in conf_list[0]["rd_mol"].GetAtoms()], dtype=np.float32
+        [atom.GetAtomicNum() for atom in conf_list[0]["rd_mol"].GetAtoms()],
+        dtype=np.float32,
     )
     expected_charges = np.array(
-        [atom.GetFormalCharge() for atom in conf_list[0]["rd_mol"].GetAtoms()], dtype=np.float32
+        [atom.GetFormalCharge() for atom in conf_list[0]["rd_mol"].GetAtoms()],
+        dtype=np.float32,
     )
     raw_energy = np.array([conf["totalenergy"] for conf in conf_list], dtype=np.float32)
     np.testing.assert_array_equal(positions.reshape(-1, 3), raw_pos)
@@ -93,7 +96,10 @@ def compare_molecule(index):
         for conf in conf_list
     ]
     for row, expected in zip(range(row0, row1), expected_smiles):
-        check(str(_SMILES_UNIQUE[_SMILES_INV[row]]) == expected, f"{key}: smiles row {row}")
+        check(
+            str(_SMILES_UNIQUE[_SMILES_INV[row]]) == expected,
+            f"{key}: smiles row {row}",
+        )
     return key
 
 
@@ -135,7 +141,7 @@ def canonical(smiles):
             import datamol as dm
 
             mol = dm.to_mol(smiles, remove_hs=False, ordered=True)
-        except Exception:
+        except (ValueError, RuntimeError, TypeError):
             mol = None
     if mol is None:
         return None
@@ -148,6 +154,12 @@ def main():
     parser.add_argument("--workers", type=int, default=32)
     parser.add_argument("--hash", action="store_true")
     args = parser.parse_args()
+    if not os.getenv("SLURM_JOB_ID"):
+        parser.error("Full memmap validation requires an SHHPC allocation")
+    if REPORT.exists() or EXPANDED.exists():
+        parser.error("Existing validation reports/splits are protected; reuse them")
+    if not 1 <= args.sample <= TOTAL_NUM_MOLS or args.workers < 1:
+        parser.error("Invalid sample or worker count")
     started = time.perf_counter()
     report = {"dest": str(DEST), "checks": {}}
 
@@ -179,26 +191,39 @@ def main():
     check(int(num_confs.sum()) == TOTAL_NUM_CONFORMERS, "inventory conformer count")
     atom_total = int((num_atoms * num_confs).sum())
     check(atom_total == TOTAL_NUM_ATOMS, "inventory atom count")
-    check(int(num_atoms.sum()) == TOTAL_ATOMS_UNIQUE_MOLS, "inventory unique atom count")
-    pidx = np.memmap(DEST / "pos_index_range.memmap", dtype=np.int32, mode="r", shape=(TOTAL_NUM_CONFORMERS, 2))
+    check(
+        int(num_atoms.sum()) == TOTAL_ATOMS_UNIQUE_MOLS, "inventory unique atom count"
+    )
+    pidx = np.memmap(
+        DEST / "pos_index_range.memmap",
+        dtype=np.int32,
+        mode="r",
+        shape=(TOTAL_NUM_CONFORMERS, 2),
+    )
     starts = np.asarray(pidx[:, 0], dtype=np.int64)
     ends = np.asarray(pidx[:, 1], dtype=np.int64)
     check(int(starts[0]) == 0, "first conformer does not start at 0")
-    check(int(ends[-1]) == TOTAL_NUM_ATOMS, "last conformer does not end at TOTAL_NUM_ATOMS")
+    check(
+        int(ends[-1]) == TOTAL_NUM_ATOMS,
+        "last conformer does not end at TOTAL_NUM_ATOMS",
+    )
     check(bool(np.all(ends > starts)), "nonpositive conformer span")
     check(bool(np.all(starts[1:] == ends[:-1])), "conformer atom ranges not contiguous")
     widths = ends - starts
     conf_offset = np.concatenate([[0], np.cumsum(num_confs)])
     expected_width = np.repeat(num_atoms, num_confs)
-    check(bool(np.array_equal(widths, expected_width)), "per-conformer atom counts differ from inventory")
+    check(
+        bool(np.array_equal(widths, expected_width)),
+        "per-conformer atom counts differ from inventory",
+    )
     atom_offsets = np.concatenate([[0], np.cumsum(num_atoms * num_confs)])
     check(
         bool(np.array_equal(starts[conf_offset[:-1]], atom_offsets[:-1])),
         "molecule starts differ from inventory",
     )
     report["checks"]["molecules_and_atoms"] = {
-        "molecules": int(len(keys)),
-        "conformers": int(len(widths)),
+        "molecules": len(keys),
+        "conformers": len(widths),
         "atoms": int(atom_total),
     }
 
@@ -227,13 +252,27 @@ def main():
     }
 
     # D. energies finite (full scan) and no zero-fill tail
-    energy = np.memmap(DEST / "energy.memmap", dtype=np.float32, mode="r", shape=(TOTAL_NUM_CONFORMERS,))
+    energy = np.memmap(
+        DEST / "energy.memmap",
+        dtype=np.float32,
+        mode="r",
+        shape=(TOTAL_NUM_CONFORMERS,),
+    )
     check(bool(np.isfinite(energy).all()), "nonfinite energy entries")
-    atomic = np.memmap(DEST / "atomic_inputs.memmap", dtype=np.float32, mode="r", shape=(TOTAL_NUM_ATOMS, 5))
-    tail = atomic[TOTAL_NUM_ATOMS - 50:]
-    check(bool(np.isfinite(tail).all()) and bool(np.abs(tail).sum() > 0), "zero-fill tail")
+    atomic = np.memmap(
+        DEST / "atomic_inputs.memmap",
+        dtype=np.float32,
+        mode="r",
+        shape=(TOTAL_NUM_ATOMS, 5),
+    )
+    tail = atomic[TOTAL_NUM_ATOMS - 50 :]
+    check(
+        bool(np.isfinite(tail).all()) and bool(np.abs(tail).sum() > 0), "zero-fill tail"
+    )
     sample_rows = np.linspace(0, TOTAL_NUM_ATOMS - 1, 20000, dtype=np.int64)
-    check(bool(np.isfinite(atomic[sample_rows]).all()), "nonfinite atomic_inputs sample")
+    check(
+        bool(np.isfinite(atomic[sample_rows]).all()), "nonfinite atomic_inputs sample"
+    )
     report["checks"]["energy"] = {"finite": True, "sampled_atoms": 20000}
 
     # E. raw-pickle sampling
@@ -258,7 +297,9 @@ def main():
         "pidx": pidx,
         "energy": energy,
     }
-    with mp.Pool(args.workers, initializer=init_worker, initargs=(inventory_tuple,)) as pool:
+    with mp.Pool(
+        args.workers, initializer=init_worker, initargs=(inventory_tuple,)
+    ) as pool:
         compared = pool.map(compare_molecule, sample_idx.tolist(), chunksize=4)
     report["checks"]["raw_comparison"] = {"sampled": len(compared), "all_equal": True}
 
@@ -274,7 +315,10 @@ def main():
         "scaffold_qm9_val": v2q / "scaffold_val_indices.npy",
     }.items():
         arr = np.load(path)
-        check(arr.size > 0 and arr.min() >= 0 and arr.max() < TOTAL_NUM_CONFORMERS, f"{name} out of range")
+        check(
+            arr.size > 0 and arr.min() >= 0 and arr.max() < TOTAL_NUM_CONFORMERS,
+            f"{name} out of range",
+        )
         expanded[name] = arr
 
     random_qm9_test = expand_rows(np.load(v2q / "count_indices.npy"))
@@ -288,12 +332,24 @@ def main():
         check(arr.max() < TOTAL_NUM_CONFORMERS, f"{name} out of range")
         expanded[name] = arr
     checks = {
-        "random_qm9_test_in_train": int(len(np.intersect1d(random_qm9_test, expanded["random_qm9_train"]))),
-        "random_qm9_test_in_val": int(len(np.intersect1d(random_qm9_test, expanded["random_qm9_val"]))),
-        "random_drugs_test_in_train": int(len(np.intersect1d(random_drugs_test, expanded["random_drugs_train"]))),
-        "random_drugs_test_in_val": int(len(np.intersect1d(random_drugs_test, expanded["random_drugs_val"]))),
-        "scaffold_qm9_test_in_train": int(len(np.intersect1d(scaffold_qm9_test, expanded["scaffold_qm9_train"]))),
-        "scaffold_qm9_test_in_val": int(len(np.intersect1d(scaffold_qm9_test, expanded["scaffold_qm9_val"]))),
+        "random_qm9_test_in_train": len(
+            np.intersect1d(random_qm9_test, expanded["random_qm9_train"])
+        ),
+        "random_qm9_test_in_val": len(
+            np.intersect1d(random_qm9_test, expanded["random_qm9_val"])
+        ),
+        "random_drugs_test_in_train": len(
+            np.intersect1d(random_drugs_test, expanded["random_drugs_train"])
+        ),
+        "random_drugs_test_in_val": len(
+            np.intersect1d(random_drugs_test, expanded["random_drugs_val"])
+        ),
+        "scaffold_qm9_test_in_train": len(
+            np.intersect1d(scaffold_qm9_test, expanded["scaffold_qm9_train"])
+        ),
+        "scaffold_qm9_test_in_val": len(
+            np.intersect1d(scaffold_qm9_test, expanded["scaffold_qm9_val"])
+        ),
     }
 
     # map v3 scaffold SMILES to conformer rows via smiles.npz
@@ -319,7 +375,10 @@ def main():
                 smiles_list = pickle.load(stream)
             missing = [s for s in smiles_list if s not in unique_index]
             if missing and canonical_map is None:
-                print(f"building canonical fallback map for {len(missing)} misses ...", flush=True)
+                print(
+                    f"building canonical fallback map for {len(missing)} misses ...",
+                    flush=True,
+                )
                 canonical_map = {}
                 for i, s in enumerate(uniques_list):
                     c = canonical(s)
@@ -362,19 +421,54 @@ def main():
         v2_arr = np.unique(v2_sources[split])
         v3_arr = scaffold_rows[f"scaffold_qm9_{split}"]
         overlap = np.intersect1d(v2_arr, v3_arr, assume_unique=True)
-        checks[f"scaffold_qm9_v2_vs_v3_{split}_equal"] = bool(np.array_equal(v2_arr, v3_arr))
-        checks[f"scaffold_qm9_v2_vs_v3_{split}_v2_only"] = int(v2_arr.size - overlap.size)
-        checks[f"scaffold_qm9_v2_vs_v3_{split}_v3_only"] = int(v3_arr.size - overlap.size)
+        checks[f"scaffold_qm9_v2_vs_v3_{split}_equal"] = bool(
+            np.array_equal(v2_arr, v3_arr)
+        )
+        checks[f"scaffold_qm9_v2_vs_v3_{split}_v2_only"] = int(
+            v2_arr.size - overlap.size
+        )
+        checks[f"scaffold_qm9_v2_vs_v3_{split}_v3_only"] = int(
+            v3_arr.size - overlap.size
+        )
     for partition in ("qm9", "drugs"):
         tr = scaffold_rows[f"scaffold_{partition}_train"]
         va = scaffold_rows[f"scaffold_{partition}_val"]
         te = scaffold_rows[f"scaffold_{partition}_test"]
-        checks[f"scaffold_{partition}_train_val_overlap"] = int(len(np.intersect1d(tr, va)))
-        checks[f"scaffold_{partition}_test_in_train"] = int(len(np.intersect1d(te, tr)))
-        checks[f"scaffold_{partition}_test_in_val"] = int(len(np.intersect1d(te, va)))
+        checks[f"scaffold_{partition}_train_val_overlap"] = len(np.intersect1d(tr, va))
+        checks[f"scaffold_{partition}_test_in_train"] = len(np.intersect1d(te, tr))
+        checks[f"scaffold_{partition}_test_in_val"] = len(np.intersect1d(te, va))
+        molecule_sets = {}
+        for split, rows in (("train", tr), ("val", va), ("test", te)):
+            groups = np.unique(np.searchsorted(conf_offset[1:], rows, side="right"))
+            molecule_sets[split] = {canonical(str(keys[i])) for i in groups}
+            check(
+                None not in molecule_sets[split],
+                f"unparseable scaffold {partition}/{split} inventory identity",
+            )
+        for left, right in (("train", "val"), ("train", "test"), ("val", "test")):
+            overlap = len(molecule_sets[left] & molecule_sets[right])
+            checks[f"scaffold_{partition}_{left}_{right}_molecule_overlap"] = overlap
+            check(
+                overlap == 0, f"scaffold molecule leakage: {partition}/{left}/{right}"
+            )
+        check(
+            all(
+                checks[name] == 0
+                for name in (
+                    f"scaffold_{partition}_train_val_overlap",
+                    f"scaffold_{partition}_test_in_train",
+                    f"scaffold_{partition}_test_in_val",
+                )
+            ),
+            f"scaffold row leakage: {partition}",
+        )
+        check(
+            scaffold_match[f"scaffold_{partition}_test"]["unmapped"] == 0,
+            f"unmapped scaffold {partition} test molecules",
+        )
     report["checks"]["splits"] = checks
 
-    EXPANDED.mkdir(parents=True, exist_ok=True)
+    EXPANDED.mkdir(parents=True, exist_ok=False)
     to_save = {
         "random_qm9_train": expanded["random_qm9_train"],
         "random_qm9_val": expanded["random_qm9_val"],
@@ -392,17 +486,24 @@ def main():
     saved = {}
     for name, arr in to_save.items():
         path = EXPANDED / f"{name}_indices.npy"
-        np.save(path, arr)
+        with path.open("xb") as stream:
+            np.save(stream, arr)
         saved[name] = {"rows": int(arr.size), "path": str(path.relative_to(WS))}
     report["expanded_splits"] = saved
 
     if args.hash:
         report["hashes"] = {
             name: sha256_file(DEST / name)
-            for name in ("atomic_inputs.memmap", "pos_index_range.memmap", "energy.memmap")
+            for name in (
+                "atomic_inputs.memmap",
+                "pos_index_range.memmap",
+                "energy.memmap",
+            )
         }
     report["seconds"] = time.perf_counter() - started
-    REPORT.write_text(json.dumps(report, indent=2))
+    REPORT.parent.mkdir(parents=True, exist_ok=True)
+    with REPORT.open("x") as stream:
+        json.dump(report, stream, indent=2)
     print(json.dumps(report["checks"]["splits"], indent=2))
     print(json.dumps(report["checks"]["molecules_and_atoms"], indent=2))
     print(f"report={REPORT}")

@@ -12,7 +12,7 @@ from pathlib import Path
 
 import numpy as np
 
-WS = Path(os.environ.get("STIFFLOW_WORKSPACE", "/gpfsnyu/scratch/ys6132/stifflow"))
+WS = Path(os.environ.get("STIFFLOW_WORKSPACE", Path(__file__).resolve().parents[3]))
 ZEN = WS / "cache/etflow-official/zenodo"
 OUT = WS / "cache/etflow-official/splits/manifest.json"
 
@@ -22,7 +22,11 @@ def file_hash(path):
     with path.open("rb") as stream:
         for block in iter(lambda: stream.read(1 << 20), b""):
             digest.update(block)
-    return {"path": str(path.relative_to(WS)), "sha256": digest.hexdigest(), "bytes": path.stat().st_size}
+    return {
+        "path": str(path.relative_to(WS)),
+        "sha256": digest.hexdigest(),
+        "bytes": path.stat().st_size,
+    }
 
 
 def array_info(path):
@@ -33,7 +37,7 @@ def array_info(path):
         "dtype": str(arr.dtype),
         "min": int(arr.min()),
         "max": int(arr.max()),
-        "unique": int(len(np.unique(arr))),
+        "unique": len(np.unique(arr)),
     }
 
 
@@ -46,6 +50,10 @@ def expand(count_indices):
 
 
 def main():
+    if not os.getenv("SLURM_JOB_ID"):
+        raise RuntimeError("Full split checks require an SHHPC allocation")
+    if OUT.exists():
+        raise FileExistsError(f"Existing manifest is protected: {OUT}")
     manifest = {
         "scheme": "ET-Flow clean-sde memmap (branch clean-sde@2f20cad)",
         "sources": {
@@ -108,14 +116,16 @@ def main():
         info = file_hash(path)
         with path.open("rb") as stream:
             obj = pickle.load(stream)
-        info["molecules"] = int(len(obj))
+        info["molecules"] = len(obj)
         manifest["files"][label] = info
 
     def rows(name):
         return set(np.load(ZEN / f"v2/{name}").tolist())
 
     rq_tr, rq_va = rows("QM9/train_indices.npy"), rows("QM9/val_indices.npy")
-    sq_tr, sq_va = rows("QM9/scaffold_train_indices.npy"), rows("QM9/scaffold_val_indices.npy")
+    sq_tr, sq_va = rows("QM9/scaffold_train_indices.npy"), rows(
+        "QM9/scaffold_val_indices.npy"
+    )
     rq_te = expand(np.load(qm9 / "count_indices.npy"))
     sq_te = expand(np.load(qm9 / "scaffold_qm9_count_indices.npy"))
     rd_tr, rd_va = rows("DRUGS/train_indices.npy"), rows("DRUGS/val_indices.npy")
@@ -133,12 +143,15 @@ def main():
         "scaffold_qm9_counts": {
             "train_rows": len(sq_tr),
             "val_rows": len(sq_va),
-            "test_molecules": int(np.load(qm9 / "scaffold_qm9_count_indices.npy").shape[1]),
+            "test_molecules": int(
+                np.load(qm9 / "scaffold_qm9_count_indices.npy").shape[1]
+            ),
             "test_rows": len(sq_te),
         },
     }
     OUT.parent.mkdir(parents=True, exist_ok=True)
-    OUT.write_text(json.dumps(manifest, indent=2))
+    with OUT.open("x") as stream:
+        json.dump(manifest, stream, indent=2)
     print(json.dumps(manifest["checks"], indent=2))
     print(f"manifest={OUT}")
 

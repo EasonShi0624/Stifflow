@@ -187,11 +187,46 @@ def estimate_stiffness(mol, config=None):
     }
 
 
-def main():
+def build_label_arrays(conformers, source):
+    """Use one unchanged target/K pair for both core and Alternative A factors."""
     from stifflow_alt_a.path import prepare_label as prepare_alt_label
 
-    from .data import load_molecule
     from .precision import prepare_label
+
+    labels = []
+    for conformer in conformers:
+        try:
+            labels.append(estimate_stiffness(conformer["rd_mol"]))
+        except (ValueError, RuntimeError, np.linalg.LinAlgError) as exc:
+            raise ValueError(f"{conformer['conformer_id']}: {exc}") from exc
+    precision = [prepare_label(source, l["K"], l["epsilon_E"]) for l in labels]
+    alternative = [prepare_alt_label(source, l["K"], l["epsilon_E"]) for l in labels]
+    arrays = {
+        "positions": np.stack([c["positions"] for c in conformers]),
+        "K": np.stack([l["K"] for l in labels]),
+        "epsilon_E": labels[0]["epsilon_E"],
+        "reference": np.stack([l["reference"] for l in labels]),
+        "H_raw": np.stack([l["H_raw"] for l in labels]),
+        "spectrum": np.stack([l["spectrum"] for l in labels]),
+        "floored_mask": np.stack([l["floored_mask"] for l in labels]),
+        "precision_values": np.stack([l["values"] for l in precision]),
+        "precision_vectors": np.stack([l["vectors"] for l in precision]),
+        "alt_L_K": np.stack([l["L_K"] for l in alternative]),
+    }
+    if any(
+        not np.array_equal(l["target"], c["positions"])
+        for l, c in zip(labels, conformers)
+    ):
+        raise ValueError("Curvature preprocessing changed the original target")
+    return (
+        arrays,
+        [l["audit"] for l in labels],
+        [l["covariance_residual"] for l in alternative],
+    )
+
+
+def main():
+    from .data import load_molecule
     from .preflight import fingerprint, provenance
     from .smoke import external_directory
     from .source import prepare_source
@@ -245,26 +280,10 @@ def main():
                 continue
             selected = molecule["conformers"][: args.conformers]
             source = prepare_source(molecule["graph"])
-            labels = [estimate_stiffness(c["rd_mol"]) for c in selected]
-            precision = [prepare_label(source, l["K"], l["epsilon_E"]) for l in labels]
-            alternative = [
-                prepare_alt_label(source, l["K"], l["epsilon_E"]) for l in labels
-            ]
+            arrays, audits, residuals = build_label_arrays(selected, source)
             filename = (
                 hashlib.sha256(entry["molecule_id"].encode()).hexdigest()[:20] + ".npz"
             )
-            arrays = {
-                "positions": np.stack([c["positions"] for c in selected]),
-                "K": np.stack([l["K"] for l in labels]),
-                "epsilon_E": labels[0]["epsilon_E"],
-                "reference": np.stack([l["reference"] for l in labels]),
-                "H_raw": np.stack([l["H_raw"] for l in labels]),
-                "spectrum": np.stack([l["spectrum"] for l in labels]),
-                "floored_mask": np.stack([l["floored_mask"] for l in labels]),
-                "precision_values": np.stack([l["values"] for l in precision]),
-                "precision_vectors": np.stack([l["vectors"] for l in precision]),
-                "alt_L_K": np.stack([l["L_K"] for l in alternative]),
-            }
             np.savez_compressed(args.output / filename, **arrays)
             record = {
                 "id": entry["molecule_id"],
@@ -279,10 +298,8 @@ def main():
                 "audit_partial": len(selected) != len(molecule["conformers"]),
                 "graph": molecule["graph"],
                 "source": molecule["source"],
-                "labels": [l["audit"] for l in labels],
-                "alternative_factor_residuals": [
-                    l["covariance_residual"] for l in alternative
-                ],
+                "labels": audits,
+                "alternative_factor_residuals": residuals,
                 "cache": fingerprint(args.output / filename),
             }
             records.append(record)

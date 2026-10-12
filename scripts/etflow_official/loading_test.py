@@ -18,7 +18,7 @@ from etflow.data.datamodule import BaseDataModule
 from etflow.data.geom import GEOM
 from torch_geometric.data import Data, Dataset
 
-WS = Path(os.environ.get("STIFFLOW_WORKSPACE", "/gpfsnyu/scratch/ys6132/stifflow"))
+WS = Path(os.environ.get("STIFFLOW_WORKSPACE", Path(__file__).resolve().parents[3]))
 DEST = WS / "cache/etflow-official/geom-preprocessed"
 EXPANDED = WS / "cache/etflow-official/splits/expanded"
 REPORT = WS / "runs/etflow-official/phase3-loading.json"
@@ -66,6 +66,10 @@ def main():
     parser.add_argument("--batches", type=int, default=200)
     parser.add_argument("--full-pass", action="store_true")
     args = parser.parse_args()
+    if not os.getenv("SLURM_JOB_ID"):
+        parser.error("Full loading checks require an SHHPC allocation")
+    if REPORT.exists():
+        parser.error("Existing loading reports are protected")
     started = time.perf_counter()
     torch.set_num_threads(1)
     report = {
@@ -103,7 +107,7 @@ def main():
             "batch_size": args.batch_size,
             "num_workers": args.workers,
             "pin_memory": False,
-            "persistent_workers": True,
+            "persistent_workers": args.workers > 0,
         },
         train_indices_path=str(EXPANDED / "scaffold_qm9_train_indices.npy"),
         val_indices_path=str(EXPANDED / "scaffold_qm9_val_indices.npy"),
@@ -142,7 +146,9 @@ def main():
         report[f"{split}_first_batch_items"] = count
     report["max_rss_mb"] = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024.0
     report["seconds"] = time.perf_counter() - started
-    REPORT.write_text(json.dumps(report, indent=2))
+    REPORT.parent.mkdir(parents=True, exist_ok=True)
+    with REPORT.open("x") as stream:
+        json.dump(report, stream, indent=2)
     print(json.dumps(report, indent=2))
     print(f"report={REPORT}")
 

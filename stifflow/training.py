@@ -7,6 +7,7 @@ from pathlib import Path
 
 import numpy as np
 
+from .official_data import KIND, SAMPLING, validate_label_manifest, validate_label_pair
 from .preflight import WORKSPACE, fingerprint, provenance
 from .smoke import external_directory
 
@@ -21,7 +22,14 @@ def load_records(manifest_path, split, count, method, source_config):
 
     manifest_path = Path(manifest_path).resolve()
     manifest = json.loads(manifest_path.read_text())
-    if (
+    official = manifest.get("dataset_kind") == KIND
+    if official:
+        validate_label_manifest(manifest)
+        if manifest["split"] != split:
+            raise ValueError("Official label split differs from requested split")
+    elif manifest.get("schema_version") == 2:
+        raise ValueError("Unknown version-2 label schema")
+    elif (
         manifest.get("audit_partial")
         or manifest.get("failed")
         or not manifest.get("requested_attempts_completed", False)
@@ -58,7 +66,27 @@ def load_records(manifest_path, split, count, method, source_config):
                 or not np.isfinite(positions).all()
             ):
                 raise ValueError("Invalid target positions or conformer IDs")
+            if official and (
+                positions.dtype != np.float64
+                or not np.array_equal(arrays["row_ids"], record["row_ids"])
+            ):
+                raise ValueError(
+                    "Official coordinate dtype or row/label pairing differs"
+                )
             if method == "precision":
+                if official:
+                    dimension = 3 * mol.GetNumAtoms() - 3
+                    if (
+                        arrays["precision_values"].shape != (len(positions), dimension)
+                        or arrays["precision_vectors"].shape
+                        != (len(positions), dimension, dimension)
+                        or arrays["precision_values"].dtype != np.float64
+                        or arrays["precision_vectors"].dtype != np.float64
+                        or not np.isfinite(arrays["precision_values"]).all()
+                        or not np.isfinite(arrays["precision_vectors"]).all()
+                        or np.any(arrays["precision_values"] <= 0)
+                    ):
+                        raise ValueError("Invalid float64 official precision factors")
                 labels = [
                     {"values": v, "vectors": V}
                     for v, V in zip(
@@ -66,6 +94,15 @@ def load_records(manifest_path, split, count, method, source_config):
                     )
                 ]
             elif method == "alternative_a":
+                if official:
+                    dimension = 3 * mol.GetNumAtoms() - 3
+                    if (
+                        arrays["alt_L_K"].shape
+                        != (len(positions), dimension, dimension)
+                        or arrays["alt_L_K"].dtype != np.float64
+                        or not np.isfinite(arrays["alt_L_K"]).all()
+                    ):
+                        raise ValueError("Invalid float64 official aligned A_E factors")
                 labels = [{"L_K": L} for L in arrays["alt_L_K"]]
             else:
                 labels = [None] * len(positions)
@@ -78,12 +115,29 @@ def load_records(manifest_path, split, count, method, source_config):
                 "positions": positions,
                 "source": source,
                 "labels": labels,
+                "row_ids": record.get("row_ids"),
             }
         )
     return records
 
 
-def make_loader(records, batch_size, steps, seed, start_step=0):
+def draw_record(lengths, seed, draw_id, sampling):
+    """A stable draw ID identifies one molecule/conformer across interruption."""
+    rng = np.random.default_rng([seed, draw_id])
+    if sampling == SAMPLING:
+        offsets = np.r_[0, np.cumsum(lengths)]
+        row = int(rng.integers(offsets[-1]))
+        record = int(np.searchsorted(offsets[1:], row, side="right"))
+        return record, row - int(offsets[record])
+    if sampling != "uniform_molecules":
+        raise ValueError("Unknown training sampling law")
+    record = int(rng.integers(len(lengths)))
+    return record, int(rng.integers(lengths[record]))
+
+
+def make_loader(
+    records, batch_size, steps, seed, start_step=0, sampling="uniform_molecules"
+):
     import torch
     from torch.utils.data import DataLoader, Dataset
     from torch_geometric.data import Batch
@@ -94,9 +148,13 @@ def make_loader(records, batch_size, steps, seed, start_step=0):
 
         def __getitem__(self, index):
             # Stateless draw IDs preserve graph/conformer choices across resume.
-            rng = np.random.default_rng([seed, start_step * batch_size + index])
-            record = records[rng.integers(len(records))]
-            conf = rng.integers(len(record["positions"]))
+            record_index, conf = draw_record(
+                [len(r["positions"]) for r in records],
+                seed,
+                start_step * batch_size + index,
+                sampling,
+            )
+            record = records[record_index]
             return record["graph"], {
                 "x1": record["positions"][conf],
                 "source": record["source"],
@@ -152,6 +210,18 @@ def main():
     if not 0 < max_steps <= profile["steps"]:
         parser.error("stop-after must be in the profile step budget")
     seed_everything(cfg["seed"], workers=True)
+    train_manifest = json.loads(args.train_labels.read_text())
+    val_manifest = json.loads(args.val_labels.read_text())
+    official = train_manifest.get("dataset_kind") == KIND
+    if official != (val_manifest.get("dataset_kind") == KIND):
+        raise ValueError("Cannot mix legacy and official train/validation labels")
+    sampling = SAMPLING if official else "uniform_molecules"
+    if official:
+        validate_label_pair(train_manifest, val_manifest)
+        if train_manifest["selection_seed"] != cfg["seed"]:
+            raise ValueError(
+                "Official molecule selection seed differs from training seed"
+            )
     train = load_records(
         args.train_labels,
         "train",
@@ -185,6 +255,10 @@ def main():
         "config": cfg,
         "profile": args.profile,
     }
+    if official:
+        model.training_signature.update(
+            sampling=sampling, official_data=train_manifest["data_manifest"]["sha256"]
+        )
     if args.resume and saved.get("training_signature") != model.training_signature:
         raise ValueError("Resume dataset, seed or configuration differs")
     args.output.mkdir(parents=True)
@@ -193,6 +267,9 @@ def main():
         "profile": args.profile,
         "config": cfg,
         "seed": cfg["seed"],
+        "sampling": sampling,
+        "train_rows": sum(len(r["positions"]) for r in train),
+        "val_rows": sum(len(r["positions"]) for r in val),
         "train_manifest": fingerprint(args.train_labels),
         "val_manifest": fingerprint(args.val_labels),
         "train_ids": [r["id"] for r in train],
@@ -230,8 +307,11 @@ def main():
                 max_steps - start_step,
                 cfg["seed"],
                 start_step,
+                sampling,
             ),
-            val_dataloaders=make_loader(val, cfg["batch_size"], 1, cfg["seed"] + 1),
+            val_dataloaders=make_loader(
+                val, cfg["batch_size"], 1, cfg["seed"] + 1, sampling=sampling
+            ),
             ckpt_path=str(args.resume) if args.resume else None,
         )
         trainer.save_checkpoint(args.output / "final.ckpt")

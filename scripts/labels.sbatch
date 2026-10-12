@@ -20,5 +20,5 @@ export PYTHONDONTWRITEBYTECODE=1
 export TMPDIR="$STIFFLOW_WORKSPACE/cache/tmp/$SLURM_JOB_ID"
 mkdir -p "$TMPDIR"
 cd "$STIFFLOW_WORKSPACE"
-python -m stifflow.stiffness --manifest "$STIFFLOW_LABEL_MANIFEST" \
+python -m "${STIFFLOW_LABEL_MODULE:-stifflow.stiffness}" --manifest "$STIFFLOW_LABEL_MANIFEST" \
     --output "$STIFFLOW_LABEL_OUTPUT" "$@"

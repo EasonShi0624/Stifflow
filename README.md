@@ -1,4 +1,108 @@
-# StifFlow：共享实现与 CPU 验证
+# StifFlow：官方 memmap 接入与受控 pilot
+
+当前路线锁定：保留 main@80f82d7 的现有 SO(3) backbone，数据使用
+clean-sde@2f20cadeb047b7dc7cd3a363c729373f288c2d08 对应的 **v3 QM9 scaffold**
+memmap；三方法共用 128 个 train / 32 个 val 分子的全部官方构象。
+Torch 实现接口与轻量检查，真实标签计算、官方生成、Lightning 验收和 pilot 由 SHHPC 执行。
+本节之后的 2026-09-21 记录是历史验收，不能替代新接口的真实运行。
+
+## 新路线的接口与验收顺序
+
+- `stifflow.official_data` 复用官方 GEOM memmap 行布局，以 inventory 的固定偏移关联
+  原始 pickle；核对元数据哈希、文件尺寸、构象行、原子序、电荷和坐标。复用 SHHPC 已完成
+  的大文件 SHA256，不在 Torch 再扫描或复制完整数据。冻结清单前检查 train/val/test 的
+  分子级隔离；已有 v2 random 重叠记录保持诊断用途。
+- `stifflow.official_labels` 默认覆盖入选分子的全部官方构象，无 top-30 截断或原子数过滤。
+  seed42 与规范分子 ID 的 SHA256 确定候选顺序；任意构象失败则整分子排除、记录原因，
+  补入下一候选。`--max-candidates` 可限制审计预算；不足指定数量时退出 1 并阻止训练。
+  `--audit` 只计算每个分子一条构象，用于成本审计，始终不能用作训练缓存。
+- 物理定义仍使用两份正文的 `eq:hessian` / `eq:stiffness`：原始目标不变，另行弛豫并
+  proper-align 的 MMFF94 参考是一项明确的曲率迁移近似，保存参考位移、残余梯度、谱和
+  kcal/mol/Å² 单位；不放宽现有负曲率、梯度或差分门槛。
+- 新标签 schema_version=2、dataset_kind=official_memmap_scaffold，与旧缓存区分。
+  每条标签保存全局 `row_ids`，训练检查其与官方 split 的完整行集合一致；按构象行均匀
+  抽样，同一 draw ID 在中断恢复后选择同一行。网络和解析 target 的接口保持不变。
+- 完整 val 标签额外导出 `references/manifest.json` 及只含坐标/原子序的 NPZ；生成入口
+  使用该独立目录，生成时不打开 Hessian 缓存。三方法使用同一参考清单、seed、训练预算
+  和 50 步采样，每个分子生成 `2*N_ref`；官方预训练模型单独做接口验收。
+- `stifflow.pilot --profile smoke` 检查官方 qm9-o3 权重严格加载及 4 分子×2 构象生成，
+  然后分别对 precision / alternative_a / control 执行 50 步连续训练、25 步中断及恢复至
+  50 步。`stifflow.verify_resume` 比较模型、优化器、scheduler、目标/torch/CUDA RNG、
+  gradient queue 和数据签名。`--profile pilot` 要求相同数据、配置和代码版本的 smoke
+  验收记录，运行三方法各 1000 steps、batch8，并调用共享生成、评测和汇总入口。
+
+现有官方 full-data 脚本增加 allocation 检查和输出保护；原始数据、已有 split、报告及
+缓存保持只读。任何输出目录已存在时拒绝覆盖。运行中的进度记录只更新本次新建目录。
+
+## SHHPC 交接命令
+
+在 SHHPC 已有工作区中执行；`STIFFLOW_WORKSPACE` 使用当地实际路径，先激活现有
+`etflow` 环境并导出 `ETFLOW_ENV="$CONDA_PREFIX"`。本路线的 `etflow` 导入路径需指向
+`ETFlow-reference` main@80f82d7，不将 clean-sde 的模型安装到它上面。
+需要既有 `phase1-inventory.npz`、`phase3-validation.json`（含三份 memmap SHA256）、
+完整 memmap、v3 expanded split、原始 GEOM pickle/summary，以及匹配的 qm9-o3 权重。
+不用重新执行已完成的 7 小时全量预处理，也不自动下载数据、安装依赖或提交作业。
+
+三个任务分支固定在：公共分支本次交接 commit（见 GitHub 完整 SHA），Alternative A
+`55009a52c2a00b2b379275c9553e3eead3922884`，benchmark
+`cbeb314bcd1f99f2a7354477592791f6151821a7`。formulation 文件另行提供，哈希沿用下方历史
+记录所对应正文。先核对 worktree、git status、实际导入路径及 SHHPC 现有验收记录。
+
+```bash
+export PYTHONPATH="$STIFFLOW_WORKSPACE/stifflow-v1:$STIFFLOW_WORKSPACE/stifflow-v1-alternative-A:$STIFFLOW_WORKSPACE/stifflow-v1-benchmark"
+export PYTHONDONTWRITEBYTECODE=1
+export STIFFLOW_OFFICIAL_MANIFEST="$STIFFLOW_WORKSPACE/cache/qm9-v3-scaffold-new.json"
+# 使用新输出路径；若已有验收通过的同版清单，直接复用。
+sbatch "$STIFFLOW_WORKSPACE/stifflow-v1/scripts/official_data.sbatch"
+```
+
+清单作业完成后，先提交小型成本审计，检查失败原因、每行耗时与存储，保持配置冻结：
+
+```bash
+export STIFFLOW_LABEL_MODULE=stifflow.official_labels
+export STIFFLOW_LABEL_MANIFEST="$STIFFLOW_OFFICIAL_MANIFEST"
+export STIFFLOW_LABEL_OUTPUT="$STIFFLOW_WORKSPACE/cache/qm9-v3-cost-train-new"
+sbatch "$STIFFLOW_WORKSPACE/stifflow-v1/scripts/labels.sbatch" --audit --split train --molecules 4 --max-candidates 16
+export STIFFLOW_LABEL_OUTPUT="$STIFFLOW_WORKSPACE/cache/qm9-v3-cost-val-new"
+sbatch "$STIFFLOW_WORKSPACE/stifflow-v1/scripts/labels.sbatch" --audit --split val --molecules 2 --max-candidates 8
+```
+
+审阅成本报告后，在 SHHPC 资源预算内提交完整标签；审计缓存不进入训练：
+
+```bash
+export STIFFLOW_LABEL_OUTPUT="$STIFFLOW_WORKSPACE/cache/qm9-v3-train-new"
+sbatch "$STIFFLOW_WORKSPACE/stifflow-v1/scripts/labels.sbatch" --split train --molecules 128
+export STIFFLOW_LABEL_OUTPUT="$STIFFLOW_WORKSPACE/cache/qm9-v3-val-new"
+sbatch "$STIFFLOW_WORKSPACE/stifflow-v1/scripts/labels.sbatch" --split val --molecules 32
+```
+
+两份完整标签成功后执行 smoke；成功记录包含各命令、日志、实际版本和返回码：
+
+```bash
+export STIFFLOW_TRAIN_LABELS="$STIFFLOW_WORKSPACE/cache/qm9-v3-train-new/manifest.json"
+export STIFFLOW_VAL_LABELS="$STIFFLOW_WORKSPACE/cache/qm9-v3-val-new/manifest.json"
+sbatch "$STIFFLOW_WORKSPACE/stifflow-v1/scripts/pilot.sbatch" --profile smoke
+# 用实际成功的 smoke job ID 替换 SMOKE_JOB_ID，再提交 pilot。
+sbatch "$STIFFLOW_WORKSPACE/stifflow-v1/scripts/pilot.sbatch" --profile pilot \
+  --smoke-acceptance "$STIFFLOW_WORKSPACE/runs/pilot-SMOKE_JOB_ID/manifest.json"
+```
+
+Slurm 资源沿用已存在的 SHHPC 模板，2 小时是模板时限，不是运行耗时承诺；SHHPC 根据
+成本与 smoke 记录设置当地资源/时限。失败留下 manifest 和逐命令日志，不发布成功验收。
+pilot 比较产物为 `comparison.json`，另有每方法训练、生成和评测摘要。实际运行结果、
+code SHA、配置、数据条件、过滤计数、NFE/耗时/显存及标签成本需一并回传小型摘要。
+本阶段不运行正式 test 集、DRUGS、全量标签或超参数搜索。
+
+2026-10-12 Torch 本轮轻量验收：三个 worktree 的 pytest **28 passed**（70.61 s），
+包含合成 memmap 的完整行/原子序、分子隔离、整分子排除、缓存重排拒绝、行均匀抽样与
+实际 DataLoader 后续抽样一致性，以及既有小型物理/矩阵/CPU 模型测试。
+Ruff、Black、20 个 Python 文件语法和 5 个 Slurm 脚本语法通过；保留两条上游字符串转义
+警告和一条刻意病态谱警告。记录位于工作区外部运行目录
+`runs/memmap-pilot-cpu-20261012/tests.xml` 和 `verification.json`，不随 Git 提交。
+这不包含真实 memmap 加载、128/32 完整标签、官方 GPU 生成、Lightning 恢复或 pilot；
+这些均标记为 **待 SHHPC 运行验证**。
+
+## 历史 CPU 实现与验收记录
 
 按用户后续指示，暂缓 GPU 验收，先实现可在 CPU 检查的后续部分。
 现有主方案、Alternative A、MMFF94 标签和共享评测代码；训练/生成接入已写入但尚未运行。

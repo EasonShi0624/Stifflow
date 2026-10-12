@@ -60,10 +60,18 @@ def run(args, report):
     report.update(
         config=cfg,
         seed=cfg["seed"],
-        data=fingerprint(test_path),
+        data=(
+            fingerprint(args.data_manifest)
+            if args.data_manifest
+            else fingerprint(test_path)
+        ),
         checkpoint=fingerprint(checkpoint_path),
         units="Angstrom",
-        split="official QM9 test; interface-only, no tuning",
+        split=(
+            "v3 QM9 scaffold val; interface-only"
+            if args.data_manifest
+            else "official QM9 test; interface-only, no tuning"
+        ),
         molecules=[],
     )
     seed_everything(cfg["seed"])
@@ -72,9 +80,19 @@ def run(args, report):
     )
     prepare = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(prepare)
-    # Trusted, existing local GEOM/official artifacts only; never download pickles.
-    with test_path.open("rb") as stream:
-        test_mols = pickle.load(stream)
+    if args.data_manifest:
+        from .official_data import OfficialDataset
+
+        dataset = OfficialDataset.from_manifest(args.data_manifest)
+        dataset.validate_splits()
+        test_mols = {}
+        for entry in dataset.candidates("val", cfg["seed"])[: args.molecules]:
+            molecule = dataset.load_molecule(entry, "val")
+            test_mols[entry["id"]] = [c["rd_mol"] for c in molecule["conformers"]]
+    else:
+        # Trusted, existing local GEOM/official artifacts only; never download pickles.
+        with test_path.open("rb") as stream:
+            test_mols = pickle.load(stream)
     if args.molecules > len(test_mols):
         raise ValueError(
             "Requested more molecules than the official test file contains"
@@ -218,6 +236,11 @@ def main():
     parser.add_argument("--output-dir", type=external_directory, required=True)
     parser.add_argument("--molecules", type=int, default=4)
     parser.add_argument("--samples", type=int, default=2)
+    parser.add_argument(
+        "--data-manifest",
+        type=Path,
+        help="Use frozen official memmap scaffold validation rows",
+    )
     args = parser.parse_args()
     if not (1 <= args.molecules <= 4 and 1 <= args.samples <= 2):
         parser.error("Interface smoke is limited to 1–4 molecules and 1–2 conformers")
