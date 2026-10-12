@@ -158,6 +158,54 @@ glob 映射只有 87 个落在 `split.npy` 的 test 数组，806 落 train、107
 export `STIFFLOW_LABEL_MANIFEST` 与 `STIFFLOW_LABEL_OUTPUT`，其它参数透传，例如
 `sbatch scripts/labels.sbatch --molecules 128 --conformers 30 --split val`；该脚本不自动提交。
 
+## 官方 clean-sde memmap 数据方案（正式）与全量验证
+
+上一节 main 分支 `.pt` 方案的审计记录仅适用于该方案。正式预处理与训练数据采用
+**clean-sde@2f20cad + Zenodo 官方划分**（论文与已发布 checkpoint 对应的 memmap 格式）；
+`ETFlow-reference` 保持 main@80f82d7 不变，另建 `ETFlow-clean-sde/` 克隆。
+clean-sde 代码依赖 `torch_sparse/torch_scatter/h5py`，已按 torch 2.4.1+cu121 的 PyG wheel
+装入现有 `etflow` 环境（未改 torch 版本）。
+
+官方文件已下载并 md5 校验（`cache/etflow-official/zenodo/`）：
+- v2 record 14226681：`QM9.zip`(1bed2e29…)、`DRUGS.zip`(5e9f7dc7…)、`XL.zip`(4759ae27…)
+  与 `dataset/ET-Flow_zenodo/` 逐文件一致；提供 conformer 级 random 索引与 QM9 scaffold 子采样索引。
+- v3 record 16551316：`scaffold_data.tar.gz`(142b4651…)，含 QM9/DRUGS scaffold 分子级 SMILES 列表
+  （112744/9785/1000 与 260752/29185/1000）及 scaffold checkpoint。
+
+预处理命令（官方 `scripts/preprocess.py`，SHHPC job 4072957，7h00m，MaxRSS 14.9GB）：
+
+```bash
+PYTHONPATH="$STIFFLOW_WORKSPACE/ETFlow-clean-sde" \
+python ETFlow-clean-sde/scripts/preprocess.py -p dataset/rdkit_folder \
+  -d cache/etflow-official/geom-preprocessed
+```
+
+结果与脚本常量逐项一致：437580 分子 / 33078483 构象 / 1656320500 原子 / 15904498 unique 原子；
+`atomic_inputs.memmap` 33,126,410,000 B 及 `pos_index_range.memmap`、`energy.memmap`、
+`smiles.npz`、`subset.npz` 齐备。校验脚本位于 `scripts/etflow_official/`（接受
+`STIFFLOW_WORKSPACE` 环境变量）：`build_split_manifest.py`、`count_inventory.py`、
+`validate_memmap.py`、`loading_test.py`。
+
+校验（job 4159963）：文件尺寸/形状精确、per-molecule 边界与计数完全一致、能量有限、
+400 个分层抽样分子与原始 pickle 的坐标/原子序/电荷/能量/逐构象 SMILES 完全相等。实测 split
+语义（conformer 级）：v3 scaffold（主）QM9/DRUGS 的 test 行与 train/val 行级 **0 重叠**、train/val
+行级 0 重叠；v2 random（对照）QM9 test 有 6457 行落入 train、578 行落入 val，DRUGS 有
+18710/1615 行落入 train/val，**不能作为隔离评测**；v2 的 QM9 scaffold 索引只是 v3 分子列表的
+子采样（train 少 794528 行），不得与 v3 混用。v3 分子列表回映射时 13 个分子因字符串无法解析而
+未映射（QM9 train/val 4/1，DRUGS train/val 4/4；test 全部映射），已在报告中单列。
+
+数据加载（同 job，32 workers）：`GEOM` len=33078483；随机访问 1244 items/s；featurized
+DataLoader 13335 items/s；完整 QM9 scaffold train（1,654,366 构象）一个 pass 124s，峰值 RSS
+6.7GB；val/test 首 batch 正常。集成 smoke（job 4160201）：clean-sde `BaseFlow` 2 步 GPU
+训练，492 tensors、9,064,209 参数，checkpoint strict 重载通过。
+
+正式锁定划分（本地生成，未入库）：`cache/etflow-official/splits/expanded/` 下
+`scaffold_qm9_{train,val,test}_indices.npy`（1654366/62801/8558 行）与
+`scaffold_drugs_{train,val,test}_indices.npy`（25464381/2803983/106988 行）为主，`random_*`
+仅作对照；memmap sha256 见 `runs/etflow-official/phase3-validation.json`。官方 split 的
+conformer 级目标规模（QM9 scaffold 约 1.65M）意味着 StifFlow K 标签需单独规划，不能直接沿用旧
+top-30 manifest。
+
 ## 共享训练和生成入口（待运行）
 
 `model.StifFlow` 继承 ET-Flow BaseFlow/BaseModel，复用 TorchMDDynamics、Lightning、优化器、
