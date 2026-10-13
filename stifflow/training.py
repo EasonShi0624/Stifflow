@@ -12,6 +12,16 @@ from .preflight import WORKSPACE, fingerprint, provenance
 from .smoke import external_directory
 
 
+def advance_cursor(consumed, supervision):
+    if "draw_id" not in supervision[0]:
+        return consumed
+    if [r["draw_id"] for r in supervision] != list(
+        range(consumed, consumed + len(supervision))
+    ):
+        raise RuntimeError("Data cursor repeated/skipped samples after resume")
+    return consumed + len(supervision)
+
+
 def load_records(manifest_path, split, count, method, source_config):
     from rdkit import Chem
 
@@ -41,7 +51,27 @@ def load_records(manifest_path, split, count, method, source_config):
         raise ValueError(
             "Offline label factors were built with different source parameters"
         )
+    if manifest.get("schema_version") == 3:
+        from .formal_cache import signature
+        from .packed_data import PackedRecords
+
+        current = signature(
+            manifest["data_manifest"]["path"],
+            split,
+            source_config,
+            manifest["selection_seed"],
+        )
+        if manifest["label_implementation"] != current["label_implementation"]:
+            raise ValueError(
+                "Packed factors were built by different source/label implementations"
+            )
+
+        if count not in (None, "all", len(manifest["records"])):
+            raise ValueError("Formal training uses the complete shared accepted cohort")
+        return PackedRecords(manifest, method)
     eligible = [r for r in manifest["records"] if r["split"] == split]
+    if count in (None, "all"):
+        count = len(eligible)
     if len(eligible) < count:
         raise ValueError(
             f"Need {count} complete {split} molecules, found {len(eligible)}"
@@ -121,11 +151,12 @@ def load_records(manifest_path, split, count, method, source_config):
     return records
 
 
-def draw_record(lengths, seed, draw_id, sampling):
+def draw_record(lengths, seed, draw_id, sampling, offsets=None, rng_domain=0):
     """A stable draw ID identifies one molecule/conformer across interruption."""
-    rng = np.random.default_rng([seed, draw_id])
+    rng = np.random.default_rng([seed, draw_id, rng_domain])
     if sampling == SAMPLING:
-        offsets = np.r_[0, np.cumsum(lengths)]
+        if offsets is None:
+            offsets = np.r_[0, np.cumsum(lengths)]
         row = int(rng.integers(offsets[-1]))
         record = int(np.searchsorted(offsets[1:], row, side="right"))
         return record, row - int(offsets[record])
@@ -136,29 +167,58 @@ def draw_record(lengths, seed, draw_id, sampling):
 
 
 def make_loader(
-    records, batch_size, steps, seed, start_step=0, sampling="uniform_molecules"
+    records,
+    batch_size,
+    steps,
+    seed,
+    start_step=0,
+    sampling="uniform_molecules",
+    accumulate_grad_batches=1,
+    consumed_samples=None,
+    num_workers=0,
+    rng_domain=0,
 ):
     import torch
     from torch.utils.data import DataLoader, Dataset
     from torch_geometric.data import Batch
 
+    packed = hasattr(records, "sample")
+    lengths = (
+        records.lengths
+        if packed
+        else np.asarray([len(r["positions"]) for r in records])
+    )
+    offsets = np.r_[0, np.cumsum(lengths)]
+    start = (
+        start_step * batch_size * accumulate_grad_batches
+        if consumed_samples is None
+        else consumed_samples
+    )
+
     class StepDataset(Dataset):
         def __len__(self):
-            return steps * batch_size
+            return steps * batch_size * accumulate_grad_batches
 
         def __getitem__(self, index):
             # Stateless draw IDs preserve graph/conformer choices across resume.
             record_index, conf = draw_record(
-                [len(r["positions"]) for r in records],
+                lengths,
                 seed,
-                start_step * batch_size + index,
+                start + index,
                 sampling,
+                offsets,
+                rng_domain,
             )
+            if packed:
+                graph, supervision = records.sample(record_index, conf)
+                supervision["draw_id"] = start + index
+                return graph, supervision
             record = records[record_index]
             return record["graph"], {
                 "x1": record["positions"][conf],
                 "source": record["source"],
                 "label": record["labels"][conf],
+                "draw_id": start + index,
             }
 
     def collate(rows):
@@ -169,7 +229,7 @@ def make_loader(
         StepDataset(),
         batch_size=batch_size,
         shuffle=False,
-        num_workers=0,
+        num_workers=num_workers,
         collate_fn=collate,
         generator=torch.Generator().manual_seed(seed),
     )
@@ -187,7 +247,12 @@ def main():
         choices=["precision", "alternative_a", "control"],
         default="precision",
     )
-    parser.add_argument("--profile", choices=["smoke", "pilot"], default="smoke")
+    parser.add_argument(
+        "--profile", choices=["smoke", "pilot", "formal"], default="smoke"
+    )
+    parser.add_argument("--seed", type=int)
+    parser.add_argument("--checkpoint-dir", type=external_directory)
+    parser.add_argument("--acceptance", type=Path)
     parser.add_argument("--output", type=external_directory, required=True)
     parser.add_argument("--resume", type=Path)
     parser.add_argument("--stop-after", type=int)
@@ -206,10 +271,22 @@ def main():
 
     cfg = yaml.safe_load(args.config.read_text())
     profile = cfg["profiles"][args.profile]
+    formal = args.profile == "formal"
+    seed = cfg["seed"] if args.seed is None else args.seed
+    accumulation = profile.get("accumulate_grad_batches", 1)
+    effective_batch = cfg["batch_size"] * accumulation
+    if formal and (effective_batch != 128 or profile["steps"] != 250000):
+        parser.error(
+            "Formal budget is 250000 optimizer updates with effective batch 128"
+        )
+    if formal and seed not in cfg["training_seeds"]:
+        parser.error("Formal training seeds are 42, 43 and 44")
+    if formal and (cfg["dataset_seed"] != 42 or cfg["row_rng_domain"] != 2):
+        parser.error("Formal data seed is 42 and row RNG domain is 2")
     max_steps = profile["steps"] if args.stop_after is None else args.stop_after
     if not 0 < max_steps <= profile["steps"]:
         parser.error("stop-after must be in the profile step budget")
-    seed_everything(cfg["seed"], workers=True)
+    seed_everything(seed, workers=True)
     train_manifest = json.loads(args.train_labels.read_text())
     val_manifest = json.loads(args.val_labels.read_text())
     official = train_manifest.get("dataset_kind") == KIND
@@ -218,10 +295,17 @@ def main():
     sampling = SAMPLING if official else "uniform_molecules"
     if official:
         validate_label_pair(train_manifest, val_manifest)
-        if train_manifest["selection_seed"] != cfg["seed"]:
+        if train_manifest["selection_seed"] != cfg.get("dataset_seed", cfg["seed"]):
             raise ValueError(
-                "Official molecule selection seed differs from training seed"
+                "Official molecule selection seed differs from dataset seed"
             )
+    if formal and (
+        train_manifest.get("schema_version") != 3
+        or val_manifest.get("schema_version") != 3
+    ):
+        raise ValueError(
+            "Formal training requires merged, all-candidate mmap label manifests"
+        )
     train = load_records(
         args.train_labels,
         "train",
@@ -232,20 +316,24 @@ def main():
     val = load_records(
         args.val_labels, "val", profile["val_molecules"], args.method, cfg["source"]
     )
-    if {r["id"] for r in train} & {r["id"] for r in val}:
+    train_metadata = train.records if formal else train
+    val_metadata = val.records if formal else val
+    if {r["id"] for r in train_metadata} & {r["id"] for r in val_metadata}:
         raise ValueError("Train/validation overlap")
     start_step = 0
     if args.resume:
         # Only trusted local checkpoints produced by this entry point.
         saved = torch.load(args.resume, map_location="cpu", weights_only=False)
         start_step = int(saved["global_step"])
+        if formal and "optimizer_states" not in saved:
+            raise ValueError("Inference snapshots cannot resume training")
         if saved["hyper_parameters"]["method"] != args.method:
             raise ValueError("Resume method differs")
     if start_step >= max_steps:
         raise ValueError("Resume checkpoint already reaches requested budget")
     model = StifFlow(
         method=args.method,
-        seed=cfg["seed"],
+        seed=seed,
         source_config=cfg["source"],
         **cfg["model_args"],
     )
@@ -255,30 +343,123 @@ def main():
         "config": cfg,
         "profile": args.profile,
     }
+    run_provenance = provenance()
+    if formal:
+        from .formal import acceptance_signature
+
+        if max_steps > 40:
+            if args.acceptance is None:
+                parser.error(
+                    "Formal training requires --acceptance from the new 40-update/resume checks"
+                )
+            accepted = json.loads(args.acceptance.read_text())
+            if (
+                accepted.get("status") != "completed"
+                or accepted.get("methods") != ["precision", "alternative_a", "control"]
+                or accepted.get("updates") != 40
+                or accepted.get("signature")
+                != acceptance_signature(
+                    args.train_labels, args.val_labels, args.config, run_provenance
+                )
+            ):
+                raise ValueError(
+                    "Formal acceptance belongs to different data/config/code or is incomplete"
+                )
+        model.training_signature.update(
+            training_seed=seed,
+            dataset_seed=cfg["dataset_seed"],
+            microbatch=cfg["batch_size"],
+            effective_batch_size=effective_batch,
+            accumulate_grad_batches=accumulation,
+            row_rng_domain=cfg["row_rng_domain"],
+            code={
+                name: {"head": value["head"], "diff": value["diff"]}
+                for name, value in run_provenance["repos"].items()
+            },
+        )
     if official:
         model.training_signature.update(
             sampling=sampling, official_data=train_manifest["data_manifest"]["sha256"]
         )
     if args.resume and saved.get("training_signature") != model.training_signature:
         raise ValueError("Resume dataset, seed or configuration differs")
+    consumed = (
+        saved.get("consumed_samples", start_step * effective_batch)
+        if args.resume
+        else 0
+    )
+    if consumed != start_step * effective_batch:
+        raise ValueError("Resume must be at a complete optimizer/accumulation boundary")
+    model.consumed_samples = consumed
     args.output.mkdir(parents=True)
     report = {
         "method": args.method,
         "profile": args.profile,
         "config": cfg,
-        "seed": cfg["seed"],
+        "seed": seed,
         "sampling": sampling,
-        "train_rows": sum(len(r["positions"]) for r in train),
-        "val_rows": sum(len(r["positions"]) for r in val),
+        "train_rows": (
+            int(train.offsets[-1])
+            if formal
+            else sum(len(r["positions"]) for r in train)
+        ),
+        "val_rows": (
+            int(val.offsets[-1]) if formal else sum(len(r["positions"]) for r in val)
+        ),
         "train_manifest": fingerprint(args.train_labels),
         "val_manifest": fingerprint(args.val_labels),
-        "train_ids": [r["id"] for r in train],
-        "val_ids": [r["id"] for r in val],
+        "train_ids": [r["id"] for r in train_metadata],
+        "val_ids": [r["id"] for r in val_metadata],
         "start_step": start_step,
         "max_steps": max_steps,
-        "provenance": provenance(),
+        "provenance": run_provenance,
+        "effective_batch_size": effective_batch,
+        "accumulate_grad_batches": accumulation,
+        "allocated_resources": {
+            key: os.getenv(key)
+            for key in (
+                "SLURM_JOB_ID",
+                "SLURM_JOB_ACCOUNT",
+                "SLURM_JOB_PARTITION",
+                "SLURM_JOB_NODELIST",
+                "SLURM_CPUS_PER_TASK",
+                "SLURM_MEM_PER_NODE",
+                "SLURM_JOB_GPUS",
+            )
+        },
         "status": "started",
     }
+    callbacks = [
+        ModelCheckpoint(
+            dirpath=args.output / "checkpoints",
+            save_last=True,
+            every_n_train_steps=min(25, max_steps),
+            save_top_k=-1,
+        )
+    ]
+    trainer_options = {}
+    if formal:
+        from .formal_checkpoints import FormalCheckpoints
+
+        recovery = args.checkpoint_dir or (
+            Path(saved["recovery_directory"])
+            if args.resume
+            else args.output / "checkpoints"
+        )
+        callbacks = [
+            FormalCheckpoints(
+                recovery,
+                effective_batch,
+                profile["recovery_every"],
+                profile["snapshot_every"],
+            )
+        ]
+        trainer_options.update(
+            accumulate_grad_batches=accumulation,
+            val_check_interval=profile["validation_every"] * accumulation,
+            check_val_every_n_epoch=None,
+            enable_checkpointing=False,
+        )
     try:
         trainer = Trainer(
             accelerator="gpu",
@@ -289,41 +470,53 @@ def main():
             deterministic=True,
             num_sanity_val_steps=0,
             logger=CSVLogger(str(args.output), name="metrics"),
-            callbacks=[
-                ModelCheckpoint(
-                    dirpath=args.output / "checkpoints",
-                    save_last=True,
-                    every_n_train_steps=min(25, max_steps),
-                    save_top_k=-1,
-                )
-            ],
+            callbacks=callbacks,
             enable_progress_bar=False,
+            **trainer_options,
         )
         trainer.fit(
             model,
             train_dataloaders=make_loader(
                 train,
                 cfg["batch_size"],
-                max_steps - start_step,
-                cfg["seed"],
+                profile["steps"] if formal else max_steps - start_step,
+                seed,
                 start_step,
                 sampling,
+                accumulate_grad_batches=accumulation,
+                consumed_samples=consumed,
+                num_workers=profile.get("num_workers", 0),
+                rng_domain=cfg.get("row_rng_domain", 0),
             ),
             val_dataloaders=make_loader(
-                val, cfg["batch_size"], 1, cfg["seed"] + 1, sampling=sampling
+                val,
+                cfg["batch_size"],
+                profile.get("validation_rows", cfg["batch_size"]) // cfg["batch_size"],
+                cfg.get("dataset_seed", seed) + 1,
+                sampling=sampling,
+                rng_domain=cfg.get("row_rng_domain", 0),
             ),
             ckpt_path=str(args.resume) if args.resume else None,
         )
         trainer.save_checkpoint(args.output / "final.ckpt")
         report.update(
-            status="completed",
+            status=(
+                "completed"
+                if not formal or trainer.global_step == profile["steps"]
+                else "stopped"
+            ),
+            budget_completed=trainer.global_step == profile["steps"],
             global_step=trainer.global_step,
+            consumed_samples=model.consumed_samples,
             peak_gpu_bytes=torch.cuda.max_memory_allocated(),
         )
     except Exception as exc:
         report.update(status="failed", error=f"{type(exc).__name__}: {exc}")
         raise
     finally:
+        if formal:
+            train.close()
+            val.close()
         (args.output / "manifest.json").write_text(json.dumps(report, indent=2))
 
 

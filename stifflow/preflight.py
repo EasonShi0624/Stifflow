@@ -79,13 +79,13 @@ def provenance(root=WORKSPACE):
     }
 
 
-def probe(code):
+def probe(code, timeout=120):
     try:
         result = subprocess.run(
             [sys.executable, "-c", code],
             capture_output=True,
             text=True,
-            timeout=120,
+            timeout=timeout,
             check=False,
         )
         return {
@@ -95,10 +95,10 @@ def probe(code):
             "returncode": result.returncode,
         }
     except subprocess.TimeoutExpired:
-        return {"ok": False, "error": "import/probe exceeded 120 seconds"}
+        return {"ok": False, "error": f"import/probe exceeded {timeout} seconds"}
 
 
-def audit(gpu=False):
+def audit(gpu=False, warmup=False):
     report = {
         "python": sys.executable,
         "prefix": sys.prefix,
@@ -124,6 +124,11 @@ def audit(gpu=False):
         report["conda_packages"].append(
             {k: item.get(k) for k in ("name", "version", "build", "channel")}
         )
+    if warmup:
+        report["warmup"] = probe(
+            "import torch, etflow; print(torch.__version__, etflow.__file__)",
+            timeout=300,
+        )
     report["probes"] = {
         "imports": probe(
             "import torch, torch_cluster, etflow; print(torch.__version__, torch.version.cuda); print(etflow.__file__)"
@@ -143,8 +148,10 @@ def audit(gpu=False):
     report["etflow_path_matches"] = (
         actual is not None and Path(actual).resolve() == expected.resolve()
     )
-    report["ok"] = report["etflow_path_matches"] and all(
-        p["ok"] for p in report["probes"].values()
+    report["ok"] = (
+        report["etflow_path_matches"]
+        and all(p["ok"] for p in report["probes"].values())
+        and (not warmup or report["warmup"]["ok"])
     )
     return report
 
@@ -153,11 +160,12 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--gpu", action="store_true")
+    parser.add_argument("--warmup", action="store_true")
     args = parser.parse_args()
     # Exclusive creation protects previous audit records.
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with args.output.open("x") as stream:
-        report = audit(args.gpu)
+        report = audit(args.gpu, args.warmup)
         report["provenance"] = provenance()
         json.dump(report, stream, indent=2)
     print(f"preflight ok={report['ok']}: {args.output}")

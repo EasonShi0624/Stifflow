@@ -125,6 +125,173 @@ SHHPC 本地 wrapper 先做 import 预热（未改动上游脚本）后稳定通
 `molecule_identity` 回退与 `validate_memmap.py` 重映射/清洗逻辑；旧校验/加载报告与旧
 expanded 划分以 `*-pre-clean` 保留。
 
+## 正式 QM9 训练：Torch 实现与 SHHPC 交接
+
+本轮从 `stifflow-v1@90d4697a90b24d22d2a0b2ee3f190fe073ececd8` fast-forward 开发。
+兄弟包保持 `alternative-a@55009a52c2a00b2b379275c9553e3eead3922884`、
+`benchmark-harness@cbeb314bcd1f99f2a7354477592791f6151821a7`。
+正式训练接口已实现，Torch 只做小型合成 I/O 和标量 CPU 优化器检查；真实映射审查、
+全量物理标签、新接口 GPU 验收、正式训练及评测均 **待 SHHPC 执行**。
+按用户要求不再核查上一节 smoke/pilot 的原始日志，其运行状态采用 SHHPC README 摘要。
+
+Torch 本轮检查：现有 `etflow` Python 3.12，实际 etflow 导入仍来自只读 `ETFlow-reference/`；
+`OMP_NUM_THREADS=OPENBLAS_NUM_THREADS=MKL_NUM_THREADS=1`，pytest 缓存及 XML 放在仓库外。
+以下两个命令合计 **35 passed**（32 + 3），包含一名 DataLoader worker 预取和 epoch 中途恢复，
+使用小型合成文件及标量优化器；不包含真实分子模型训练、全量标签或 GPU 验收。
+
+```bash
+python -m pytest tests/test_identity.py tests/test_official_data.py tests/test_formal_cache.py \
+  tests/test_formal_training.py tests/test_preflight.py tests/test_model_integration.py -q
+python -m pytest tests/test_formal_evaluation.py -q
+```
+
+变更 Python 文件的 Ruff、Black --check、AST 检查、五个新增脚本的 bash -n、git diff --check
+以及四个入口的 --help 均通过。参考代码的旧字符串转义警告和 Lightning 的 worker/Slurm/恢复提示
+保留；恢复实际样本、优化器和 RNG 状态已由小型测试比较，真实 CUDA 仍须按下文验收。
+
+`configs/qm9-formal.yaml` 冻结 precision / alternative_a / control × seeds 42/43/44，
+每次从头训练 250000 次**优化器更新**，microbatch 8、梯度累积 16，有效 batch 128。
+九次共 2.88 亿次构象抽样；数据选择 seed42 固定，行抽样使用独立 RNG domain，
+路径 RNG 独立保存/恢复。沿用现有 20 层/160 hidden、AdamW 7e-4、cosine 250k、
+source sigma0=rho=1、普通 Euclidean CFM、网络 FP32 与路径/标签 float64。
+这是共同预算的 controlled 比较，不能宣称复现了官方 ET-Flow 训练预算或原始 1000 分子 test。
+
+### 1. 固定代码与数据映射
+
+开始前核对三个 worktree 的分支、完整 SHA、未提交差异和实际包导入路径；九次运行保持同一版本。
+SHHPC 使用已安装的 etflow 环境，不安装依赖。新增作业脚本不硬编码账号、分区、内存或墙时；
+下列 `CPU_ARGS` / `GPU_ARGS` 必须由 SHHPC 按真实资源填写，GPU 任务为单卡、至少四个 CPU。
+所有变量使用 SHHPC 的实际路径。`STIFFLOW_WORKSPACE`、`ETFLOW_ENV`、输出目录通过 export 传入。
+
+```bash
+cd "$STIFFLOW_WORKSPACE/stifflow-v1"
+CPU_ARGS=(--account="$SHHPC_ACCOUNT" --partition="$SHHPC_CPU_PARTITION" \
+  --cpus-per-task="$SHHPC_CPU_COUNT" --mem="$SHHPC_CPU_MEMORY" --time="$SHHPC_CPU_TIME")
+GPU_ARGS=(--account="$SHHPC_ACCOUNT" --partition="$SHHPC_GPU_PARTITION" \
+  --gres=gpu:1 --cpus-per-task=4 --mem="$SHHPC_GPU_MEMORY" --time="$SHHPC_GPU_TIME")
+
+sbatch "${CPU_ARGS[@]}" scripts/formal_task.sbatch freeze_data \
+  --manifest "$STIFFLOW_OFFICIAL_MANIFEST" --scaffold-dir "$STIFFLOW_V3_SCAFFOLD_DIR" \
+  --smiles-npz "$STIFFLOW_SMILES_NPZ" --output "$STIFFLOW_FREEZE_ROOT"
+```
+
+此步骤只重审已有 v3 列表→inventory 映射，复用原 phase3 的大文件验证，不重新扫描完整 memmap。
+共享身份函数统一普通氢表示、保留立体/同位素/电荷；指纹保留全部显式氢及完整 indexed connectivity。
+多个 UID 只有落在同一个 inventory 分子组时才可合并；跨组歧义不选第一项。
+输出每个官方列表条目的 `mapping.jsonl`、`audit.json` 及 `qm9-v3-clean-v1` manifest。
+全部新映射行必须与现有清理版精确一致；歧义、test 未解析或行差异会阻止冻结，保留旧划分，
+由 SHHPC 回传受影响 ID/原因后处理，不能默默改变 test 数量。
+train/val 原本已排除且仍未映射的条目按原因记录，不能伪装成完整官方划分。
+
+成功后设置 `STIFFLOW_FROZEN_DATA="$STIFFLOW_FREEZE_ROOT/manifest.json"`。
+
+### 2. 全量候选标签、可恢复分片和 mmap 合并
+
+每个候选保留所有官方构象；任何物理标签失败仍整分子拒绝。处理完成表示所有候选均有终态，
+分别记录候选数、成功数、拒绝数、原因、构象行数及预处理成本。三方法使用同一个合格训练清单。
+每 1024 个候选一片、单进程/BLAS 线程1；通过 CPU 作业数组并发限制控制集群开销。
+数组上界从冻结 manifest 的实际分子数计算：`ceil(molecules/1024)-1`。
+
+```bash
+export STIFFLOW_LABEL_SPLIT=train
+# 可选：复用已有同 split 的完整 v2 pilot manifest；会核对原始目标、行及两种因子的矩阵恒等式。
+export STIFFLOW_REUSE_LABELS="$STIFFLOW_OLD_TRAIN_LABELS"
+sbatch "${CPU_ARGS[@]}" --array="0-$TRAIN_SHARD_LAST%$LABEL_CONCURRENCY" scripts/formal_labels.sbatch
+
+export STIFFLOW_LABEL_SPLIT=val
+export STIFFLOW_REUSE_LABELS="$STIFFLOW_OLD_VAL_LABELS"
+sbatch "${CPU_ARGS[@]}" --array="0-$VAL_SHARD_LAST%$LABEL_CONCURRENCY" scripts/formal_labels.sbatch
+```
+
+`STIFFLOW_LABEL_ROOT` 指向新的外部缓存目录。失败/中断任务重复提交同一 shard-index 时自动 resume；
+已完成候选不重算，输入配置/数据不同会拒绝恢复。I/O 故障中断任务，不冒充物理样本拒绝。
+保留物理审计 NPZ 与每候选原子写入的 receipt，不在每个分子后重写全量 JSON。
+
+```bash
+sbatch "${CPU_ARGS[@]}" scripts/formal_task.sbatch formal_cache merge \
+  --manifest "$STIFFLOW_FROZEN_DATA" --config configs/qm9-formal.yaml --split train \
+  --shards "$STIFFLOW_LABEL_ROOT"/train/shard-*/shard.json --output "$STIFFLOW_PACKED_TRAIN"
+sbatch "${CPU_ARGS[@]}" scripts/formal_task.sbatch formal_cache merge \
+  --manifest "$STIFFLOW_FROZEN_DATA" --config configs/qm9-formal.yaml --split val \
+  --shards "$STIFFLOW_LABEL_ROOT"/val/shard-*/shard.json --output "$STIFFLOW_PACKED_VAL"
+```
+
+合并检查完整候选覆盖、拒绝账目和全部行配对，产生 schema3 清单；按原子数最多 4096 行一片，
+因子 `.npy` 用 mmap 读取，graph/source 也打包。读取器最多打开16片、缓存64个 graph/source，
+样本复制后可安全淘汰 mmap。行偏移只计算一次。
+`--resume` 可恢复合并，已提交的分片检查哈希后复用；中断留下的未提交产物保留，不自动清理。
+`archive_bytes` 与 `packed_bytes` 分别记录归档和打包占用：二者都会保留，SHHPC 须预留总配额。
+
+```bash
+export STIFFLOW_TRAIN_LABELS="$STIFFLOW_PACKED_TRAIN/manifest.json"
+export STIFFLOW_VAL_LABELS="$STIFFLOW_PACKED_VAL/manifest.json"
+sbatch "${CPU_ARGS[@]}" scripts/formal_task.sbatch formal references \
+  --manifest "$STIFFLOW_FROZEN_DATA" --config configs/qm9-formal.yaml --output "$STIFFLOW_REFERENCE_ROOT"
+```
+
+参考导出覆盖全部清理版 val/test，并检查图特征与参考手性；不依赖 Hessian 合格性。
+val/monitor.json 是 seed42 预先冻结的512分子子集，val/manifest.json 和 test/manifest.json 是完整清单。
+test 仅用于最终固定配置评测，不能拟合标签尺度或挑选超参数。
+
+### 3. 新接口验收与九次正式训练
+
+Torch 的小型测试不能代替真实 CUDA 运行。全量合并后，用同一 mmap 清单完成新接口验收：
+三方法各“连续40更新”对比“20更新后恢复至40”，batch8×accum16，检查样本游标、权重、优化器、
+scheduler、路径/torch/CUDA RNG 和梯度裁剪状态。先以300秒 import 预热，再执行原120秒探针。
+
+```bash
+sbatch "${GPU_ARGS[@]}" scripts/formal_acceptance.sbatch
+# STIFFLOW_ACCEPTANCE_ROOT 必须是新目录。
+export STIFFLOW_ACCEPTANCE="$STIFFLOW_ACCEPTANCE_ROOT/workflow.json"
+sbatch "${GPU_ARGS[@]}" --array="0-8%$TRAIN_CONCURRENCY" scripts/formal.sbatch
+```
+
+数组0/1/2＝precision seeds42/43/44；3/4/5＝Alternative A；6/7/8＝control。
+长训练强制匹配新验收的代码、配置和标签哈希；旧 smoke/pilot 原始日志不是启动条件。
+按40步验收的实际稳定吞吐、内存与显存设置墙时和并发；不从14m09s pilot 摘要估算正式 GPU 核时。
+预处理成本单列。每次训练3200万抽样，九次2.88亿。
+
+`STIFFLOW_RUN_ROOT/<method>-seed<seed>/segments/<job-id>/` 保存独立运行记录和 CSV。
+每500优化器更新保存恢复点，只保留最近两个，`checkpoints/latest.ckpt` 指向最新完整点；
+每25k更新保存 `snapshots/step-XXXXXXXX.ckpt`（权重及元数据），最终保存完整 checkpoint。
+未完成任务再次提交对应数组 ID 自动恢复，读取器从已消费 draw ID 接续，预取不计入游标；
+仅在完整累积边界恢复。已完成250k的任务不要重复提交。
+每5000更新在固定4096个验证抽样上记录 CFM loss；这是诊断，不比较不同方法的 loss 尺度。
+代码记录优化器更新数、已消费样本、耗时、实际 Slurm 资源、版本、配置与 peak GPU memory。
+
+### 4. 监测、最终评测与三个 seed 汇总
+
+每25k快照监测固定512个验证分子的 MAT/COV/手性；主比较统一250k最终权重。
+生成沿用 Euler50、每分子2×参考数、推理 seed42、现有 heavy-atom RMSD 协议。
+GPU 生成与 CPU RMSD 评测分别申请资源，不让 Torch 代跑。
+
+```bash
+sbatch "${GPU_ARGS[@]}" scripts/formal_task.sbatch formal generate \
+  --config configs/qm9-formal.yaml --checkpoint "$STIFFLOW_SNAPSHOT" \
+  --references "$STIFFLOW_REFERENCE_ROOT/val/monitor.json" --stage monitor --output "$STIFFLOW_MONITOR_OUTPUT"
+sbatch "${CPU_ARGS[@]}" scripts/formal_task.sbatch formal evaluate \
+  --manifest "$STIFFLOW_MONITOR_OUTPUT/generated/manifest.json" --output "$STIFFLOW_MONITOR_OUTPUT/evaluation.json"
+
+# 九次训练完成后，分别对 full val 和 frozen test 执行；TEST_CHECKPOINT 是250k快照。
+sbatch "${GPU_ARGS[@]}" scripts/formal_task.sbatch formal generate \
+  --config configs/qm9-formal.yaml --checkpoint "$TEST_CHECKPOINT" \
+  --references "$STIFFLOW_REFERENCE_ROOT/test/manifest.json" --stage final --output "$FINAL_OUTPUT"
+sbatch "${CPU_ARGS[@]}" scripts/formal_task.sbatch formal evaluate \
+  --manifest "$FINAL_OUTPUT/generated/manifest.json" --output "$FINAL_OUTPUT/evaluation.json"
+
+sbatch "${CPU_ARGS[@]}" scripts/formal_task.sbatch formal summarize \
+  --reports "$FORMAL_EVAL_ROOT"/*/evaluation.json --output "$FORMAL_EVAL_ROOT/comparison.json"
+```
+
+同一次汇总提供恰好九个**同 split**的最终报告，val 与 test 分开汇总。
+完整参考清单按哈希核对，生成中止后未处理的 ID 仍以失败保留；存在失败时结果标记不完整，
+不能进入主比较。报告 MAT-R/P mean/median、COV-R/P@0.5、手性、NFE、耗时和显存，
+三个 seeds 汇总均值及样本标准差（ddof=1）。生成不读取 Hessian 缓存。
+出现非有限 loss/gradient/坐标或配对错误立即失败；手性低是监测风险，不自动删构象或改变方法。
+
+SHHPC 回传完整代码 SHA、实际配置/输入哈希、环境、分片和过滤数量、作业命令与资源、
+新接口验收结果及指标摘要。数据、标签、checkpoint、构象和大量日志仍留在 Git 外。
+
 ## 历史 CPU 实现与验收记录
 
 按用户后续指示，暂缓 GPU 验收，先实现可在 CPU 检查的后续部分。

@@ -17,6 +17,33 @@ from .source import prepare_source
 from .stiffness import DEFAULTS, build_label_arrays
 
 
+def label_record(dataset, entry, split, source_config, audit=False):
+    """One complete molecule uses the existing physical-label implementation."""
+    molecule = dataset.load_molecule(entry, split, limit=1 if audit else None)
+    selected = molecule["conformers"]
+    source = prepare_source(molecule["graph"], source_config)
+    arrays, audits, residuals = build_label_arrays(selected, source)
+    rows = [c["row_id"] for c in selected]
+    arrays["row_ids"] = np.asarray(rows, dtype=np.int64)
+    record = {
+        "id": entry["id"],
+        "split": split,
+        "row_ids": rows,
+        "raw_indices": [c["raw_index"] for c in selected],
+        "conformer_ids": [c["conformer_id"] for c in selected],
+        "retained_conformers": len(entry["row_ids"]),
+        "audit_partial": audit,
+        "molblock": Chem.MolToMolBlock(selected[0]["rd_mol"]),
+        "graph": molecule["graph"],
+        "source": molecule["source"],
+        "original_weights": [c["boltzmann_weight"] for c in selected],
+        "original_energies": [c["energy"] for c in selected],
+        "labels": audits,
+        "alternative_factor_residuals": residuals,
+    }
+    return record, arrays, source
+
+
 def build_cache(
     dataset,
     data_manifest,
@@ -75,41 +102,20 @@ def build_cache(
             report["attempts"].append(attempt)
             attempt_started = time.perf_counter()
             try:
-                molecule = dataset.load_molecule(
-                    entry, split, limit=1 if audit else None
+                record, arrays, _source = label_record(
+                    dataset, entry, split, source_config, audit
                 )
-                selected = molecule["conformers"]
-                source = prepare_source(molecule["graph"], source_config)
-                arrays, audits, residuals = build_label_arrays(selected, source)
-                rows = [c["row_id"] for c in selected]
-                arrays["row_ids"] = np.asarray(rows, dtype=np.int64)
+                rows = record["row_ids"]
                 filename = (
                     hashlib.sha256(entry["id"].encode()).hexdigest()[:20] + ".npz"
                 )
                 with (output / filename).open("xb") as stream:
                     np.savez_compressed(stream, **arrays)
-                record = {
-                    "id": entry["id"],
-                    "split": split,
-                    "npz": filename,
-                    "row_ids": rows,
-                    "raw_indices": [c["raw_index"] for c in selected],
-                    "conformer_ids": [c["conformer_id"] for c in selected],
-                    "retained_conformers": len(entry["row_ids"]),
-                    "audit_partial": audit,
-                    "molblock": Chem.MolToMolBlock(selected[0]["rd_mol"]),
-                    "graph": molecule["graph"],
-                    "source": molecule["source"],
-                    "original_weights": [c["boltzmann_weight"] for c in selected],
-                    "original_energies": [c["energy"] for c in selected],
-                    "labels": audits,
-                    "alternative_factor_residuals": residuals,
-                    "cache": fingerprint(output / filename),
-                }
+                record.update(npz=filename, cache=fingerprint(output / filename))
                 report["records"].append(record)
                 attempt.update(
                     status="success",
-                    atoms=len(molecule["graph"]["atomic_numbers"]),
+                    atoms=len(record["graph"]["atomic_numbers"]),
                     labeled_rows=len(rows),
                 )
             except (

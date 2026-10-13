@@ -56,6 +56,8 @@ def main():
     )
     if "cuda_rng" in left or "cuda_rng" in right:
         keys += ("cuda_rng",)
+    if "consumed_samples" in left or "consumed_samples" in right:
+        keys += ("consumed_samples",)
     for key in keys:
         compare_states(left[key], right[key], key)
     args.output.parent.mkdir(parents=True, exist_ok=True)

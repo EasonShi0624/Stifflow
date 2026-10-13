@@ -12,6 +12,7 @@ from torch_geometric.utils import scatter
 
 from .source import prepare_source
 from .targets import draw_target, path_module
+from .training import advance_cursor
 
 
 def graph_data(graph):
@@ -47,6 +48,7 @@ class StifFlow(BaseFlow):
         self.source_config = source_config or {"sigma0": 1.0, "rho": 1.0}
         self.training_signature = None
         self.target_rng = np.random.default_rng(seed)
+        self.consumed_samples = 0
         self.save_hyperparameters(
             {
                 "method": method,
@@ -79,6 +81,8 @@ class StifFlow(BaseFlow):
 
     def generic_step(self, payload, batch_idx, stage):
         graph, supervision = payload
+        if stage == "train":
+            self.consumed_samples = advance_cursor(self.consumed_samples, supervision)
         positions, targets, times = [], [], []
         rng = (
             self.target_rng
@@ -140,12 +144,16 @@ class StifFlow(BaseFlow):
         checkpoint["stifflow_rng"] = self.target_rng.bit_generator.state
         checkpoint["torch_rng"] = torch.get_rng_state()
         checkpoint["gradient_queue"] = self.gradnorm_queue.items
+        checkpoint["consumed_samples"] = self.consumed_samples
         if torch.cuda.is_available():
             checkpoint["cuda_rng"] = torch.cuda.get_rng_state_all()
 
     def on_load_checkpoint(self, checkpoint):
         self.target_rng.bit_generator.state = checkpoint["stifflow_rng"]
         self.gradnorm_queue.items = checkpoint["gradient_queue"]
+        self.consumed_samples = checkpoint.get(
+            "consumed_samples", self.consumed_samples
+        )
         torch.set_rng_state(checkpoint["torch_rng"].cpu())
         if "cuda_rng" in checkpoint and torch.cuda.is_available():
             torch.cuda.set_rng_state_all([s.cpu() for s in checkpoint["cuda_rng"]])

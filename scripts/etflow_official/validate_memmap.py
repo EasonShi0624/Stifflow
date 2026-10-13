@@ -15,6 +15,8 @@ from pathlib import Path
 
 import numpy as np
 
+from stifflow.identity import SplitMapper, molecule_identity
+
 WS = Path(os.environ.get("STIFFLOW_WORKSPACE", Path(__file__).resolve().parents[3]))
 RAW = WS / "dataset/rdkit_folder"
 DEST = WS / "cache/etflow-official/geom-preprocessed"
@@ -132,56 +134,15 @@ def expand_rows(count_indices):
 
 
 def canonical(smiles):
-    from rdkit import Chem, RDLogger
-
-    RDLogger.DisableLog("rdApp.*")
-    mol = Chem.MolFromSmiles(smiles)
-    if mol is None:
-        try:
-            import datamol as dm
-
-            mol = dm.to_mol(smiles, remove_hs=False, ordered=True)
-        except (ValueError, RuntimeError, TypeError):
-            mol = None
-    if mol is None:
+    try:
+        return molecule_identity(smiles)
+    except (ValueError, RuntimeError):
         return None
-    return Chem.MolToSmiles(Chem.RemoveHs(mol), isomericSmiles=True)
-
-
-def ordered_signature(smiles):
-    """Atom-map-ordered (atomic number, formal charge) sequence."""
-    from rdkit import Chem
-
-    mol = Chem.MolFromSmiles(smiles)
-    if mol is None:
-        mol = Chem.MolFromSmiles(smiles, sanitize=False)
-    if mol is None:
-        return None
-    maps = [atom.GetAtomMapNum() for atom in mol.GetAtoms()]
-    if sorted(maps) != list(range(mol.GetNumAtoms())):
-        return None
-    atoms = sorted(mol.GetAtoms(), key=lambda atom: atom.GetAtomMapNum())
-    return tuple((atom.GetAtomicNum(), atom.GetFormalCharge()) for atom in atoms)
 
 
 def identity_of_key(smiles):
     """Molecule identity consistent with stifflow.official_data.molecule_identity."""
-    from rdkit import Chem
-
-    mol = Chem.MolFromSmiles(smiles)
-    sanitized = mol is not None
-    if mol is None:
-        mol = Chem.MolFromSmiles(smiles, sanitize=False)
-    if mol is None:
-        return None
-    for atom in mol.GetAtoms():
-        atom.SetAtomMapNum(0)
-    if sanitized:
-        return Chem.MolToSmiles(Chem.RemoveHs(mol), isomericSmiles=True)
-    try:
-        return Chem.MolToSmiles(mol, canonical=True, isomericSmiles=True)
-    except Exception:
-        return None
+    return canonical(smiles)
 
 
 def main():
@@ -192,7 +153,8 @@ def main():
     args = parser.parse_args()
     if not os.getenv("SLURM_JOB_ID"):
         parser.error("Full memmap validation requires an SHHPC allocation")
-    if REPORT.exists() or EXPANDED.exists():
+    diagnostics_path = WS / "runs/etflow-official/phase4-clean-diagnostics.json"
+    if REPORT.exists() or EXPANDED.exists() or diagnostics_path.exists():
         parser.error("Existing validation reports/splits are protected; reuse them")
     if not 1 <= args.sample <= TOTAL_NUM_MOLS or args.workers < 1:
         parser.error("Invalid sample or worker count")
@@ -389,7 +351,6 @@ def main():
     }
 
     # map v3 scaffold SMILES to conformer rows via smiles.npz (order-sensitive)
-    unique_index = {s: i for i, s in enumerate(uniques_list)}
     order = np.argsort(inv_smiles, kind="stable")
     sorted_inv = inv_smiles[order]
     boundaries = np.flatnonzero(np.diff(sorted_inv)) + 1
@@ -402,41 +363,13 @@ def main():
         "qm9": ZEN / "v3/data/scaffold/qm9",
         "drugs": ZEN / "v3/data/scaffold/drugs",
     }
-    canonical_map = None
-    signature_cache = {}
-
-    def unique_signature(uid):
-        if uid not in signature_cache:
-            signature_cache[uid] = ordered_signature(uniques_list[uid])
-        return signature_cache[uid]
-
-    def resolve(smiles):
-        """Return (unique_id, method); unique_id None means unmapped/ambiguous."""
-        if smiles in unique_index:
-            return unique_index[smiles], "exact"
-        c = canonical(smiles)
-        ids = canonical_map.get(c, []) if c is not None else []
-        if not ids:
-            return None, "unmapped"
-        signature = ordered_signature(smiles)
-        if signature is None:
-            return (ids[0], "canonical_unique") if len(ids) == 1 else (None, "ambiguous")
-        matched = [uid for uid in ids if unique_signature(uid) == signature]
-        if len(matched) == 1:
-            return matched[0], "fingerprint"
-        if not matched:
-            target = sorted(signature)
-            matched = [
-                uid
-                for uid in ids
-                if unique_signature(uid) is not None
-                and sorted(unique_signature(uid)) == target
-            ]
-            if len(matched) == 1:
-                return matched[0], "multiset"
-            if not matched:
-                return None, "fingerprint_miss"
-        return matched[0], "fingerprint_tied"
+    uid_groups = [
+        np.unique(
+            np.searchsorted(conf_offset[1:], row_by_unique[i], side="right")
+        ).tolist()
+        for i in range(len(uniques_list))
+    ]
+    mapper = SplitMapper(uniques_list, uid_groups)
 
     scaffold_rows = {}
     scaffold_match = {}
@@ -445,13 +378,6 @@ def main():
         for split in ("train", "val", "test"):
             with (base / f"scaffold_{split}_smiles.pkl").open("rb") as stream:
                 smiles_list = pickle.load(stream)
-            if canonical_map is None and any(s not in unique_index for s in smiles_list):
-                print("building canonical fallback map ...", flush=True)
-                canonical_map = {}
-                for i, s in enumerate(uniques_list):
-                    c = canonical(s)
-                    if c is not None:
-                        canonical_map.setdefault(c, []).append(i)
             train_identities = partition_identities.get((partition, "train"))
             val_identities = partition_identities.get((partition, "val"))
             seen = set()
@@ -462,6 +388,7 @@ def main():
                 "fingerprint": 0,
                 "multiset": 0,
                 "canonical_unique": 0,
+                "canonical_group": 0,
                 "fingerprint_tied": 0,
                 "duplicates_skipped": 0,
                 "overlap_removed": 0,
@@ -469,7 +396,7 @@ def main():
                 "unmapped_examples": [],
             }
             for s in smiles_list:
-                uid, method = resolve(s)
+                uid, method = mapper.resolve(s)
                 if uid is None:
                     stats["unmapped"] += 1
                     if len(stats["unmapped_examples"]) < 5:
@@ -533,7 +460,9 @@ def main():
         for split, rows in (("train", tr), ("val", va), ("test", te)):
             indices = np.unique(np.searchsorted(conf_offset[1:], rows, side="right"))
             identities = {identity_of_key(str(keys[i])) for i in indices}
-            unparseable[split] = int(None in identities)
+            unparseable[split] = sum(
+                identity_of_key(str(keys[i])) is None for i in indices
+            )
             molecule_sets[split] = {x for x in identities if x is not None}
         checks[f"scaffold_{partition}_unparseable_identities"] = unparseable
         for left, right in (("train", "val"), ("train", "test"), ("val", "test")):
@@ -541,7 +470,9 @@ def main():
             checks[f"scaffold_{partition}_{left}_{right}_molecule_overlap"] = overlap
         if partition == "qm9":
             diagnostics = {
-                "sizes": {split: len(values) for split, values in molecule_sets.items()},
+                "sizes": {
+                    split: len(values) for split, values in molecule_sets.items()
+                },
                 "scaffold_match": scaffold_match,
                 "row_overlaps": {
                     "train/val": checks[f"scaffold_{partition}_train_val_overlap"],
@@ -556,9 +487,8 @@ def main():
                     "count": len(inter),
                     "examples": sorted(inter)[:8],
                 }
-            (
-                WS / "runs/etflow-official/phase4-clean-diagnostics.json"
-            ).write_text(json.dumps(diagnostics, indent=2))
+            with diagnostics_path.open("x") as stream:
+                json.dump(diagnostics, stream, indent=2)
             check(
                 all(
                     checks[f"scaffold_{partition}_{left}_{right}_molecule_overlap"] == 0

@@ -16,6 +16,7 @@ import numpy as np
 from rdkit import Chem
 
 from .data import graph_from_mol
+from .identity import molecule_identity
 from .preflight import WORKSPACE, fingerprint
 from .smoke import external_directory
 
@@ -29,25 +30,6 @@ def verified_path(record):
     if fingerprint(path)["sha256"] != record["sha256"]:
         raise ValueError(f"Metadata hash mismatch: {path}")
     return path
-
-
-def molecule_identity(smiles):
-    mol = Chem.MolFromSmiles(smiles)
-    sanitized = mol is not None
-    if mol is None:
-        # GEOM summary keys include radicals/zwitterions that fail sanitization;
-        # fall back to an unsanitized parse and canonical string.
-        mol = Chem.MolFromSmiles(smiles, sanitize=False)
-    if mol is None:
-        raise ValueError(f"Unparseable inventory molecule: {smiles}")
-    for atom in mol.GetAtoms():
-        atom.SetAtomMapNum(0)
-    if sanitized:
-        return Chem.MolToSmiles(Chem.RemoveHs(mol), isomericSmiles=True)
-    try:
-        return Chem.MolToSmiles(mol, canonical=True, isomericSmiles=True)
-    except Exception:
-        return smiles
 
 
 class OfficialDataset:
@@ -278,7 +260,7 @@ def build_manifest(workspace):
 
 def validate_label_manifest(manifest):
     if (
-        manifest.get("schema_version") != 2
+        manifest.get("schema_version") not in (2, 3)
         or manifest.get("dataset_kind") != KIND
         or manifest.get("sampling") != SAMPLING
         or manifest.get("status") != "completed"
@@ -293,6 +275,19 @@ def validate_label_manifest(manifest):
         g["id"]: g["row_ids"]
         for g in OfficialDataset(specification).groups(manifest["split"])
     }
+    formal = manifest["schema_version"] == 3
+    if formal:
+        from .freeze_data import require_frozen
+
+        require_frozen(specification)
+        if (
+            manifest.get("all_candidates_processed") is not True
+            or manifest.get("candidate_molecules") != len(expected)
+            or manifest.get("attempted_molecules") != len(expected)
+        ):
+            raise ValueError(
+                "Formal labels require every frozen candidate to be processed"
+            )
     ids, rows = set(), set()
     for record in manifest["records"]:
         selected = record["row_ids"]
@@ -303,7 +298,7 @@ def validate_label_manifest(manifest):
             or record["audit_partial"]
             or not selected
             or len(selected) != record["retained_conformers"]
-            or len(selected) != len(record["conformer_ids"])
+            or (not formal and len(selected) != len(record["conformer_ids"]))
             or any(not isinstance(row, int) or row < 0 for row in selected)
             or len(set(selected)) != len(selected)
             or rows.intersection(selected)
@@ -313,6 +308,26 @@ def validate_label_manifest(manifest):
         rows.update(selected)
     if not ids or len(ids) != manifest["requested_molecules"]:
         raise ValueError("Official shared molecule list is incomplete")
+    if formal:
+        rejected = set()
+        with verified_path(manifest["rejections"]).open() as stream:
+            for line in stream:
+                item = json.loads(line)
+                if (
+                    item["id"] in rejected
+                    or item["id"] in ids
+                    or item["status"] != "rejected"
+                    or item["split"] != manifest["split"]
+                    or not item.get("reason")
+                ):
+                    raise ValueError("Invalid whole-molecule rejection ledger")
+                rejected.add(item["id"])
+        if (
+            len(rejected) != manifest["rejected_molecules"]
+            or ids | rejected != set(expected)
+            or manifest["labeled_rows"] != len(rows)
+        ):
+            raise ValueError("Formal candidate coverage differs")
     return ids, rows
 
 
@@ -324,6 +339,9 @@ def validate_label_pair(train, val):
         or val["split"] != "val"
         or train["data_manifest"]["sha256"] != val["data_manifest"]["sha256"]
         or train["selection_seed"] != val["selection_seed"]
+        or train["source_config"] != val["source_config"]
+        or train["stiffness_config"] != val["stiffness_config"]
+        or train.get("label_implementation") != val.get("label_implementation")
         or train_ids & val_ids
         or train_rows & val_rows
     ):
