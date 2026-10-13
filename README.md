@@ -292,6 +292,21 @@ sbatch "${CPU_ARGS[@]}" scripts/formal_task.sbatch formal summarize \
 SHHPC 回传完整代码 SHA、实际配置/输入哈希、环境、分片和过滤数量、作业命令与资源、
 新接口验收结果及指标摘要。数据、标签、checkpoint、构象和大量日志仍留在 Git 外。
 
+### 2026-10-13 SHHPC 执行更新（严格映射与 freeze）
+
+按确认的“严格映射重生成”口径，`validate_memmap.py`（已在 5e54e9f 改用
+`identity.SplitMapper`）重新生成 expanded 划分：train 111457 分子/1650255 行、
+val 9654/62648、test 993/8580，行级与分子级重合为 0；旧 first-match 划分与报告以
+`*-firstmatch` 保留。官方 manifest 重建为 `cache/qm9-v3-scaffold-strict.json`
+（job 4183794）。freeze（job 4183840）三 split `matches_existing=True`、行差 0；官方
+v3 列表存在 81 条固有跨组歧义（train 77、val 4），test 无未解析，按确认把门控放宽为
+“三 split 行集一致 + test 无未解析 + 全部排除项记录在 audit/mapping”
+（`stifflow/freeze_data.py`；受影响条目本地见
+`runs/etflow-official/freeze-ambiguous-strict.json`）。冻结清单
+`cache/qm9-v3-freeze-strict/manifest.json`（variant `qm9-v3-clean-v1`）。
+全量标签分片完成：train 109/109、val 10/10（job 4183844/4183845）；mmap 合并与
+references 正在进行，结果见后续记录。
+
 ## 历史 CPU 实现与验收记录
 
 按用户后续指示，暂缓 GPU 验收，先实现可在 CPU 检查的后续部分。
