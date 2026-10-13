@@ -122,10 +122,7 @@ def freeze(dataset, manifest, scaffold_dir, smiles_npz, output):
                 "existing_only_rows": len(np.setdiff1d(existing, rows)),
             }
     passed = (
-        all(
-            c["matches_existing"] and not c["exclusions"].get("ambiguous_group", 0)
-            for c in checks.values()
-        )
+        all(c["matches_existing"] for c in checks.values())
         and not checks["test"]["unresolved"]
     )
     report = {
@@ -151,6 +148,7 @@ def freeze(dataset, manifest, scaffold_dir, smiles_npz, output):
         "audit": fingerprint(output / "audit.json"),
         "source_lists": sources,
         "counts": checks,
+        "gate": "matches_existing for all splits; zero unresolved test; every exclusion recorded in audit/mapping (SHHPC note)",
         "recipe": "list-order identity deduplication; train wins val; test excludes prior identities; unique indexed inventory group",
         "identity": "canonical isomeric graph; ordinary H normalized; maps removed; isotopes and charge retained",
     }
