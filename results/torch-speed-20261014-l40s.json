@@ -296,7 +296,11 @@
     "ruff": "passed",
     "black": "passed",
     "bash_syntax": "passed",
-    "gpu_tests_are_separate": true
+    "gpu_tests_are_separate": true,
+    "formal_config_forwarding_checks": 4,
+    "final_speed_suite_passed": 2,
+    "command": "python -m pytest -q tests/test_targets.py tests/test_model_integration.py tests/test_official_data.py tests/test_formal_cache.py tests/test_formal_training.py tests/test_formal_evaluation.py tests/test_speed.py tests/test_paths.py",
+    "final_command": "python -m pytest -q tests/test_speed.py"
   },
   "measurements": [
     {
@@ -1626,12 +1630,229 @@
     "Initial timings use 6 updates; confirmation uses 12, all after 2 warmups",
     "BF16 finite but 3.28% gradient deviation; short training does not validate quality",
     "Microbatch 256 intentionally failed two largest-molecule memory probes; no formal use",
-    "Worker shutdown emitted shared-temp filesystem EBUSY warnings; tests completed; later script uses node-local temp",
-    "Latest script temp/config-path edits were syntax checked only, benchmark code SHA remains the recorded commit"
+    "Main job worker shutdown emitted shared-temp filesystem EBUSY warnings; node-local temp supplement completed with none",
+    "Formal config-path edits passed default/override argument self-checks; later main-loop change ensures prefetch4 is always included, full matrix was not repeated",
+    "Short-run gradients were finite with frequent clipping and pre-clip norm up to approximately 5e6; convergence requires SHHPC validation"
   ],
   "raw_report": {
     "path": "/scratch/ys6132/project/0_stiff_flow_matching/26Fall_DL/runs/torch-speed/19784028/summary.json",
     "bytes": 56903,
     "sha256": "6b38883d79a7b03060b83a2b6f7d0754ee08a215abc15c3cc88e2e1b901ab29c"
+  },
+  "prefetch_supplement": {
+    "benchmark_commit": "c3288ceb7dc60b6768d2257adf7279ddab19c4bd",
+    "code_provenance": {
+      "repos": {
+        "ETFlow-reference": {
+          "path": "/scratch/ys6132/project/0_stiff_flow_matching/26Fall_DL/ETFlow-reference",
+          "head": "80f82d7d142bc3872412d2966a8d71ed14462b18",
+          "branch": "main",
+          "status": "",
+          "diff": "",
+          "untracked": []
+        },
+        "stifflow-v1": {
+          "path": "/scratch/ys6132/project/0_stiff_flow_matching/26Fall_DL/stifflow-v1",
+          "head": "c3288ceb7dc60b6768d2257adf7279ddab19c4bd",
+          "branch": "stifflow-v1",
+          "status": "?? formulation/\n",
+          "diff": "",
+          "untracked": [
+            {
+              "path": "/scratch/ys6132/project/0_stiff_flow_matching/26Fall_DL/stifflow-v1/formulation/StifFlow_core_formulation_v1.pdf",
+              "bytes": 364944,
+              "sha256": "5374c6f2cb600ef800f12f1840d1e4495c371a8fd1877bbe32809ef2a154a988"
+            },
+            {
+              "path": "/scratch/ys6132/project/0_stiff_flow_matching/26Fall_DL/stifflow-v1/formulation/StifFlow_core_formulation_v1.tex",
+              "bytes": 32392,
+              "sha256": "422efa327fdb6284ee37b61500f41d109263cc77ed81759d0f772a5b5f390d42"
+            }
+          ]
+        },
+        "stifflow-v1-alternative-A": {
+          "path": "/scratch/ys6132/project/0_stiff_flow_matching/26Fall_DL/stifflow-v1-alternative-A",
+          "head": "55009a52c2a00b2b379275c9553e3eead3922884",
+          "branch": "alternative-a",
+          "status": "?? formulation/\n",
+          "diff": "",
+          "untracked": [
+            {
+              "path": "/scratch/ys6132/project/0_stiff_flow_matching/26Fall_DL/stifflow-v1-alternative-A/formulation/StifFlow_v1_Alternative_A..tex",
+              "bytes": 63448,
+              "sha256": "7ca92270d16e992aa4c2162a14628b7398f906a31e2a571339034d006ea148f0"
+            },
+            {
+              "path": "/scratch/ys6132/project/0_stiff_flow_matching/26Fall_DL/stifflow-v1-alternative-A/formulation/StifFlow_v1_Alternative_A.pdf",
+              "bytes": 441061,
+              "sha256": "ecbbc2a76e269bd75774642f1e81997c88330f0379c2c1f2621aa9612111ef82"
+            }
+          ]
+        },
+        "stifflow-v1-benchmark": {
+          "path": "/scratch/ys6132/project/0_stiff_flow_matching/26Fall_DL/stifflow-v1-benchmark",
+          "head": "cbeb314bcd1f99f2a7354477592791f6151821a7",
+          "branch": "benchmark-harness",
+          "status": "",
+          "diff": "",
+          "untracked": []
+        }
+      },
+      "formulations": [
+        {
+          "path": "/scratch/ys6132/project/0_stiff_flow_matching/26Fall_DL/stifflow-v1/formulation/StifFlow_core_formulation_v1.pdf",
+          "bytes": 364944,
+          "sha256": "5374c6f2cb600ef800f12f1840d1e4495c371a8fd1877bbe32809ef2a154a988"
+        },
+        {
+          "path": "/scratch/ys6132/project/0_stiff_flow_matching/26Fall_DL/stifflow-v1/formulation/StifFlow_core_formulation_v1.tex",
+          "bytes": 32392,
+          "sha256": "422efa327fdb6284ee37b61500f41d109263cc77ed81759d0f772a5b5f390d42"
+        },
+        {
+          "path": "/scratch/ys6132/project/0_stiff_flow_matching/26Fall_DL/stifflow-v1-alternative-A/formulation/StifFlow_v1_Alternative_A..tex",
+          "bytes": 63448,
+          "sha256": "7ca92270d16e992aa4c2162a14628b7398f906a31e2a571339034d006ea148f0"
+        },
+        {
+          "path": "/scratch/ys6132/project/0_stiff_flow_matching/26Fall_DL/stifflow-v1-alternative-A/formulation/StifFlow_v1_Alternative_A.pdf",
+          "bytes": 441061,
+          "sha256": "ecbbc2a76e269bd75774642f1e81997c88330f0379c2c1f2621aa9612111ef82"
+        }
+      ],
+      "official_pairs": {
+        "qm9-o3": {
+          "config": {
+            "path": "/scratch/ys6132/project/0_stiff_flow_matching/26Fall_DL/ETFlow-reference/configs/qm9-o3.yaml",
+            "bytes": 2184,
+            "sha256": "3bf9936eca6497ff5c55f06e980cda20d24f8119bf55b0f13d4b97e92c624cec"
+          },
+          "checkpoint": {
+            "path": "/scratch/ys6132/project/0_stiff_flow_matching/26Fall_DL/dataset/ET-Flow_zenodo/qm9-o3.ckpt",
+            "bytes": 100681751,
+            "sha256": "c2cd6e889b61409333b0803beb80a8da36092e9d8ed7f57dc65212243ae51d5f"
+          }
+        },
+        "drugs-o3": {
+          "config": {
+            "path": "/scratch/ys6132/project/0_stiff_flow_matching/26Fall_DL/ETFlow-reference/configs/drugs-o3.yaml",
+            "bytes": 2150,
+            "sha256": "cdcc9b2aa154a161c1a9b7ca88bc734f7102b40b5f5ceeccccfd729994632ef3"
+          },
+          "checkpoint": {
+            "path": "/scratch/ys6132/project/0_stiff_flow_matching/26Fall_DL/dataset/ET-Flow_zenodo/drugs-o3.ckpt",
+            "bytes": 100676519,
+            "sha256": "a24ae9a1fed2708696929308ed1dc10ab167fd66a2d51c44a4afb6c11badccb2"
+          }
+        },
+        "drugs-so3": {
+          "config": {
+            "path": "/scratch/ys6132/project/0_stiff_flow_matching/26Fall_DL/ETFlow-reference/configs/drugs-so3.yaml",
+            "bytes": 2122,
+            "sha256": "1a130ea8fab64834180663022e2895fe495bc9a1c02ff54b04c54f139d0069bb"
+          },
+          "checkpoint": {
+            "path": "/scratch/ys6132/project/0_stiff_flow_matching/26Fall_DL/dataset/ET-Flow_zenodo/drugs-so3.ckpt",
+            "bytes": 109393319,
+            "sha256": "0a18e82860d1a39573f0d9a627a639b6b48e53a3f3d7697329cbac21fe6f55a1"
+          }
+        }
+      }
+    },
+    "driver_version": "610.43.02",
+    "allocation": {
+      "SLURM_JOB_ID": "19786218",
+      "SLURM_JOB_NODELIST": "gl019",
+      "SLURM_JOB_GPUS": "2",
+      "SLURM_JOB_PARTITION": "l40s_public"
+    },
+    "allocation_elapsed_seconds": 101,
+    "gpu_count": 1,
+    "elapsed_seconds": 34.66691208584234,
+    "data_manifest": {
+      "path": "/scratch/ys6132/project/0_stiff_flow_matching/26Fall_DL/cache/torch-speed/19784028/manifest.json",
+      "bytes": 37430,
+      "sha256": "5b751c690caeb2132d6535053439ef4efe4171e07b9d922367e525412e09434f"
+    },
+    "entrypoint": {
+      "path": "/scratch/ys6132/project/0_stiff_flow_matching/26Fall_DL/runs/torch-speed/prefetch-pair.py",
+      "bytes": 1981,
+      "sha256": "cdce1ad0ad0a70a1d52ebef817f4d448fd4d0b527e82fe444ec535e60e5336a3"
+    },
+    "measurements": [
+      {
+        "case": {
+          "method": "precision",
+          "microbatch": 32,
+          "effective_batch": 128,
+          "accumulation": 4,
+          "runtime": "optimized",
+          "precision": "32-true",
+          "workers": 2,
+          "prefetch": 2,
+          "pin_memory": false
+        },
+        "stress": false,
+        "profiled": false,
+        "status": "completed",
+        "startup_seconds": 6.158281373791397,
+        "start_step": 0,
+        "global_step": 14,
+        "consumed_samples": 1792,
+        "peak_allocated_bytes": 6489548800,
+        "peak_reserved_bytes": 7891582976,
+        "measured_updates": 12,
+        "seconds_per_update": 0.9900988552641744,
+        "median_seconds_per_update": 0.9948582772631198,
+        "p90_seconds_per_update": 1.0141624423209579,
+        "std_seconds_per_update": 0.03722921819998759,
+        "samples_per_second": 129.28002019136517,
+        "atoms_per_second": 2583.0754034329407,
+        "wall_seconds": 18.46245417976752
+      },
+      {
+        "case": {
+          "method": "precision",
+          "microbatch": 32,
+          "effective_batch": 128,
+          "accumulation": 4,
+          "runtime": "optimized",
+          "precision": "32-true",
+          "workers": 2,
+          "prefetch": 4,
+          "pin_memory": false
+        },
+        "stress": false,
+        "profiled": false,
+        "status": "completed",
+        "startup_seconds": 3.6128411651588976,
+        "start_step": 0,
+        "global_step": 14,
+        "consumed_samples": 1792,
+        "peak_allocated_bytes": 6489548800,
+        "peak_reserved_bytes": 7889485824,
+        "measured_updates": 12,
+        "seconds_per_update": 0.9876227934534351,
+        "median_seconds_per_update": 0.994381710421294,
+        "p90_seconds_per_update": 1.0107924630865455,
+        "std_seconds_per_update": 0.039360607092863854,
+        "samples_per_second": 129.60413717510562,
+        "atoms_per_second": 2589.551412697911,
+        "wall_seconds": 15.911028793081641
+      }
+    ],
+    "raw_report": {
+      "path": "/scratch/ys6132/project/0_stiff_flow_matching/26Fall_DL/runs/torch-speed/19786218/summary.json",
+      "bytes": 9320,
+      "sha256": "6e45648e5118adb902bfa6a9ee78cdb403d704d28b42af229994670429d5b48d"
+    },
+    "worker_cleanup_errors": 0,
+    "conclusion": "Prefetch4 improves 0.25%, below per-update variation; keep prefetch2. Supplement paired on one L40S, separate from primary gl004 allocation."
+  },
+  "total_gpu_budget": {
+    "gpu_count_at_once": 1,
+    "allocation_elapsed_seconds": 658,
+    "gpu_hours": 0.1827777777777778,
+    "approved_gpu_hours": 1
   }
 }

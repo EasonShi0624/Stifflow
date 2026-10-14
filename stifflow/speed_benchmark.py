@@ -613,8 +613,8 @@ def main():
         ]
         loader_valid = [r for r in loader_cases if r["status"] == "completed"]
         tuned = max(loader_valid, key=lambda r: r["samples_per_second"])["case"]
-        if tuned["workers"]:
-            loader_cases.append(run({**tuned, "prefetch": 4}, "prefetch"))
+        prefetch_case = {**tuned, "workers": tuned["workers"] or 2, "prefetch": 4}
+        loader_cases.append(run(prefetch_case, "prefetch"))
         loader_cases.append(run({**tuned, "pin_memory": True}, "pinned"))
         loader_valid = [r for r in loader_cases if r["status"] == "completed"]
         tuned = max(loader_valid, key=lambda r: r["samples_per_second"])["case"]

@@ -413,8 +413,12 @@ Alternative A 为 `55009a52c2a00b2b379275c9553e3eead3922884`，benchmark 为
 有效 batch256 的 32×8 为 130.55 samples/s，batch512 的 32×16 为 128.39 samples/s；
 把 microbatch 提至128反而下降至119.13/117.56 samples/s，本轮没有增大有效 batch 的依据。
 worker0/2/4 在32×4下为131.27/129.13/129.51 samples/s；pinned memory 为131.15，
-收益不足以支持全量 I/O 改为 worker0。此次最佳 worker0 无需 prefetch；脚本支持非零 worker
-的 prefetch2/4 对照，本轮没有再运行 prefetch4。
+收益不足以支持全量 I/O 改为 worker0。主测试最优为 worker0；补充 job `19786218` 在
+`gl019` 的一张 L40S 上复用相同缓存，worker2、32×4、每格2预热+12计时更新，
+prefetch2/4 分别为129.28/129.60 samples/s，差0.25%，小于约0.04秒的更新标准差。
+保留 prefetch2。补充运行代码为 `c3288ceb7dc60b6768d2257adf7279ddab19c4bd`，
+退出 `0:0`，分配1m41s；两次作业合计10m58s，0.183 GPU 小时。
+后续完整测试脚本始终包含一次非零 worker 的 prefetch4 格。
 
 BF16 的三方法分别为126.81/129.60/129.98 samples/s，显存保留量约6.20 GB，
 比 FP32 略慢；batch256/512 的 BF16 为127.16/126.33 samples/s。
@@ -427,8 +431,10 @@ GPU 连续4更新与2+恢复2更新的模型、优化器、scheduler、路径/to
 12156→2789；float64 target 的 CPU 区间18.01→10.75 ms/更新。此对照同时改变
 microbatch/累积与检查实现，不能把全部收益归给某一项；profiling 有额外开销，未计入吞吐表。
 物理标签预处理0.296秒、整个小缓存准备4.174秒，单列于结果。共享临时目录导致 worker
-清理时出现 EBUSY 警告，未阻断测试；后续 Torch 脚本改用节点本地临时目录，已做 shell 检查，
-没有为该目录修正重复申请 GPU。
+清理时出现 EBUSY 警告，未阻断测试；Torch 脚本改用节点本地临时目录，补充作业使用相同
+目录规则并运行 worker2，两格均无 EBUSY/Traceback。日志也显示频繁裁剪较大的梯度，
+个别裁剪前 norm 约5e6，但 loss/梯度保持有限；沿用 clip100，正式验收应核查其分布与
+损失稳定性，短速度测试不足以判断收敛。
 
 SHHPC 下一轮先验证 FP32 32×4，继续有效 batch128、250k更新、seeds42/43/44、原学习率。
 复用已完成的 strict-v3 train/val 标签，无需重做 freeze/Hessian；references 用新代码在新目录
