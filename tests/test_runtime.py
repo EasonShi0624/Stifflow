@@ -1,0 +1,194 @@
+"""Small CPU contracts of DDP IDs, memory budgets and legacy configuration."""
+
+from pathlib import Path
+
+import numpy as np
+import pytest
+import torch
+import yaml
+
+from stifflow.model import StifFlow, graph_data
+from stifflow.source import prepare_source
+from stifflow.speed_benchmark import case
+from stifflow.training import advance_cursor, allocator_budget, make_loader
+
+
+def tiny_records():
+    graph = {
+        "atomic_numbers": [6, 1, 1],
+        "bonds": [[0, 1], [1, 0], [0, 2], [2, 0]],
+        "node_attr": np.zeros((3, 10)),
+        "bond_attr": np.ones((4, 3)),
+    }
+    return [
+        {
+            "graph": graph_data(graph),
+            "source": prepare_source(graph),
+            "positions": np.arange(18, dtype=float).reshape(2, 3, 3),
+            "labels": [None, None],
+        }
+    ]
+
+
+def test_rank_draw_blocks_resume_and_effective_batch():
+    assert case("precision", 32, devices=2)["accumulation"] == 2
+    assert case("precision", 16, devices=2)["accumulation"] == 4
+    records = tiny_records()
+    ids = []
+    for rank in (0, 1):
+        loader = make_loader(
+            records, 2, 2, 42, accumulate_grad_batches=2, rank=rank, world_size=2
+        )
+        cursor = 0
+        sequence = []
+        for _, rows in loader:
+            sequence.extend(r["draw_id"] for r in rows)
+            cursor = advance_cursor(cursor, rows, rank, 2)
+        assert cursor == 16
+        ids.extend(sequence)
+        resumed = make_loader(
+            records,
+            2,
+            1,
+            42,
+            accumulate_grad_batches=2,
+            rank=rank,
+            world_size=2,
+            consumed_samples=8,
+        )
+        assert [r["draw_id"] for _, rows in resumed for r in rows] == sequence[4:]
+    assert sorted(ids) == list(range(16))
+    with pytest.raises(RuntimeError):
+        advance_cursor(0, [{"draw_id": 1}], 0, 2)
+    with pytest.raises(ValueError):
+        make_loader(records, 2, 1, 42, rank=2, world_size=2)
+
+
+def test_memory_ceiling_counts_overhead_and_validates_fractions():
+    cfg = {"budget_gib": 24, "preferred_fraction": 0.9, "hard_fraction": 0.95}
+    assert allocator_budget(cfg, 48 * 1024**3, 1024**3) == pytest.approx(
+        (22.8 - 1) / 48
+    )
+    with pytest.raises(MemoryError):
+        allocator_budget(cfg, 24 * 1024**3, 24 * 1024**3)
+    with pytest.raises(ValueError):
+        allocator_budget({**cfg, "preferred_fraction": 0.99}, 24 * 1024**3, 0)
+
+
+def test_global_draw_targets_ignore_rank_partition_and_keep_default_stream():
+    records = tiny_records()
+    model = StifFlow(
+        method="control",
+        target_rng_mode="global_draw",
+        hidden_channels=8,
+        num_layers=1,
+        num_rbf=8,
+        num_heads=2,
+        clip_during_norm=True,
+        lr_scheduler_type=None,
+    )
+    model.log_helper = lambda *args, **kwargs: None
+    full = next(iter(make_loader(records, 4, 1, 42, sampling="uniform_conformer_rows")))
+    expected = model.generic_step(full, 0, "val")
+    actual = (
+        sum(
+            model.generic_step(
+                next(
+                    iter(
+                        make_loader(
+                            records,
+                            2,
+                            1,
+                            42,
+                            sampling="uniform_conformer_rows",
+                            rank=r,
+                            world_size=2,
+                        )
+                    )
+                ),
+                0,
+                "val",
+            )
+            for r in (0, 1)
+        )
+        / 2
+    )
+    torch.testing.assert_close(expected, actual, atol=1e-5, rtol=1e-5)
+    assert (
+        StifFlow(
+            method="control",
+            hidden_channels=8,
+            num_layers=1,
+            num_rbf=8,
+            num_heads=2,
+            clip_during_norm=True,
+        ).target_rng_mode
+        == "stream"
+    )
+    with pytest.raises(ValueError):
+        StifFlow(target_rng_mode="invalid")
+
+
+def test_formal_4090_config_preserves_training_budget():
+    base = yaml.safe_load(Path("configs/qm9-formal.yaml").read_text())
+    cfg = yaml.safe_load(Path("configs/qm9-formal-4090d.yaml").read_text())
+    assert (
+        cfg["batch_size"] * cfg["profiles"]["formal"]["accumulate_grad_batches"] == 128
+    )
+    assert cfg["model_args"] == base["model_args"] and cfg["source"] == base["source"]
+    assert cfg["profiles"]["formal"]["steps"] == 250000
+    assert cfg["training_seeds"] == [42, 43, 44]
+    assert cfg["runtime_acceptance"] == "torch_runtime"
+
+
+def test_runtime_receipt_scope_code_recovery_and_memory_gate(monkeypatch):
+    import copy
+
+    from stifflow import formal
+
+    cfg = yaml.safe_load(Path("configs/qm9-formal-4090d.yaml").read_text())
+    signature = {"verified": "sha"}
+    monkeypatch.setattr(formal, "runtime_code_signature", lambda: signature)
+    r = {
+        "kind": "torch_runtime",
+        "status": "completed",
+        "devices": 1,
+        "selected_config": cfg,
+        "runtime_code": signature,
+        "maximum_atoms": 29,
+        "gpu": {"total_bytes": 48 * 1024**3},
+        "checks": {
+            m
+            + "-formal-stream-resume": {
+                "passed": True,
+                "updates": 40,
+                "consumed_samples": 5120,
+            }
+            for m in formal.METHODS
+        },
+        "cases": [
+            {
+                "maximum": True,
+                "status": "completed",
+                "case": {"method": m, "microbatch": 32},
+                "peak_reserved_whole_case_bytes": 10 * 1024**3,
+                "peak_device_used_bytes": 11 * 1024**3,
+            }
+            for m in formal.METHODS
+        ],
+    }
+    formal.require_torch_runtime(r, cfg)
+    for key, value in (
+        ("runtime_code", {}),
+        ("devices", 2),
+        ("maximum_atoms", 25),
+        ("checks", {}),
+    ):
+        bad = copy.deepcopy(r)
+        bad[key] = value
+        with pytest.raises(ValueError):
+            formal.require_torch_runtime(bad, cfg)
+    bad = copy.deepcopy(r)
+    bad["cases"][0]["peak_device_used_bytes"] = 23 * 1024**3
+    with pytest.raises(ValueError):
+        formal.require_torch_runtime(bad, cfg)

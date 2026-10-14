@@ -1,0 +1,74 @@
+seed: 42
+dataset_seed: 42
+training_seeds:
+- 42
+- 43
+- 44
+generation_seed: 42
+row_rng_domain: 2
+batch_size: 32
+source:
+  sigma0: 1.0
+  rho: 1.0
+model_args:
+  network_type: TorchMDDynamics
+  hidden_channels: 160
+  num_layers: 20
+  num_rbf: 64
+  rbf_type: expnorm
+  trainable_rbf: true
+  activation: silu
+  neighbor_embedding: true
+  cutoff_lower: 0.0
+  cutoff_upper: 10.0
+  max_z: 100
+  node_attr_dim: 10
+  edge_attr_dim: 3
+  attn_activation: silu
+  num_heads: 8
+  distance_influence: both
+  reduce_op: sum
+  qk_norm: true
+  clip_during_norm: true
+  so3_equivariant: true
+  output_layer_norm: true
+  sigma: 0.0
+  prior_type: gaussian
+  optimizer_type: AdamW
+  lr: 0.0007
+  weight_decay: 1.0e-08
+  lr_scheduler_type: CosineAnnealingWarmupRestarts
+  first_cycle_steps: 250000
+  cycle_mult: 1.0
+  max_lr: 0.0007
+  min_lr: 1.0e-08
+  warmup_steps: 0
+  gamma: 0.05
+  last_epoch: -1
+  lr_scheduler_monitor: val/loss
+  lr_scheduler_interval: step
+  lr_scheduler_frequency: 1
+  parity_switch: null
+  sample_time_dist: uniform
+profiles:
+  formal:
+    train_molecules: all
+    val_molecules: all
+    steps: 250000
+    accumulate_grad_batches: 4
+    num_workers: 2
+    validation_rows: 4096
+    validation_every: 5000
+    recovery_every: 500
+    snapshot_every: 25000
+    prefetch_factor: 2
+    pin_memory: false
+evaluation:
+  monitor_molecules: 512
+  steps: 50
+  reference_ratio: 2
+runtime_acceptance: torch_runtime
+gpu_memory:
+  budget_gib: 24
+  preferred_fraction: 0.9
+  hard_fraction: 0.95

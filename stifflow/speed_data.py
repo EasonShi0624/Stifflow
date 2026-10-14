@@ -228,3 +228,108 @@ def prepare_speed_cache(split_manifest, output, source_config, count=16, attempt
     )
     atomic_json(output / "manifest.json", manifest)
     return manifest
+
+
+def prepare_max_cache(split_manifest, output, source_config):
+    """Bounded original-conformer checks of two train molecules at QM9's 29-atom bound."""
+    output = Path(output)
+    output.mkdir(parents=True, exist_ok=False)
+    started = time.perf_counter()
+    split = read_json(split_manifest)
+    test_file = split["official_test"]
+    if (
+        not test_file.get("isolated")
+        or fingerprint(test_file["path"])["sha256"] != test_file["sha256"]
+    ):
+        raise ValueError("Unverified local training/test isolation")
+    with Path(test_file["path"]).open(newline="") as stream:
+        test_ids = {molecule_identity(row["smiles"]) for row in csv.DictReader(stream)}
+    raw_dir = Path(split["raw_dir"]).resolve()
+    records, ledger = [], []
+    for identity_text in ("CCCCCCCCC", "CCCCCCC(C)C"):
+        entries = [
+            e
+            for e in split["entries"]
+            if e["molecule_id"] == identity_text and e["split"] == "train"
+        ]
+        if len(entries) != 1 or molecule_identity(identity_text) in test_ids:
+            raise ValueError("Largest molecule is not a unique isolated training entry")
+        path = (raw_dir / entries[0]["file"]).resolve()
+        if not path.is_relative_to(raw_dir) or path.stat().st_size > 1024**2:
+            raise ValueError(
+                "Maximum-molecule raw artifact escapes the small-read bound"
+            )
+        with path.open("rb") as stream:
+            raw = pickle.load(stream)  # Trusted local GEOM artifact.
+        for index, conformer in enumerate(raw["conformers"][:4]):
+            item = {"id": identity_text, "raw_index": index, "raw": fingerprint(path)}
+            ledger.append(item)
+            try:
+                mol = Chem.Mol(conformer["rd_mol"])
+                if mol.GetNumAtoms() != 29 or mol.GetNumHeavyAtoms() != 9:
+                    raise ValueError(
+                        "The maximum-size QM9 witness has unexpected atoms"
+                    )
+                positions = (
+                    mol.GetConformer()
+                    .GetPositions()
+                    .astype(np.float32)
+                    .astype(np.float64)
+                )
+                for atom, xyz in enumerate(positions):
+                    mol.GetConformer().SetAtomPosition(atom, xyz)
+                graph = graph_from_mol(mol)
+                source = prepare_source(graph, source_config)
+                label_started = time.perf_counter()
+                try:
+                    arrays, audits, residuals = build_label_arrays(
+                        [
+                            {
+                                "rd_mol": mol,
+                                "positions": positions,
+                                "conformer_id": f"{identity_text}:raw:{index}",
+                            }
+                        ],
+                        source,
+                    )
+                finally:
+                    item["stiffness_seconds"] = time.perf_counter() - label_started
+                item.update(
+                    status="accepted",
+                    atoms=29,
+                    audit=audits,
+                    covariance_residuals=residuals,
+                )
+                records.append(
+                    {
+                        "id": "qm9:" + identity_text,
+                        "graph": graph,
+                        "source": source,
+                        "arrays": arrays,
+                    }
+                )
+                break
+            except (ValueError, FloatingPointError, np.linalg.LinAlgError) as exc:
+                item.update(status="rejected", reason=f"{type(exc).__name__}: {exc}")
+            finally:
+                atomic_json(output / "attempts.json", ledger)
+    if len(records) != 2:
+        raise ValueError(
+            "No smaller molecules can replace a failed maximum-size label witness"
+        )
+    manifest = pack_speed_records(records, output, source_config)
+    manifest.update(
+        input_manifest=fingerprint(split_manifest),
+        atoms=[29, 29],
+        maximum_atoms=29,
+        maximum_basis="GEOM-QM9 9 heavy / 29 total atom bound; both witnesses in local frozen train",
+        cohort="Torch local legacy train, not SHHPC strict-v3",
+        coordinate_rule="Original selected conformer, float32 rounding, never relaxed",
+        preparation_seconds=time.perf_counter() - started,
+        stiffness_preprocessing_seconds=sum(
+            r.get("stiffness_seconds", 0) for r in ledger
+        ),
+        attempts=fingerprint(output / "attempts.json"),
+    )
+    atomic_json(output / "manifest.json", manifest)
+    return manifest

@@ -473,6 +473,29 @@ sbatch "${GPU_ARGS[@]}" scripts/formal_acceptance.sbatch
 保留同一个 `STIFFLOW_FORMAL_CONFIG`、代码 SHA 和验收清单，不把候选验收与默认配置混用。
 本轮未在 Torch 启动正式训练，未获取 SHHPC 原始日志；其历史耗时仍只是 README 回报值。
 
+### 4090D 配置与本地最大分子 / 双卡测量
+
+本轮按用户指示在 Torch 进行小规模 GPU 验证；完成后不再要求 SHHPC 单独提交
+`formal_acceptance.sbatch`。新配置 `configs/qm9-formal-4090d.yaml` 保留正式 FP32、
+20 层 / hidden160、有效 batch128、250k 更新及原学习率，初始 microbatch32×累积4，
+显存按 24 GiB 的 90% 作为优选线、95% 为硬上限，并计入非 PyTorch 的设备占用。
+
+`stifflow.runtime_benchmark` 复用现有训练与计时入口，用本地冻结 legacy train 中
+两种 29 原子 / 9 重原子分子的真实原始构象填满每个压力 batch；仅生成两个轻量
+物理标签，缓存保持 speed_only。Torch 无 4090D，使用 L40S 和 24 GiB allocator
+上限作代理验证，不能据此证明 4090D 的驱动显存或 PCIe 通信性能。
+
+两卡 DDP 只评测：每卡32×累积2、全局有效 batch128，每个全局 draw ID 只出现一次。
+按 draw ID 的监督 RNG 仅用于单卡 / DDP 等监督比较，正式单卡默认 stream RNG 不变。
+检查三方法的裁剪前梯度、loss，以及连续40更新与20+恢复20更新的 checkpoint 状态。
+本轮结果尚待 GPU 作业返回；相关 CPU 检查已通过，不能当作 GPU 验收结果。
+单卡 / 两卡 allocation 上限为12 / 18分钟，关闭 requeue；加上既有658 GPU秒，
+最多3538 GPU秒，均计入原有一小时预算。验收记录与实际 GPU秒在作业完成后补充。
+
+`runtime_acceptance: torch_runtime` 配置只接受同算法文件哈希、同配置、三方法正式
+stream RNG 40更新恢复通过且29原子显存合格的 Torch 记录；原有完整生产缓存、划分、
+标签哈希与 resume 签名检查继续执行。默认旧配置的 SHHPC 验收门禁保持原样。
+
 ## 历史 CPU 实现与验收记录
 
 按用户后续指示，暂缓 GPU 验收，先实现可在 CPU 检查的后续部分。

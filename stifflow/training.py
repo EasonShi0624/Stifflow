@@ -12,14 +12,45 @@ from .preflight import WORKSPACE, fingerprint, provenance
 from .smoke import external_directory
 
 
-def advance_cursor(consumed, supervision):
+def allocator_budget(memory, total, overhead):
+    if not (
+        memory["budget_gib"] > 0
+        and 0 < memory["preferred_fraction"] <= memory["hard_fraction"] < 1
+    ):
+        raise ValueError("Invalid memory budget/fractions")
+    allowed = (
+        min(total, memory["budget_gib"] * 1024**3) * memory["hard_fraction"] - overhead
+    )
+    if allowed <= 0:
+        raise MemoryError("Device overhead already exceeds the GPU budget")
+    return allowed / total
+
+
+def gpu_memory_check(memory):
+    import torch
+
+    free, total = torch.cuda.mem_get_info()
+    limit = min(total, memory["budget_gib"] * 1024**3) * memory["hard_fraction"]
+    reserved, used = torch.cuda.max_memory_reserved(), total - free
+    valid = torch.tensor(int(max(reserved, used) <= limit), device="cuda")
+    if torch.distributed.is_initialized():
+        torch.distributed.all_reduce(valid, op=torch.distributed.ReduceOp.MIN)
+    if not valid:
+        raise MemoryError("Exceeds the GPU-memory budget including device overhead")
+    return reserved, used
+
+
+def advance_cursor(consumed, supervision, rank=0, world_size=1):
+    if world_size < 1 or not 0 <= rank < world_size:
+        raise ValueError("Invalid data rank/world size")
     if "draw_id" not in supervision[0]:
         return consumed
+    start = consumed + rank * len(supervision)
     if [r["draw_id"] for r in supervision] != list(
-        range(consumed, consumed + len(supervision))
+        range(start, start + len(supervision))
     ):
         raise RuntimeError("Data cursor repeated/skipped samples after resume")
-    return consumed + len(supervision)
+    return consumed + len(supervision) * world_size
 
 
 def load_records(manifest_path, split, count, method, source_config):
@@ -183,10 +214,15 @@ def make_loader(
     rng_domain=0,
     pin_memory=False,
     prefetch_factor=2,
+    rank=0,
+    world_size=1,
 ):
     import torch
     from torch.utils.data import DataLoader, Dataset
     from torch_geometric.data import Batch
+
+    if world_size < 1 or not 0 <= rank < world_size:
+        raise ValueError("Invalid loader rank/world size")
 
     packed = hasattr(records, "sample")
     lengths = (
@@ -207,24 +243,29 @@ def make_loader(
 
         def __getitem__(self, index):
             # Stateless draw IDs preserve graph/conformer choices across resume.
+            draw_id = (
+                start
+                + (index // batch_size * world_size + rank) * batch_size
+                + index % batch_size
+            )
             record_index, conf = draw_record(
                 lengths,
                 seed,
-                start + index,
+                draw_id,
                 sampling,
                 offsets,
                 rng_domain,
             )
             if packed:
                 graph, supervision = records.sample(record_index, conf)
-                supervision["draw_id"] = start + index
+                supervision["draw_id"] = draw_id
                 return graph, supervision
             record = records[record_index]
             return record["graph"], {
                 "x1": record["positions"][conf],
                 "source": record["source"],
                 "label": record["labels"][conf],
-                "draw_id": start + index,
+                "draw_id": draw_id,
             }
 
     def collate(rows):
@@ -345,6 +386,7 @@ def main():
         source_config=cfg["source"],
         **cfg["model_args"],
     )
+    model.gpu_memory = cfg.get("gpu_memory")
     model.training_signature = {
         "train": fingerprint(args.train_labels)["sha256"],
         "val": fingerprint(args.val_labels)["sha256"],
@@ -353,7 +395,7 @@ def main():
     }
     run_provenance = provenance()
     if formal:
-        from .formal import acceptance_signature
+        from .formal import acceptance_signature, require_torch_runtime
 
         if max_steps > 40:
             if args.acceptance is None:
@@ -361,7 +403,9 @@ def main():
                     "Formal training requires --acceptance from the new 40-update/resume checks"
                 )
             accepted = json.loads(args.acceptance.read_text())
-            if (
+            if cfg.get("runtime_acceptance") == "torch_runtime":
+                require_torch_runtime(accepted, cfg)
+            elif (
                 accepted.get("status") != "completed"
                 or accepted.get("methods") != ["precision", "alternative_a", "control"]
                 or accepted.get("updates") != 40
@@ -519,6 +563,7 @@ def main():
             global_step=trainer.global_step,
             consumed_samples=model.consumed_samples,
             peak_gpu_bytes=torch.cuda.max_memory_allocated(),
+            peak_reserved_gpu_bytes=torch.cuda.max_memory_reserved(),
         )
     except Exception as exc:
         report.update(status="failed", error=f"{type(exc).__name__}: {exc}")

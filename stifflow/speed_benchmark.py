@@ -16,6 +16,7 @@ import torch
 import yaml
 from etflow.models.loss import batchwise_mse_loss
 from lightning.pytorch import Callback, Trainer, seed_everything
+from lightning.pytorch.strategies import DDPStrategy
 from torch_geometric.data import Batch
 
 from . import precision
@@ -44,13 +45,14 @@ def legacy_finite(tensors, what):
 
 
 def case(method, microbatch, effective=128, **options):
-    if microbatch < 1 or effective % microbatch:
+    devices = options.get("devices", 1)
+    if microbatch < 1 or devices not in (1, 2) or effective % (microbatch * devices):
         raise ValueError("Microbatch must divide the effective batch")
     return {
         "method": method,
         "microbatch": microbatch,
         "effective_batch": effective,
-        "accumulation": effective // microbatch,
+        "accumulation": effective // (microbatch * devices),
         "runtime": "optimized",
         "precision": "32-true",
         "workers": 2,
@@ -61,13 +63,44 @@ def case(method, microbatch, effective=128, **options):
 
 
 class UpdateTiming(Callback):
-    def __init__(self, warmup, deadline, case_started, effective):
+    def __init__(self, warmup, deadline, case_started, effective, memory=None):
         self.warmup, self.deadline, self.case_started = warmup, deadline, case_started
         self.effective = effective
         self.rows = []
         self.last_step = 0
         self.samples = self.atoms = 0
+        self.loss_sum = 0.0
         self.startup_seconds = None
+        self.memory = memory
+        self.peak_device_used_bytes = self.peak_reserved_bytes = 0
+
+    def memory_check(self):
+        reserved = torch.cuda.max_memory_reserved()
+        free, total = torch.cuda.mem_get_info()
+        used = total - free
+        self.peak_reserved_bytes = max(self.peak_reserved_bytes, reserved)
+        self.peak_device_used_bytes = max(self.peak_device_used_bytes, used)
+        limit = (
+            min(
+                torch.cuda.get_device_properties(
+                    torch.cuda.current_device()
+                ).total_memory,
+                self.memory["budget_gib"] * 1024**3,
+            )
+            * self.memory["hard_fraction"]
+            if self.memory
+            else 0.8
+            * torch.cuda.get_device_properties(torch.cuda.current_device()).total_memory
+        )
+        valid = torch.tensor(int(max(reserved, used) <= limit), device="cuda")
+        if torch.distributed.is_initialized():
+            torch.distributed.all_reduce(valid, op=torch.distributed.ReduceOp.MIN)
+        if not valid:
+            raise MemoryError("Exceeds the GPU-memory budget including device overhead")
+
+    def on_before_backward(self, trainer, pl_module, loss):
+        self.memory_check()
+        self.loss_sum += float(loss.detach())
 
     def on_train_start(self, trainer, pl_module):
         torch.cuda.synchronize()
@@ -78,32 +111,46 @@ class UpdateTiming(Callback):
             torch.cuda.reset_peak_memory_stats()
 
     def on_train_batch_start(self, trainer, pl_module, batch, batch_idx):
-        if time.monotonic() >= self.deadline:
+        expired = torch.tensor(
+            int(time.monotonic() >= self.deadline), device=pl_module.device
+        )
+        if torch.distributed.is_initialized():
+            torch.distributed.all_reduce(expired, op=torch.distributed.ReduceOp.MAX)
+        if expired:
             raise SpeedBudgetReached("Reached the speed-test deadline")
         self.samples += len(batch[1])
         self.atoms += batch[0].num_nodes
 
     def on_train_batch_end(self, trainer, pl_module, outputs, batch, batch_idx):
-        if (
-            torch.cuda.max_memory_reserved()
-            > 0.8 * torch.cuda.get_device_properties(0).total_memory
-        ):
-            raise MemoryError("Exceeds the 80% GPU-memory safety limit")
+        self.memory_check()
         step = trainer.global_step
         if step == self.last_step:
             return
         torch.cuda.synchronize()
         now = time.perf_counter()
-        if self.samples != self.effective:
+        elapsed = now - self.last_stamp
+        totals = torch.tensor(
+            [self.samples, self.atoms, self.loss_sum],
+            device=pl_module.device,
+            dtype=torch.float64,
+        )
+        duration = torch.tensor(elapsed, device=pl_module.device, dtype=torch.float64)
+        if torch.distributed.is_initialized():
+            torch.distributed.all_reduce(totals)
+            torch.distributed.all_reduce(duration, op=torch.distributed.ReduceOp.MAX)
+        samples, atoms = map(int, totals[:2].tolist())
+        update_loss = float(totals[2]) / trainer.world_size
+        if samples != self.effective:
             raise RuntimeError("Wrong sample count at optimizer boundary")
         if step > self.warmup:
             self.rows.append(
                 {
                     "step": step,
-                    "seconds": now - self.last_stamp,
-                    "samples": self.samples,
-                    "atoms": self.atoms,
+                    "seconds": float(duration),
+                    "samples": samples,
+                    "atoms": atoms,
                     "last_microbatch_loss": float(outputs["loss"].detach().cpu()),
+                    "update_mean_loss": update_loss,
                 }
             )
         if step == self.warmup:
@@ -111,7 +158,26 @@ class UpdateTiming(Callback):
             torch.cuda.reset_peak_memory_stats()
         self.last_step = step
         self.samples = self.atoms = 0
+        self.loss_sum = 0.0
         self.last_stamp = time.perf_counter()
+
+
+class UnclippedGradient(Callback):
+    def __init__(self, path):
+        self.path = path
+        self.saved = False
+
+    def on_before_optimizer_step(self, trainer, module, optimizer):
+        if not self.saved and trainer.global_rank == 0:
+            gradient = torch.cat(
+                [
+                    p.grad.detach().flatten()
+                    for p in module.parameters()
+                    if p.grad is not None
+                ]
+            )
+            torch.save(gradient.cpu(), self.path)
+        self.saved = True
 
 
 def timing_summary(rows):
@@ -144,14 +210,21 @@ def run_case(
     resume=None,
     save=None,
     budget_steps=None,
+    capture=None,
 ):
     """Same Lightning optimizer, hooks and data cursor as training; I/O is tiny."""
-    output.mkdir(parents=True, exist_ok=False)
+    rank = torch.distributed.get_rank() if torch.distributed.is_initialized() else 0
+    world = spec.get("devices", 1)
+    if rank == 0:
+        output.mkdir(parents=True, exist_ok=False)
+    if torch.distributed.is_initialized():
+        torch.distributed.barrier()
     started = time.perf_counter()
     store = PackedRecords(manifest, spec["method"])
     model = trainer = loader = None
     result = {"case": spec, "stress": stress, "profiled": profile, "status": "started"}
-    atomic_json(output / "result.json", result)
+    if rank == 0:
+        atomic_json(output / "result.json", result)
     seed_everything(42, workers=True)
     torch.cuda.empty_cache()
     torch.cuda.reset_peak_memory_stats()
@@ -177,6 +250,7 @@ def run_case(
             method=spec["method"],
             seed=42,
             source_config=cfg["source"],
+            target_rng_mode=spec.get("target_rng_mode", "stream"),
             **cfg["model_args"],
         )
         model.consumed_samples = consumed
@@ -184,7 +258,10 @@ def run_case(
             "speed_only": True,
             "case": spec,
             "data": manifest["row_index"]["sha256"],
+            "config": cfg,
         }
+        if resume and saved.get("training_signature") != model.training_signature:
+            raise ValueError("Benchmark resume belongs to different data/config/case")
         loader = make_loader(
             records,
             spec["microbatch"],
@@ -197,11 +274,21 @@ def run_case(
             rng_domain=2,
             pin_memory=spec["pin_memory"],
             prefetch_factor=spec["prefetch"],
+            rank=rank,
+            world_size=world,
         )
-        timer = UpdateTiming(warmup, deadline, started, spec["effective_batch"])
+        timer = UpdateTiming(
+            warmup, deadline, started, spec["effective_batch"], cfg.get("gpu_memory")
+        )
         trainer = Trainer(
             accelerator="gpu",
-            devices=1,
+            devices=world,
+            strategy=(
+                DDPStrategy(find_unused_parameters=False, gradient_as_bucket_view=True)
+                if world > 1
+                else "auto"
+            ),
+            use_distributed_sampler=False,
             max_steps=stop,
             max_epochs=-1,
             accumulate_grad_batches=spec["accumulation"],
@@ -212,7 +299,7 @@ def run_case(
             enable_checkpointing=False,
             enable_progress_bar=False,
             enable_model_summary=False,
-            callbacks=[timer],
+            callbacks=[timer] + ([UnclippedGradient(capture)] if capture else []),
             default_root_dir=output,
         )
         with ExitStack() as context:
@@ -279,6 +366,8 @@ def run_case(
             consumed_samples=model.consumed_samples,
             peak_allocated_bytes=torch.cuda.max_memory_allocated(),
             peak_reserved_bytes=torch.cuda.max_memory_reserved(),
+            peak_device_used_bytes=timer.peak_device_used_bytes,
+            peak_reserved_whole_case_bytes=timer.peak_reserved_bytes,
             updates=timer.rows,
             **timing_summary(timer.rows),
         )
@@ -295,10 +384,27 @@ def run_case(
         result.update(status="budget_exhausted")
         raise
     except (RuntimeError, MemoryError, FloatingPointError) as exc:
-        result.update(status="failed", error=f"{type(exc).__name__}: {exc}")
+        result.update(
+            status="failed",
+            error=f"{type(exc).__name__}: {exc}",
+            error_type=type(exc).__name__,
+        )
     finally:
         result["wall_seconds"] = time.perf_counter() - started
-        atomic_json(output / "result.json", result)
+        if torch.distributed.is_initialized():
+            memory = torch.tensor(
+                [
+                    result.get("peak_reserved_whole_case_bytes", 0),
+                    result.get("peak_device_used_bytes", 0),
+                ],
+                device="cuda",
+                dtype=torch.int64,
+            )
+            memories = [torch.empty_like(memory) for _ in range(world)]
+            torch.distributed.all_gather(memories, memory)
+            result["per_rank_memory"] = [list(map(int, v.tolist())) for v in memories]
+        if rank == 0:
+            atomic_json(output / "result.json", result)
         store.close()
         del loader, trainer, model
         gc.collect()

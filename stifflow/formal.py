@@ -16,11 +16,84 @@ from rdkit import Chem
 from .cache_io import atomic_json, read_json
 from .freeze_data import require_frozen
 from .official_data import OfficialDataset, validate_label_pair, verified_path
-from .preflight import fingerprint, provenance
+from .preflight import WORKSPACE, fingerprint, git, provenance
 from .smoke import external_directory
 
 METHODS = ("precision", "alternative_a", "control")
 SEEDS = (42, 43, 44)
+
+
+def runtime_code_signature():
+    """Hash executed algorithm files, so a results-only commit does not invalidate evidence."""
+    files = (
+        "model",
+        "training",
+        "targets",
+        "source",
+        "precision",
+        "geometry",
+        "features",
+        "packed_data",
+        "formal_checkpoints",
+    )
+    return {
+        "stifflow": {
+            name: fingerprint(WORKSPACE / "stifflow-v1/stifflow" / (name + ".py"))[
+                "sha256"
+            ]
+            for name in files
+        },
+        "dependencies": {
+            name: git(WORKSPACE / name, "rev-parse", "HEAD").strip()
+            for name in (
+                "ETFlow-reference",
+                "stifflow-v1-alternative-A",
+                "stifflow-v1-benchmark",
+            )
+        },
+    }
+
+
+def require_torch_runtime(report, cfg):
+    """Runtime-only evidence; production label/data validation remains in training."""
+    if (
+        report.get("kind") != "torch_runtime"
+        or report.get("status") != "completed"
+        or report.get("devices") != 1
+        or report.get("selected_config") != cfg
+        or report.get("runtime_code") != runtime_code_signature()
+        or report.get("maximum_atoms") != 29
+    ):
+        raise ValueError(
+            "Torch runtime acceptance scope/config/code differs or is incomplete"
+        )
+    for method in METHODS:
+        check = report.get("checks", {}).get(method + "-formal-stream-resume", {})
+        if check != {"passed": True, "updates": 40, "consumed_samples": 5120}:
+            raise ValueError(
+                "Missing formal-stream 40-update runtime recovery evidence"
+            )
+        pressure = [
+            r
+            for r in report.get("cases", [])
+            if r.get("maximum")
+            and r["case"]["method"] == method
+            and r["case"]["microbatch"] == cfg["batch_size"]
+        ]
+        if not pressure or pressure[-1].get("status") != "completed":
+            raise ValueError("Missing maximum-atom memory evidence")
+        limit = (
+            min(report["gpu"]["total_bytes"], cfg["gpu_memory"]["budget_gib"] * 1024**3)
+            * cfg["gpu_memory"]["hard_fraction"]
+        )
+        memory = max(
+            pressure[-1].get("peak_reserved_whole_case_bytes", 0),
+            pressure[-1].get("peak_device_used_bytes", 0),
+        )
+        if not 0 < memory <= limit:
+            raise ValueError(
+                "Maximum-atom memory evidence exceeds the configured ceiling"
+            )
 
 
 def acceptance_signature(train, val, config, prov):
