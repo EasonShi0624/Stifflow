@@ -185,7 +185,7 @@ def test_runtime_receipt_scope_code_recovery_and_memory_gate(monkeypatch):
             {
                 "maximum": True,
                 "status": "completed",
-                "case": {"method": m, "microbatch": 32},
+                "case": {"method": m, "microbatch": cfg["batch_size"]},
                 "peak_reserved_whole_case_bytes": 10 * 1024**3,
                 "peak_device_used_bytes": 11 * 1024**3,
             }
@@ -207,3 +207,88 @@ def test_runtime_receipt_scope_code_recovery_and_memory_gate(monkeypatch):
     bad["cases"][0]["peak_device_used_bytes"] = 23 * 1024**3
     with pytest.raises(ValueError):
         formal.require_torch_runtime(bad, cfg)
+
+
+def test_batch_selection_requires_gain_in_every_method_and_repeat():
+    import copy
+
+    from stifflow.runtime_benchmark import choose_batch
+    from stifflow.speed_benchmark import METHODS
+
+    rows = [
+        {
+            "stage": f"batch-throughput-{repeat}",
+            "case": case(method, micro),
+            "status": "completed",
+            "measured_updates": 40,
+            "seconds_per_update": 1.0 if micro == 32 else 0.9,
+        }
+        for repeat in range(1, 4)
+        for method in METHODS
+        for micro in (32, 64)
+    ]
+    selected, comparison = choose_batch(rows)
+    assert selected == 64
+    assert comparison["precision"]["speedup"] == pytest.approx(1 / 0.9)
+    changed = copy.deepcopy(rows)
+    changed[-1]["seconds_per_update"] = 1.01
+    assert choose_batch(changed)[0] == 32
+    changed = copy.deepcopy(rows)
+    for row in changed:
+        if row["case"]["method"] == "control" and row["case"]["microbatch"] == 64:
+            row["seconds_per_update"] = 0.97
+    assert choose_batch(changed)[0] == 32
+    baseline = [r for r in rows if r["case"]["microbatch"] == 32]
+    assert choose_batch(baseline) == (32, {})
+    with pytest.raises(ValueError, match="three complete"):
+        choose_batch(rows[:-1])
+    broken = copy.deepcopy(rows)
+    broken[-1]["status"] = "budget_exhausted"
+    with pytest.raises(ValueError, match="three complete"):
+        choose_batch(broken)
+
+
+def test_batch_memory_failure_skips_candidate_and_keeps_full_acceptance(
+    monkeypatch, tmp_path
+):
+    from stifflow import runtime_benchmark as runtime
+
+    cfg = yaml.safe_load(Path("configs/qm9-formal-4090d.yaml").read_text())
+    report = {
+        "cases": [],
+        "checks": {},
+        "config": cfg,
+        "gpu": {"total_bytes": 48 * 1024**3},
+    }
+    recovered = []
+
+    def run(spec, stage, maximum=False, **options):
+        result = {
+            "case": spec,
+            "stage": stage,
+            "maximum": maximum,
+            "status": "completed",
+            "measured_updates": options.get("updates", 6),
+            "seconds_per_update": 1.0,
+            "peak_reserved_whole_case_bytes": 10 * 1024**3,
+            "peak_device_used_bytes": 11 * 1024**3,
+        }
+        if spec["microbatch"] == 64:
+            assert maximum and stage == "batch-maximum"
+            result.update(status="failed", error_type="MemoryError")
+        if "capture" in options:
+            torch.save(torch.ones(3), options["capture"])
+        report["cases"].append(result)
+        return result
+
+    def recovery(spec, *args):
+        recovered.append(spec)
+        return {"passed": True, "updates": 40, "consumed_samples": 5120}
+
+    monkeypatch.setattr(runtime, "recovery_probe", recovery)
+    assert runtime.optimize_batch(run, report, tmp_path, lambda: None) == 32
+    assert len(recovered) == 3
+    assert all(r["microbatch"] == 32 and r["workers"] == 2 for r in recovered)
+    assert sum(r["stage"] == "maximum-sustained" for r in report["cases"]) == 3
+    assert report["maximum_memory_fraction"] == pytest.approx(11 / 24)
+    assert "candidate_rejected" in report

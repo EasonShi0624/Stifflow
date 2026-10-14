@@ -76,6 +76,155 @@ def recovery_probe(spec, run, output, rank):
     return {"passed": True, "updates": steps, "consumed_samples": steps * 128}
 
 
+def choose_batch(results):
+    """Require three paired repeats and a gain in every method before using 64."""
+    comparison = {}
+    for method in METHODS:
+        groups = {
+            micro: [
+                r
+                for r in results
+                if r["case"]["method"] == method
+                and r["case"]["microbatch"] == micro
+                and r["stage"].startswith("batch-throughput-")
+            ]
+            for micro in (32, 64)
+        }
+        for micro, rows in groups.items():
+            if (micro == 32 or rows) and (
+                len(rows) != 3
+                or any(
+                    r["status"] != "completed" or r["measured_updates"] != 40
+                    for r in rows
+                )
+            ):
+                raise ValueError(
+                    "Batch selection requires three complete 40-update repeats"
+                )
+        if not groups[64]:
+            continue
+        speeds = {
+            micro: 128
+            * sum(r["measured_updates"] for r in rows)
+            / sum(r["measured_updates"] * r["seconds_per_update"] for r in rows)
+            for micro, rows in groups.items()
+        }
+        ratios = [
+            old["seconds_per_update"] / new["seconds_per_update"]
+            for old, new in zip(groups[32], groups[64], strict=True)
+        ]
+        gain = speeds[64] / speeds[32]
+        comparison[method] = {
+            "baseline_samples_per_second": speeds[32],
+            "candidate_samples_per_second": speeds[64],
+            "speedup": gain,
+            "repeat_speedups": ratios,
+            "passed": gain >= 1.05 and all(r > 1 for r in ratios),
+        }
+    selected = (
+        64
+        if len(comparison) == len(METHODS)
+        and all(r["passed"] for r in comparison.values())
+        else 32
+    )
+    return selected, comparison
+
+
+def optimize_batch(run, report, output, persist):
+    eligible = []
+    for micro in (32, 64):
+        results = [
+            run(case(method, micro), "batch-maximum", maximum=True)
+            for method in METHODS
+        ]
+        failures = [r for r in results if r["status"] != "completed"]
+        if failures:
+            if micro == 32 or any(
+                r.get("error_type") not in ("OutOfMemoryError", "MemoryError")
+                for r in failures
+            ):
+                raise RuntimeError(f"Maximum-atom pressure failed: {failures}")
+            report["candidate_rejected"] = "64 exceeds the maximum-atom memory budget"
+        else:
+            eligible.append(micro)
+        persist()
+    for repeat in range(3):
+        order = eligible if repeat % 2 == 0 else eligible[::-1]
+        for method in METHODS:
+            for micro in order:
+                result = run(
+                    case(method, micro),
+                    f"batch-throughput-{repeat + 1}",
+                    warmup=5,
+                    updates=40,
+                )
+                if result["status"] != "completed":
+                    raise RuntimeError(f"Batch throughput failed: {result}")
+    micro, report["batch_comparison"] = choose_batch(report["cases"])
+    report["selected_microbatch"] = micro
+    persist()
+    for method in METHODS:
+        gradients = []
+        for size in eligible:
+            path = output / f"{method}-batch{size}-gradient.pt"
+            result = run(
+                case(method, size, target_rng_mode="global_draw", workers=0),
+                "batch-gradient",
+                warmup=0,
+                updates=1,
+                capture=path,
+            )
+            if result["status"] != "completed":
+                raise RuntimeError("Batch gradient capture failed")
+            gradients.append((torch.load(path, weights_only=True), result))
+        if len(gradients) == 2:
+            (left, old), (right, new) = gradients
+            relative = float(
+                torch.linalg.vector_norm(left - right) / torch.linalg.vector_norm(left)
+            )
+            old_loss = old["updates"][0]["update_mean_loss"]
+            new_loss = new["updates"][0]["update_mean_loss"]
+            passed = relative <= 1e-4 and np.isclose(
+                old_loss, new_loss, rtol=1e-5, atol=1e-5
+            )
+            report["checks"][method + "-batch-gradient"] = {
+                "relative_l2": relative,
+                "loss_relative": abs(new_loss - old_loss) / abs(old_loss),
+                "passed": bool(passed),
+            }
+            persist()
+            if not passed:
+                raise AssertionError("Microbatch 32/64 gradient or loss differs")
+        result = run(
+            case(method, micro),
+            "maximum-sustained",
+            maximum=True,
+            warmup=0,
+            updates=100,
+        )
+        if result["status"] != "completed":
+            raise RuntimeError(f"Sustained maximum-atom pressure failed: {result}")
+        report["checks"][method + "-formal-stream-resume"] = recovery_probe(
+            case(method, micro), run, output, 0
+        )
+        persist()
+    pressure = [
+        r for r in report["cases"] if r["maximum"] and r["case"]["microbatch"] == micro
+    ]
+    pressure_bytes = max(
+        max(r["peak_reserved_whole_case_bytes"], r["peak_device_used_bytes"])
+        for r in pressure
+    )
+    memory = report["config"]["gpu_memory"]
+    report["maximum_memory_fraction"] = pressure_bytes / min(
+        report["gpu"]["total_bytes"], memory["budget_gib"] * 1024**3
+    )
+    report["within_preferred_memory"] = (
+        report["maximum_memory_fraction"] <= memory["preferred_fraction"]
+    )
+    return micro
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -89,14 +238,18 @@ def main():
     parser.add_argument("--devices", type=int, choices=(1, 2), default=1)
     parser.add_argument("--max-seconds", type=int, required=True)
     parser.add_argument("--single-report", type=Path)
+    parser.add_argument("--optimize-batch", action="store_true")
     args = parser.parse_args()
+    if args.optimize_batch and args.devices != 1:
+        parser.error("Batch optimization requires one GPU")
     if (
         not os.getenv("SLURM_JOB_ID")
         or not torch.cuda.is_available()
         or torch.cuda.device_count() != args.devices
     ):
         parser.error("Require a Slurm allocation with the requested visible GPU count")
-    if not 0 < args.max_seconds <= (630 if args.devices == 1 else 990):
+    ceiling = 3210 if args.optimize_batch else (630 if args.devices == 1 else 990)
+    if not 0 < args.max_seconds <= ceiling:
         parser.error("Deadline must leave shutdown time within the approved allocation")
     if args.devices == 2 and args.single_report is None:
         parser.error("DDP requires the matching single-card baseline")
@@ -179,6 +332,19 @@ def main():
         "limitations": "L40S 24 GiB proxy; local legacy train, not SHHPC strict cohort; DDP assessment only",
         "runtime_code": runtime_code_signature() if rank == 0 else None,
     }
+    if args.optimize_batch:
+        report["timing_protocol"] = {
+            "repeats": 3,
+            "warmup_updates": 5,
+            "measured_updates": 40,
+            "minimum_speedup": 1.05,
+            "sustained_maximum_updates": 100,
+            "precision": "32-true",
+            "tf32": False,
+            "workers": 2,
+            "prefetch": 2,
+            "pin_memory": False,
+        }
 
     def persist():
         if rank == 0:
@@ -223,128 +389,134 @@ def main():
         return result
 
     try:
-        micro = 32
-        if args.devices == 2:
-            baseline = read_json(args.single_report)
-            if (
-                baseline["status"] != "completed"
-                or baseline["config_file"]["sha256"] != report["config_file"]["sha256"]
-            ):
-                raise ValueError(
-                    "Single-card baseline is incomplete or has different configuration"
-                )
-            micro = baseline["selected_microbatch"]
-        while True:
-            results = [
-                run(
-                    case(
-                        method,
-                        micro,
-                        devices=args.devices,
-                        target_rng_mode="global_draw",
-                        workers=0,
-                    ),
-                    "maximum",
-                    maximum=True,
-                )
-                for method in METHODS
-            ]
-            failures = [r for r in results if r["status"] != "completed"]
-            if not failures:
-                break
-            if micro == 16 or any(
-                r.get("error_type") not in ("OutOfMemoryError", "MemoryError")
-                for r in failures
-            ):
-                raise RuntimeError(f"Maximum-atom pressure failed: {failures}")
-            micro = 16
-        report["selected_microbatch"] = micro
-        pressure_bytes = max(
-            max(r["peak_reserved_whole_case_bytes"], r["peak_device_used_bytes"])
-            for r in results
-        )
-        report["maximum_memory_fraction"] = pressure_bytes / min(
-            total, cfg["gpu_memory"]["budget_gib"] * 1024**3
-        )
-        report["within_preferred_memory"] = (
-            report["maximum_memory_fraction"] <= cfg["gpu_memory"]["preferred_fraction"]
-        )
-        for method in METHODS:
-            spec = case(
-                method,
-                micro,
-                devices=args.devices,
-                target_rng_mode="global_draw",
-                workers=0,
-            )
-            result = run(spec, "throughput", updates=12)
-            if result["status"] != "completed":
-                raise RuntimeError(f"Throughput failed: {result}")
-            gradient_case = run(
-                spec,
-                "gradient",
-                warmup=0,
-                updates=1,
-                capture=args.output / f"{method}-gradient.pt",
-            )
-            if gradient_case["status"] != "completed":
-                raise RuntimeError("Gradient capture failed")
+        if args.optimize_batch:
+            micro = optimize_batch(run, report, args.output, persist)
+        else:
+            micro = 32
             if args.devices == 2:
-                error = None
-                if rank == 0:
-                    left = torch.load(
-                        args.single_report.parent / f"{method}-gradient.pt",
-                        weights_only=True,
+                baseline = read_json(args.single_report)
+                if (
+                    baseline["status"] != "completed"
+                    or baseline["config_file"]["sha256"]
+                    != report["config_file"]["sha256"]
+                ):
+                    raise ValueError(
+                        "Single-card baseline is incomplete or has different configuration"
                     )
-                    right = torch.load(
-                        args.output / f"{method}-gradient.pt", weights_only=True
+                micro = baseline["selected_microbatch"]
+            while True:
+                results = [
+                    run(
+                        case(
+                            method,
+                            micro,
+                            devices=args.devices,
+                            target_rng_mode="global_draw",
+                            workers=0,
+                        ),
+                        "maximum",
+                        maximum=True,
                     )
-                    relative = float(
-                        torch.linalg.vector_norm(left - right)
-                        / torch.linalg.vector_norm(left)
-                    )
-                    old = next(
-                        v
-                        for v in baseline["cases"]
-                        if v["stage"] == "gradient" and v["case"]["method"] == method
-                    )["updates"][0]["update_mean_loss"]
-                    new = gradient_case["updates"][0]["update_mean_loss"]
-                    passed = relative <= 1e-4 and np.isclose(
-                        old, new, rtol=1e-5, atol=1e-5
-                    )
-                    report["checks"][method + "-gradient"] = {
-                        "relative_l2": relative,
-                        "loss_relative": abs(new - old) / abs(old),
-                        "passed": bool(passed),
-                    }
-                    if not passed:
-                        error = "Single/DDP gradient or loss differs"
-                message = [error]
-                torch.distributed.broadcast_object_list(message, src=0)
-                if message[0]:
-                    raise AssertionError(message[0])
-            report["checks"][method + "-resume"] = recovery_probe(
-                spec, run, args.output, rank
+                    for method in METHODS
+                ]
+                failures = [r for r in results if r["status"] != "completed"]
+                if not failures:
+                    break
+                if micro == 16 or any(
+                    r.get("error_type") not in ("OutOfMemoryError", "MemoryError")
+                    for r in failures
+                ):
+                    raise RuntimeError(f"Maximum-atom pressure failed: {failures}")
+                micro = 16
+            report["selected_microbatch"] = micro
+            pressure_bytes = max(
+                max(r["peak_reserved_whole_case_bytes"], r["peak_device_used_bytes"])
+                for r in results
             )
-            persist()
-        if args.devices == 1:
-            for effective in (256, 512):
-                result = run(
-                    case(
-                        "precision",
-                        micro,
-                        effective,
-                        target_rng_mode="global_draw",
-                        workers=0,
-                    ),
-                    "larger-batch",
-                )
-                if result["status"] != "completed":
-                    raise RuntimeError("Expanded batch case failed")
+            report["maximum_memory_fraction"] = pressure_bytes / min(
+                total, cfg["gpu_memory"]["budget_gib"] * 1024**3
+            )
+            report["within_preferred_memory"] = (
+                report["maximum_memory_fraction"]
+                <= cfg["gpu_memory"]["preferred_fraction"]
+            )
             for method in METHODS:
-                report["checks"][method + "-formal-stream-resume"] = recovery_probe(
-                    case(method, micro, devices=1), run, args.output, rank
+                spec = case(
+                    method,
+                    micro,
+                    devices=args.devices,
+                    target_rng_mode="global_draw",
+                    workers=0,
                 )
+                result = run(spec, "throughput", updates=12)
+                if result["status"] != "completed":
+                    raise RuntimeError(f"Throughput failed: {result}")
+                gradient_case = run(
+                    spec,
+                    "gradient",
+                    warmup=0,
+                    updates=1,
+                    capture=args.output / f"{method}-gradient.pt",
+                )
+                if gradient_case["status"] != "completed":
+                    raise RuntimeError("Gradient capture failed")
+                if args.devices == 2:
+                    error = None
+                    if rank == 0:
+                        left = torch.load(
+                            args.single_report.parent / f"{method}-gradient.pt",
+                            weights_only=True,
+                        )
+                        right = torch.load(
+                            args.output / f"{method}-gradient.pt", weights_only=True
+                        )
+                        relative = float(
+                            torch.linalg.vector_norm(left - right)
+                            / torch.linalg.vector_norm(left)
+                        )
+                        old = next(
+                            v
+                            for v in baseline["cases"]
+                            if v["stage"] == "gradient"
+                            and v["case"]["method"] == method
+                        )["updates"][0]["update_mean_loss"]
+                        new = gradient_case["updates"][0]["update_mean_loss"]
+                        passed = relative <= 1e-4 and np.isclose(
+                            old, new, rtol=1e-5, atol=1e-5
+                        )
+                        report["checks"][method + "-gradient"] = {
+                            "relative_l2": relative,
+                            "loss_relative": abs(new - old) / abs(old),
+                            "passed": bool(passed),
+                        }
+                        if not passed:
+                            error = "Single/DDP gradient or loss differs"
+                    message = [error]
+                    torch.distributed.broadcast_object_list(message, src=0)
+                    if message[0]:
+                        raise AssertionError(message[0])
+                report["checks"][method + "-resume"] = recovery_probe(
+                    spec, run, args.output, rank
+                )
+                persist()
+            if args.devices == 1:
+                for effective in (256, 512):
+                    result = run(
+                        case(
+                            "precision",
+                            micro,
+                            effective,
+                            target_rng_mode="global_draw",
+                            workers=0,
+                        ),
+                        "larger-batch",
+                    )
+                    if result["status"] != "completed":
+                        raise RuntimeError("Expanded batch case failed")
+                for method in METHODS:
+                    report["checks"][method + "-formal-stream-resume"] = recovery_probe(
+                        case(method, micro, devices=1), run, args.output, rank
+                    )
         report["status"] = "completed"
         report["selected_config"] = copy.deepcopy(cfg)
         report["selected_config"]["batch_size"] = micro

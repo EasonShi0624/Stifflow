@@ -1,5 +1,5 @@
 #!/bin/bash
-# Supply --gres=gpu:1/2, --ntasks=1/2, CPU/memory and 12m/18m walltime explicitly.
+# Supply GPU/CPU/memory and walltime; batch optimization allows one GPU for 55m.
 #SBATCH --job-name=stifflow-runtime
 #SBATCH --no-requeue
 #SBATCH --signal=B:TERM@90
@@ -20,6 +20,14 @@ export MPLCONFIGDIR="$STIFFLOW_WORKSPACE/cache/matplotlib"
 mkdir -p "$TMPDIR" "$MPLCONFIGDIR"
 args=(--devices "$STIFFLOW_RUNTIME_DEVICES" --manifest "$STIFFLOW_RUNTIME_MANIFEST"
       --stress-manifest "$STIFFLOW_RUNTIME_MAXIMUM" --output "$STIFFLOW_RUNTIME_OUTPUT")
+if [[ -n "${STIFFLOW_RUNTIME_CONFIG:-}" ]]; then
+  args+=(--config "$STIFFLOW_RUNTIME_CONFIG")
+fi
+if [[ "${STIFFLOW_RUNTIME_OPTIMIZE_BATCH:-0}" == 1 ]]; then
+  [[ "$STIFFLOW_RUNTIME_DEVICES" == 1 ]] || { echo "Batch optimization requires one GPU" >&2; exit 2; }
+  : "${STIFFLOW_RUNTIME_SECONDS:?Set the approved optimization deadline}"
+  args+=(--optimize-batch)
+fi
 if [[ "$STIFFLOW_RUNTIME_DEVICES" == 2 ]]; then
   : "${STIFFLOW_RUNTIME_SINGLE_REPORT:?Set matching single-card report}"
   export MASTER_ADDR=127.0.0.1
