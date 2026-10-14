@@ -176,11 +176,24 @@ class OfficialDataset:
             conf = conformers[raw_index]
             mol = Chem.Mol(conf["rd_mol"])
             metadata = graph_from_mol(mol)
+            signature = (
+                tuple(metadata["atomic_numbers"]),
+                tuple(metadata["charges"]),
+                tuple(metadata["atom_mapping"]),
+                tuple(metadata["atom_indices"]),
+                tuple(tuple(bond) for bond in metadata["bonds"]),
+                tuple(metadata["bond_types"]),
+            )
             if graph is None:
                 graph = metadata
-            if graph != metadata or len(Chem.GetMolFrags(mol)) != 1:
+                order_signature = signature
+            elif signature != order_signature:
+                # Conformer-dependent stereo perception is a known GEOM property;
+                # atom order, topology and charges must still agree exactly.
+                # Connectivity is a label-domain constraint (stiffness enforces it);
+                # references must still cover every frozen molecule.
                 raise ValueError(
-                    "Atom order, topology or stereo varies across official rows"
+                    "Atom order or topology varies across official rows"
                 )
             if (
                 not np.isfinite(block).all()
