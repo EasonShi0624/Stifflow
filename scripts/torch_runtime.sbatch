@@ -24,10 +24,10 @@ if [[ "$STIFFLOW_RUNTIME_DEVICES" == 2 ]]; then
   : "${STIFFLOW_RUNTIME_SINGLE_REPORT:?Set matching single-card report}"
   export MASTER_ADDR=127.0.0.1
   export MASTER_PORT="$((20000 + SLURM_JOB_ID % 30000))"
-  args+=(--max-seconds 990 --single-report "$STIFFLOW_RUNTIME_SINGLE_REPORT")
+  args+=(--max-seconds "${STIFFLOW_RUNTIME_SECONDS:-990}" --single-report "$STIFFLOW_RUNTIME_SINGLE_REPORT")
   exec srun --ntasks=2 --ntasks-per-node=2 --kill-on-bad-exit=1 python -u -m stifflow.runtime_benchmark "${args[@]}"
 elif [[ "$STIFFLOW_RUNTIME_DEVICES" == 1 ]]; then
-  args+=(--max-seconds 630)
+  args+=(--max-seconds "${STIFFLOW_RUNTIME_SECONDS:-630}")
   exec python -u -m stifflow.runtime_benchmark "${args[@]}"
 else
   echo "Only 1/2 GPUs are approved" >&2

@@ -289,9 +289,6 @@ def main():
             )
             if gradient_case["status"] != "completed":
                 raise RuntimeError("Gradient capture failed")
-            report["checks"][method + "-resume"] = recovery_probe(
-                spec, run, args.output, rank
-            )
             if args.devices == 2:
                 error = None
                 if rank == 0:
@@ -326,6 +323,9 @@ def main():
                 torch.distributed.broadcast_object_list(message, src=0)
                 if message[0]:
                     raise AssertionError(message[0])
+            report["checks"][method + "-resume"] = recovery_probe(
+                spec, run, args.output, rank
+            )
             persist()
         if args.devices == 1:
             for effective in (256, 512):

@@ -33,6 +33,10 @@ def tiny_records():
 def test_rank_draw_blocks_resume_and_effective_batch():
     assert case("precision", 32, devices=2)["accumulation"] == 2
     assert case("precision", 16, devices=2)["accumulation"] == 4
+    assert case("precision", 32, devices=2)["gradient_as_bucket_view"] is False
+    assert case("precision", 32, devices=2, gradient_as_bucket_view=True) != case(
+        "precision", 32, devices=2
+    )  # Different strategy settings also differ in the checkpoint case signature.
     records = tiny_records()
     ids = []
     for rank in (0, 1):
@@ -62,6 +66,17 @@ def test_rank_draw_blocks_resume_and_effective_batch():
         advance_cursor(0, [{"draw_id": 1}], 0, 2)
     with pytest.raises(ValueError):
         make_loader(records, 2, 1, 42, rank=2, world_size=2)
+
+
+def test_resume_failure_keeps_path_and_numeric_diagnostics():
+    from stifflow.verify_resume import compare_states
+
+    with pytest.raises(AssertionError) as error:
+        compare_states(torch.tensor([1.0]), torch.tensor([2.0]), "state_dict.weight")
+    assert "state_dict.weight" in str(error.value)
+    assert "Greatest absolute difference" in str(error.value)
+    with pytest.raises(ValueError, match="gradient_queue: 1.0 vs 2.0"):
+        compare_states(1.0, 2.0, "gradient_queue")
 
 
 def test_memory_ceiling_counts_overhead_and_validates_fractions():

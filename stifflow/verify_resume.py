@@ -15,7 +15,9 @@ def compare_states(left, right, path="checkpoint"):
     if isinstance(left, torch.Tensor):
         if not isinstance(right, torch.Tensor):
             raise TypeError(f"Resume type differs: {path}")
-        torch.testing.assert_close(left, right, rtol=1e-6, atol=1e-7, msg=path)
+        torch.testing.assert_close(
+            left, right, rtol=1e-6, atol=1e-7, msg=lambda detail: f"{path}: {detail}"
+        )
     elif isinstance(left, dict):
         if not isinstance(right, dict) or left.keys() != right.keys():
             raise ValueError(f"Resume keys differ: {path}")
@@ -27,7 +29,7 @@ def compare_states(left, right, path="checkpoint"):
         for index, (a, b) in enumerate(zip(left, right)):
             compare_states(a, b, f"{path}[{index}]")
     elif left != right:
-        raise ValueError(f"Resume value differs: {path}")
+        raise ValueError(f"Resume value differs: {path}: {left!r} vs {right!r}")
 
 
 def main():

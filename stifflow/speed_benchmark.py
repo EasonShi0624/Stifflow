@@ -49,6 +49,9 @@ def case(method, microbatch, effective=128, **options):
     devices = options.get("devices", 1)
     if microbatch < 1 or devices not in (1, 2) or effective % (microbatch * devices):
         raise ValueError("Microbatch must divide the effective batch")
+    if devices == 2:
+        # Bucket aliases change gradient storage after warmup and break exact resume.
+        options.setdefault("gradient_as_bucket_view", False)
     return {
         "method": method,
         "microbatch": microbatch,
@@ -285,7 +288,10 @@ def run_case(
             accelerator="gpu",
             devices=world,
             strategy=(
-                DDPStrategy(find_unused_parameters=False, gradient_as_bucket_view=True)
+                DDPStrategy(
+                    find_unused_parameters=False,
+                    gradient_as_bucket_view=spec["gradient_as_bucket_view"],
+                )
                 if world > 1
                 else "auto"
             ),
