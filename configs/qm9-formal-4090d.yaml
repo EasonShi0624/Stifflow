@@ -70,5 +70,5 @@ evaluation:
 runtime_acceptance: torch_runtime
 gpu_memory:
   budget_gib: 24
-  preferred_fraction: 0.9
+  preferred_fraction: 0.92
   hard_fraction: 0.95

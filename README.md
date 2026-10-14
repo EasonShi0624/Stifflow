@@ -543,7 +543,46 @@ pin_memory=false，TF32关闭。每个方法三轮，每轮5次预热+40次计�
 `STIFFLOW_RUNTIME_SECONDS`（最多3210秒）；单卡allocation最多55分钟，预留至少
 20分49秒作必要诊断。原单/双卡验收模式和默认截止时间继续可用。
 既有16分子与两个29原子speed-only缓存复用，不重新生成标签或改变生产数学实现。
-新增GPU结果尚待作业运行，L40S的24 GiB代理和小缓存不代表4090D全量I/O。
+作业 `19815618` 已完成（gl010 / 单张NVIDIA L40S，退出0:0，无重排），
+实际allocation为1959 GPU秒（32分39秒）；固定运行代码
+`25f09e803abc3b09360456a80a7dedb507f2bd97`，tracked diff为空。
+42个case全部完成；合并三轮计时结果如下，全部使用正式workers2及stream监督：
+
+| 方法 | 32×4 samples/s | 64×2 samples/s | 64×2变化 |
+| --- | ---: | ---: | ---: |
+| precision | 125.75 | 121.09 | -3.71% |
+| Alternative A | 125.83 | 120.86 | -3.95% |
+| control | 126.72 | 121.90 | -3.80% |
+
+三方法每一轮都支持32×4，正式配置保留该batch/累积组合；显存优选线更新为92%，
+硬上限仍为95%。全29原子压力下，32×4峰值allocated / reserved / device-used
+为10.05 / 10.25 / 10.81 GiB（设备占用45.03%）；64×2为19.90 / 20.39 / 20.95 GiB
+（设备占用87.29%）。64×2容量通过，但没有速度收益。选中32×4的三方法另外各完成
+100次最大分子更新（12800样本），设备峰值保持10.81 GiB。
+
+固定监督的32/64梯度相对L2差分别为1.42e-6 / 3.58e-7 / 4.07e-7，loss差均通过
+原1e-5容差。三方法正式stream连续40与20+恢复20全部通过原恢复容差，完整运行消费
+5120样本。日志无Traceback、OOM、EBUSY或非有限值错误；频繁梯度裁剪仍需SHHPC
+在正式训练中观察，速度检查不代表收敛或生成质量。
+
+第一轮precision / microbatch32混合吞吐中，原ET-Flow的 `GatedEquivariantBlock`
+提示1个原子的 `vec1_buffer` 含零分量：原掩码使用 `all(dim=1)`，该原子的vec1范数
+支路未求导，其余支路仍运行。该提示不能单独证明原子的真实邻域为空；警告默认过滤
+可能去重，日志未给出总触发频率。对应case完成，梯度有限；本轮没有改变backbone或
+cutoff，SHHPC正式训练遇到该提示时应回报实际样本及日志。
+
+相关轻量CPU检查11 passed（102.05秒）；配置选择、显存回退、验收匹配、原速度缓存及
+既有checkpoint比较检查通过。Ruff、Black、bash语法及git diff检查通过；新摘要与实际
+正式配置已通过 `formal.require_torch_runtime`，核对真实GPU摘要的算法哈希、配置、
+最大分子显存及三方法恢复记录。配置更新后的正式预算/验收门禁针对性复测2 passed
+（63.85秒）；没有重复运行未修改数学实现的整套测试。
+完整报告为 `runs/torch-runtime/25f09e8-batch-opt/summary.json`，日志为
+`runs/torch-runtime/slurm-19815618.out`；同步摘要为
+[results/torch-runtime-batch-4090d-20261014.json](results/torch-runtime-batch-4090d-20261014.json)。
+旧单卡/DDP摘要保留其原配置和预算历史，不能代替匹配92%优选线的新验收摘要。
+累计用量为2651+1959 = **4610 GPU秒（1小时16分50秒）**，7200秒上限还剩
+**2590秒（43分10秒）**；测试已完成，不为耗尽预算追加作业。
+L40S的24 GiB代理和小缓存不代表真实4090D或SHHPC strict-v3全量I/O性能。
 
 #### SHHPC下一步
 
@@ -559,7 +598,7 @@ references用新代码在新目录CPU重导出，核对val/test覆盖和 `stereo
 
 ```bash
 export STIFFLOW_FORMAL_CONFIG="$STIFFLOW_WORKSPACE/stifflow-v1/configs/qm9-formal-4090d.yaml"
-export STIFFLOW_ACCEPTANCE="$STIFFLOW_WORKSPACE/stifflow-v1/results/torch-runtime-acceptance-20261014.json"
+export STIFFLOW_ACCEPTANCE="$STIFFLOW_WORKSPACE/stifflow-v1/results/torch-runtime-batch-4090d-20261014.json"
 # STIFFLOW_FROZEN_DATA、TRAIN_LABELS、VAL_LABELS使用SHHPC已验收的完整缓存；REFERENCE_ROOT使用新目录。
 sbatch "${CPU_ARGS[@]}" scripts/formal_task.sbatch formal references \
   --manifest "$STIFFLOW_FROZEN_DATA" --config "$STIFFLOW_FORMAL_CONFIG" \
