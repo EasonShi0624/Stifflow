@@ -322,6 +322,68 @@ position 3428，26 行，bonds 2 种变体），需要 Torch 决定是否改为�
 本地已应用“立体容忍 + 移除连通性检查”补丁；由于该补丁改变代码 diff，现有
 acceptance 签名将失效，Torch 调整后需重新跑 `formal_acceptance`。
 
+### Torch 训练速度审查与小规模 GPU 测试
+
+本轮审查以 SHHPC `stifflow-v1@756637e954213f1ef5b340b606dd7b2288597df2`
+为基准。远端只提交了上述 README 摘要，没有原始 `workflow.json`、逐步计时或作业
+日志，因此 9.9/7.9/4.1 s/update 是 SHHPC 报告值。`formal.acceptance` 的命令耗时包含
+解释器/模型初始化、数据加载及最终 checkpoint 保存；正式读取器又会在每个 worker
+首次打开分片时计算整文件 SHA256。40 更新验收不能证明 250k 更新稳定吞吐，约
+190 GPU-天的外推需用 SHHPC 全量缓存的稳定区间重新核对。
+
+本轮保留所有逐次 loss/gradient/parameter 有限性检查，将 gradient/parameter 的
+CUDA 结果合并成一次 host 判断；precision 监督直接应用 `A_t z` 和 `A_dot_t z`，
+保持 Version 2 的非对易顺序、float64、同一噪声与 RNG 流。完整因子与标签生成实现
+保留，已有物理标签无需重建。训练入口支持 profile 的 `pin_memory` 和
+`prefetch_factor`，默认值与原配置相同；网络仍接收图、坐标及时间，标签矩阵留在 CPU。
+
+references 使用规范化的成对键端点/键型比较，避免 RDKit 键顺序差异导致误拒绝；
+`OfficialDataset.load_molecule(..., allow_stereo_variation=False)` 默认检查立体条件。
+仅 references 显式容忍并记录 `stereo_variation_rows`，使用第一官方构象作为条件图，
+保留所有参考构象；连通性仍由 stiffness 标签生成检查。
+
+`stifflow.speed_benchmark` 复用现有 StifFlow、Lightning、mmap 读取器和优化器。
+输入是 Torch 本地已冻结 legacy 训练划分的 16 个真实 QM9 分子，每分子取原始
+构象 0；另检查与官方 test 的规范化身份隔离。小样本覆盖不同原子规模，物理标签
+复用现有 MMFF94/Hessian 实现，保留 float32 官方坐标舍入后的原始目标。
+缓存标记 `speed_only`/`audit_partial`，禁止进入正常训练/评测入口；不复制或扫描
+SHHPC 91.8 GB 正式缓存。预处理成本单列。
+
+测试固定正式 20 层/160 hidden 模型和学习率。FP32 比较有效 batch 128 的
+8×16、16×8、32×4、64×2、128×1，以及有效 batch 256/512；再比较 worker 0/2/4、
+prefetch 2/4、pinned memory 和独立 BF16 变体。每格 2 次预热+6 个计时更新，候选
+追加 12 更新复测；GPU 同步在 optimizer 更新边界执行，记录 samples/s、atoms/s、
+更新耗时分布、启动和显存。最大分子压力检查保留至少 20% 显存余量；profiling、
+固定监督梯度对照和 4 更新 checkpoint 恢复检查单独报告。
+
+按用户授权，Torch 使用单卡最多 1 GPU 小时；55 分钟停止新增测试，自动重排关闭。
+Torch 当前 GPU 提交应使用 `--gres=gpu:1 --constraint=l40s` 等型号约束，由 scheduler
+分配分区；普通账户的 A100 仅可通过 `--comment='preemption=yes;requeue=false'` 的
+抢占访问，具体 GPU/账户以实际 allocation 记录为准。固定完整代码 SHA 后提交：
+
+```bash
+export STIFFLOW_WORKSPACE=/scratch/ys6132/project/0_stiff_flow_matching/26Fall_DL
+export ETFLOW_ENV=/scratch/ys6132/programs/miniforge3/envs/etflow
+export STIFFLOW_SPEED_ROOT="$STIFFLOW_WORKSPACE/runs/torch-speed"
+export STIFFLOW_SPEED_CACHE="$STIFFLOW_WORKSPACE/cache/torch-speed"
+export STIFFLOW_EXPECTED_COMMIT="$(git rev-parse HEAD)"
+mkdir -p "$STIFFLOW_SPEED_ROOT"
+sbatch --account=torch_pr_1034_general --gres=gpu:1 --constraint=l40s \
+  --cpus-per-task=8 --mem=32G \
+  --output="$STIFFLOW_SPEED_ROOT/slurm-%j.out" scripts/torch_speed.sbatch
+```
+
+实际测试状态、GPU、代码 SHA 和结果由作业的 `summary.json` 记录；脚本实现和 CPU
+测试通过不表示 GPU 已运行。当前正式配置仍为 batch8×累积16、FP32、250k 更新；
+较大有效 batch 和 BF16 仅用于独立速度探索，不据短训练选择学习率或宣称生成质量。
+等样本预算为 128×250k = 256×125k = 512×62.5k = 3200 万样本。
+Torch 小缓存吞吐不能代替 SHHPC strict-v3 全量 I/O；最终公共配置、完整 commit SHA
+和 small result summary 回传后，SHHPC 需重跑匹配的新接口/恢复验收及稳定吞吐核查。
+
+本轮相关 CPU 检查：`test_targets`、`test_model_integration`、`test_official_data`、
+`test_formal_cache`、`test_formal_training`、`test_formal_evaluation`、`test_speed`、
+`test_paths`，41 passed，0 failed/0 skipped；线程数 1，轻量 worker 最多 1。
+
 ## 历史 CPU 实现与验收记录
 
 按用户后续指示，暂缓 GPU 验收，先实现可在 CPU 检查的后续部分。

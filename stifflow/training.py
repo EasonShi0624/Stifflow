@@ -32,6 +32,10 @@ def load_records(manifest_path, split, count, method, source_config):
 
     manifest_path = Path(manifest_path).resolve()
     manifest = json.loads(manifest_path.read_text())
+    if manifest.get("speed_only"):
+        raise ValueError(
+            "Speed-only caches cannot be used for model training/evaluation"
+        )
     official = manifest.get("dataset_kind") == KIND
     if official:
         validate_label_manifest(manifest)
@@ -177,6 +181,8 @@ def make_loader(
     consumed_samples=None,
     num_workers=0,
     rng_domain=0,
+    pin_memory=False,
+    prefetch_factor=2,
 ):
     import torch
     from torch.utils.data import DataLoader, Dataset
@@ -232,6 +238,8 @@ def make_loader(
         num_workers=num_workers,
         collate_fn=collate,
         generator=torch.Generator().manual_seed(seed),
+        pin_memory=pin_memory,
+        **({"prefetch_factor": prefetch_factor} if num_workers else {}),
     )
 
 
@@ -487,6 +495,8 @@ def main():
                 consumed_samples=consumed,
                 num_workers=profile.get("num_workers", 0),
                 rng_domain=cfg.get("row_rng_domain", 0),
+                pin_memory=profile.get("pin_memory", False),
+                prefetch_factor=profile.get("prefetch_factor", 2),
             ),
             val_dataloaders=make_loader(
                 val,

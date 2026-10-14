@@ -15,6 +15,13 @@ from .targets import draw_target, path_module
 from .training import advance_cursor
 
 
+def require_finite(tensors, what):
+    """Keep all checks, with one host decision instead of one per parameter."""
+    flags = [torch.isfinite(tensor).all() for tensor in tensors]
+    if flags and not torch.stack(flags).all():
+        raise FloatingPointError(f"Non-finite {what}")
+
+
 def graph_data(graph):
     """Whitelist graph features: never include target coordinates or labels."""
     return Data(
@@ -89,39 +96,43 @@ class StifFlow(BaseFlow):
             if stage == "train"
             else np.random.default_rng([self.seed, batch_idx, 1])
         )
-        for record in supervision:
-            xt, ut, t = draw_target(
-                record["x1"], record["source"], record["label"], self.method, rng
+        with torch.profiler.record_function("stifflow/float64_target"):
+            for record in supervision:
+                xt, ut, t = draw_target(
+                    record["x1"], record["source"], record["label"], self.method, rng
+                )
+                positions.append(xt)
+                targets.append(ut)
+                times.append(t)
+        with torch.profiler.record_function("stifflow/target_transfer"):
+            pos = torch.as_tensor(
+                np.concatenate(positions), dtype=torch.float32, device=self.device
             )
-            positions.append(xt)
-            targets.append(ut)
-            times.append(t)
-        pos = torch.as_tensor(
-            np.concatenate(positions), dtype=torch.float32, device=self.device
-        )
-        target = torch.as_tensor(
-            np.concatenate(targets), dtype=torch.float32, device=self.device
-        )
-        t = torch.as_tensor(times, dtype=torch.float32, device=self.device).reshape(
-            -1, 1
-        )
-        prediction = self(
-            z=graph.atomic_numbers,
-            t=t,
-            pos=pos,
-            bond_index=graph.edge_index,
-            edge_attr=graph.edge_attr,
-            node_attr=graph.node_attr,
-            batch=graph.batch,
-        )
-        loss = batchwise_mse_loss(prediction, target, graph.batch, reduce="sum")
+            target = torch.as_tensor(
+                np.concatenate(targets), dtype=torch.float32, device=self.device
+            )
+            t = torch.as_tensor(times, dtype=torch.float32, device=self.device).reshape(
+                -1, 1
+            )
+        with torch.profiler.record_function("stifflow/network_forward"):
+            prediction = self(
+                z=graph.atomic_numbers,
+                t=t,
+                pos=pos,
+                bond_index=graph.edge_index,
+                edge_attr=graph.edge_attr,
+                node_attr=graph.node_attr,
+                batch=graph.batch,
+            )
+        loss = batchwise_mse_loss(prediction.float(), target, graph.batch, reduce="sum")
         if not torch.isfinite(loss):
             raise FloatingPointError("Non-finite Euclidean CFM loss")
         self.log_helper(f"{stage}/loss", loss, len(supervision))
         return loss
 
     def transfer_batch_to_device(self, batch, device, dataloader_idx):
-        return batch[0].to(device), batch[1]  # Keep float64 label matrices on CPU.
+        with torch.profiler.record_function("stifflow/graph_transfer"):
+            return batch[0].to(device, non_blocking=True), batch[1]
 
     def sample(self, *args, **kwargs):
         raise RuntimeError(
@@ -129,15 +140,14 @@ class StifFlow(BaseFlow):
         )
 
     def on_after_backward(self):
-        if any(
-            p.grad is not None and not torch.isfinite(p.grad).all()
-            for p in self.parameters()
-        ):
-            raise FloatingPointError("Non-finite gradient")
+        with torch.profiler.record_function("stifflow/gradient_checks"):
+            require_finite(
+                (p.grad for p in self.parameters() if p.grad is not None), "gradient"
+            )
 
     def on_before_zero_grad(self, optimizer):
-        if any(not torch.isfinite(p).all() for p in self.parameters()):
-            raise FloatingPointError("Non-finite parameter")
+        with torch.profiler.record_function("stifflow/parameter_checks"):
+            require_finite(self.parameters(), "parameter")
 
     def on_save_checkpoint(self, checkpoint):
         checkpoint["training_signature"] = self.training_signature

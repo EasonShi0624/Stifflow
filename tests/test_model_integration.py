@@ -57,10 +57,11 @@ def test_optimizer_scheduler_rng_resume(method):
     import io
 
     from etflow.models.loss import batchwise_mse_loss
+    from torch_geometric.data import Batch
+
     from stifflow.model import graph_data
     from stifflow.source import prepare_source
     from stifflow.targets import draw_target, path_module
-    from torch_geometric.data import Batch
 
     torch.manual_seed(42)
     graph = {
@@ -165,3 +166,13 @@ def test_graph_only_sampler_without_label_access():
     assert positions.shape == (1, 3, 3) and np.isfinite(positions).all()
     np.testing.assert_allclose(positions.mean(axis=1), 0, atol=1e-6)
     assert metrics["forward_calls"] == metrics["nfe_per_conformer"] == 2
+
+
+def test_batched_finite_checks_do_not_skip_empty_or_late_bad_tensors():
+    from stifflow.model import require_finite
+
+    require_finite([], "gradient")
+    require_finite([torch.zeros(2), torch.ones(3)], "gradient")
+    for what, value in (("gradient", float("nan")), ("parameter", float("inf"))):
+        with pytest.raises(FloatingPointError, match=what):
+            require_finite([torch.zeros(2), torch.tensor([value])], what)

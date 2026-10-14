@@ -9,10 +9,12 @@ from unittest.mock import patch
 import numpy as np
 import pytest
 from rdkit import Chem
+
 from stifflow.geometry import centered, centered_basis
 from stifflow.official_data import (
     OfficialDataset,
     build_manifest,
+    graph_signatures,
     validate_label_manifest,
     validate_label_pair,
 )
@@ -151,6 +153,62 @@ def test_all_official_rows_keep_atom_order_and_original_target(official):
     assert fingerprint(original["path"])["sha256"] == original["sha256"]
 
 
+@pytest.mark.parametrize("change_type", [False, True])
+def test_bond_order_is_ignored_but_bond_type_is_checked(official, change_type):
+    dataset, _, root = official
+    path = root / "dataset/rdkit_folder/molecule-0.pickle"
+    with path.open("rb") as stream:
+        raw = pickle.load(stream)
+    mol = raw["conformers"][1]["rd_mol"]
+    changed = Chem.RWMol(mol)
+    bonds = [
+        (b.GetBeginAtomIdx(), b.GetEndAtomIdx(), b.GetBondType())
+        for b in mol.GetBonds()
+    ]
+    for i, j, _ in bonds:
+        changed.RemoveBond(i, j)
+    for i, j, kind in reversed(bonds):
+        changed.AddBond(j, i, kind)
+    if change_type:
+        changed.GetBondWithIdx(0).SetBondType(Chem.BondType.DOUBLE)
+    raw["conformers"][1]["rd_mol"] = changed.GetMol()
+    with path.open("wb") as stream:
+        pickle.dump(raw, stream)
+    entry = dataset.groups("train")[0]
+    if change_type:
+        with pytest.raises(ValueError, match="topology"):
+            dataset.load_molecule(entry, "train")
+    else:
+        assert len(dataset.load_molecule(entry, "train")["conformers"]) == 2
+
+
+def test_stereo_variation_requires_explicit_reference_mode(official):
+    from stifflow.data import graph_from_mol
+
+    dataset, _, root = official
+    with (root / "dataset/rdkit_folder/molecule-0.pickle").open("rb") as stream:
+        mol = pickle.load(stream)["conformers"][0]["rd_mol"]
+    first = graph_from_mol(mol)
+    changed = copy.deepcopy(first)
+    changed["cip_codes"][
+        0
+    ] = "R"  # Exercise the metadata policy independently of 3D perception.
+    entry = dataset.groups("train")[0]
+    with patch(
+        "stifflow.official_data.graph_from_mol", side_effect=[first, changed]
+    ), pytest.raises(ValueError, match="Stereochemistry"):
+        dataset.load_molecule(entry, "train")
+    with patch("stifflow.official_data.graph_from_mol", side_effect=[first, changed]):
+        loaded = dataset.load_molecule(entry, "train", allow_stereo_variation=True)
+    assert loaded["stereo_variation_rows"] == [entry["row_ids"][1]]
+    left, right = [
+        graph_from_mol(Chem.MolFromSmiles(s))
+        for s in ("F[C@](Cl)(Br)I", "F[C@@](Cl)(Br)I")
+    ]
+    assert graph_signatures(left)[0] == graph_signatures(right)[0]
+    assert graph_signatures(left)[1] != graph_signatures(right)[1]
+
+
 def test_molecule_leakage_is_rejected_even_when_rows_do_not_overlap(official):
     dataset, _, _ = official
     dataset.keys = dataset.keys.astype(object)
@@ -231,6 +289,7 @@ def test_cached_row_reordering_fails_even_with_a_new_file_hash(official):
 
 def test_checkpoint_comparison_detects_a_changed_optimizer_or_rng():
     import torch
+
     from stifflow.verify_resume import compare_states
 
     state = {"optimizer": [torch.tensor([0.2, 0.3])], "rng": {"state": 123}}

@@ -237,7 +237,20 @@ def test_train_val_pair_and_modified_packed_row_fail(frozen):
         PackedRecords(train, "precision")
 
 
-def test_freeze_preserves_existing_rows_and_records_exclusions(official):
+@pytest.mark.parametrize(
+    "extra_split,row_mismatch,passes",
+    [
+        (None, False, True),
+        ("train", False, True),
+        ("test", False, False),
+        ("train", True, False),
+    ],
+)
+def test_freeze_preserves_existing_rows_and_records_exclusions(
+    official, extra_split, row_mismatch, passes
+):
+    from stifflow.identity import SplitMapper
+
     dataset, manifest, root = official
     base = root / "scaffold"
     base.mkdir()
@@ -246,6 +259,8 @@ def test_freeze_preserves_existing_rows_and_records_exclusions(official):
         "val": ["CN", "CC"],
         "test": ["CF"],
     }.items():
+        if split == extra_split:
+            keys.append("unit:ambiguous")
         with (base / f"scaffold_{split}_smiles.pkl").open("wb") as file:
             pickle.dump(keys, file)
     uniques, inverse = [], []
@@ -257,10 +272,34 @@ def test_freeze_preserves_existing_rows_and_records_exclusions(official):
         inverse.extend([i] * count)
     smiles = root / "smiles.npz"
     np.savez(smiles, uniques=uniques, inv_indices=inverse)
-    with patch("stifflow.freeze_data.provenance", return_value={}):
+    original_resolve = SplitMapper.resolve
+
+    def resolve(mapper, text):
+        return (
+            (None, "ambiguous_group")
+            if text == "unit:ambiguous"
+            else original_resolve(mapper, text)
+        )
+
+    if row_mismatch:
+        changed = root / "different-rows.npy"
+        np.save(changed, np.asarray([1, 2, 3, 4], dtype=np.int64))
+        dataset.specification["splits"]["train"] = fingerprint(changed)
+    with patch("stifflow.freeze_data.provenance", return_value={}), patch.object(
+        SplitMapper, "resolve", resolve
+    ):
+        if not passes:
+            with pytest.raises(ValueError, match="Strict mapping"):
+                freeze(dataset, manifest, base, smiles, root / "strict")
+            assert not (root / "strict/manifest.json").exists()
+            assert not json.loads((root / "strict/audit.json").read_text())["passed"]
+            return
         result = freeze(dataset, manifest, base, smiles, root / "strict")
     assert result["passed"]
-    assert result["checks"]["train"]["exclusions"] == {"duplicate": 1}
+    expected_exclusions = {"duplicate": 1}
+    if extra_split == "train":
+        expected_exclusions["ambiguous_group"] = 1
+    assert result["checks"]["train"]["exclusions"] == expected_exclusions
     assert result["checks"]["val"]["exclusions"] == {"prior_split_overlap": 1}
     frozen_spec = json.loads((root / "strict/manifest.json").read_text())
     assert frozen_spec["variant"]["name"] == VARIANT

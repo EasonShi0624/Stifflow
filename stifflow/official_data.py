@@ -25,6 +25,38 @@ OFFICIAL_COMMIT = "2f20cadeb047b7dc7cd3a363c729373f288c2d08"
 SAMPLING = "uniform_conformer_rows"
 
 
+def graph_signatures(metadata):
+    """Compare indexed bonds with their attributes, not RDKit bond-list order."""
+    topology = (
+        tuple(metadata["atomic_numbers"]),
+        tuple(metadata["charges"]),
+        tuple(metadata["atom_mapping"]),
+        tuple(metadata["atom_indices"]),
+        tuple(
+            sorted(
+                (min(i, j), max(i, j), kind)
+                for (i, j), kind in zip(metadata["bonds"], metadata["bond_types"])
+            )
+        ),
+    )
+    stereo_bonds = []
+    for (i, j), stereo, atoms in zip(
+        metadata["bonds"], metadata["bond_stereo"], metadata["bond_stereo_atoms"]
+    ):
+        # Stereo atoms follow the bond endpoints when its direction is reversed.
+        stereo_bonds.append(
+            (min(i, j), max(i, j), stereo, tuple(atoms if i < j else atoms[::-1]))
+        )
+    stereo = (
+        tuple(
+            (code, None if code is not None else tag)
+            for code, tag in zip(metadata["cip_codes"], metadata["chiral_tags"])
+        ),
+        tuple(sorted(stereo_bonds)),
+    )
+    return topology, stereo
+
+
 def verified_path(record):
     path = Path(record["path"])
     if fingerprint(path)["sha256"] != record["sha256"]:
@@ -149,7 +181,7 @@ class OfficialDataset:
             key=lambda g: hashlib.sha256(f"{seed}:{g['id']}".encode()).hexdigest(),
         )
 
-    def load_molecule(self, entry, split, limit=None):
+    def load_molecule(self, entry, split, limit=None, *, allow_stereo_variation=False):
         if self.summary is None:
             self.summary = json.loads(self.summary_path.read_text())
         index = entry["inventory_index"]
@@ -163,7 +195,7 @@ class OfficialDataset:
         if len(conformers) != int(self.conformers[index]):
             raise ValueError("Raw conformer count differs from official inventory")
         rows = entry["row_ids"] if limit is None else entry["row_ids"][:limit]
-        selected, graph = [], None
+        selected, graph, stereo_variations = [], None, []
         for row in rows:
             raw_index = row - int(self.row_offsets[index])
             if not 0 <= raw_index < len(conformers):
@@ -176,25 +208,19 @@ class OfficialDataset:
             conf = conformers[raw_index]
             mol = Chem.Mol(conf["rd_mol"])
             metadata = graph_from_mol(mol)
-            signature = (
-                tuple(metadata["atomic_numbers"]),
-                tuple(metadata["charges"]),
-                tuple(metadata["atom_mapping"]),
-                tuple(metadata["atom_indices"]),
-                tuple(tuple(bond) for bond in metadata["bonds"]),
-                tuple(metadata["bond_types"]),
-            )
+            signature, stereo_signature = graph_signatures(metadata)
             if graph is None:
                 graph = metadata
                 order_signature = signature
+                first_stereo = stereo_signature
             elif signature != order_signature:
-                # Conformer-dependent stereo perception is a known GEOM property;
-                # atom order, topology and charges must still agree exactly.
-                # Connectivity is a label-domain constraint (stiffness enforces it);
-                # references must still cover every frozen molecule.
-                raise ValueError(
-                    "Atom order or topology varies across official rows"
-                )
+                raise ValueError("Atom order or topology varies across official rows")
+            elif stereo_signature != first_stereo:
+                if not allow_stereo_variation:
+                    raise ValueError(
+                        "Stereochemistry varies across official label rows"
+                    )
+                stereo_variations.append(row)
             if (
                 not np.isfinite(block).all()
                 or not np.array_equal(block[:, 0], metadata["atomic_numbers"])
@@ -231,6 +257,7 @@ class OfficialDataset:
             "graph": graph,
             "conformers": selected,
             "source": fingerprint(path),
+            "stereo_variation_rows": stereo_variations,
         }
 
 
