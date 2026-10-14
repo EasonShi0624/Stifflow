@@ -1,0 +1,41 @@
+{
+  "status": "queued",
+  "formal_adoption": false,
+  "gpu_validation": "not_run",
+  "job_id": 19804304,
+  "expected_code_commit": "7bffe00e1388bbd816f9a6c382cf9812ebdc15a1",
+  "devices": 2,
+  "method_scope": [
+    "precision",
+    "alternative_a",
+    "control"
+  ],
+  "microbatch_per_rank": 32,
+  "accumulation": 2,
+  "global_effective_batch": 128,
+  "target_rng_mode": "global_draw",
+  "data_scope": "Torch local legacy train speed-only caches",
+  "allocation_wall_limit_seconds": 1080,
+  "runtime_deadline_seconds": 990,
+  "reason": "QoS concurrent GPU limits and public GPU resource availability",
+  "single_report": "results/torch-runtime-acceptance-20261014.json",
+  "pending_output": "/scratch/ys6132/project/0_stiff_flow_matching/26Fall_DL/runs/torch-runtime/7bffe00-ddp/summary.json",
+  "planned_checks": [
+    "maximum29 memory per rank",
+    "single/DDP unclipped gradient relative L2 <= 1e-4",
+    "equal supervision loss rtol/atol 1e-5",
+    "DDP40 vs20+resume20 model/optimizer/scheduler/RNG/cursor/clipping state"
+  ],
+  "actual_ddp_gpu_seconds": 0,
+  "cumulative_gpu_budget": {
+    "limit_seconds": 3600,
+    "previous_gpu_seconds": 658,
+    "new_single_gpu_seconds": 535,
+    "used_seconds": 1193,
+    "pending_maximum_gpu_seconds": 2160,
+    "maximum_total_seconds": 3353
+  },
+  "limitations": "DDP is implemented and queued; no speedup, communication, or DDP recovery result is claimed.",
+  "last_observed_utc": "2026-10-14T14:13:11.036834+00:00",
+  "last_observed_slurm_state": "PENDING|(QOSGrpGRES)"
+}

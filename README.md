@@ -436,65 +436,78 @@ microbatch/累积与检查实现，不能把全部收益归给某一项；profil
 个别裁剪前 norm 约5e6，但 loss/梯度保持有限；沿用 clip100，正式验收应核查其分布与
 损失稳定性，短速度测试不足以判断收敛。
 
-SHHPC 下一轮先验证 FP32 32×4，继续有效 batch128、250k更新、seeds42/43/44、原学习率。
-复用已完成的 strict-v3 train/val 标签，无需重做 freeze/Hessian；references 用新代码在新目录
-重导出，核对全部 val/test 覆盖和 `stereo_variation_rows`。随后用正式缓存做三方法40更新及恢复
-验收，分开记录 import、首次分片校验、稳定更新、验证和 checkpoint 耗时，不将全过程耗时
-除以40作为稳定吞吐。Torch 的16分子 legacy cohort 不能外推 SHHPC 的91.8 GB缓存吞吐，
-也不能验证正式训练或生成质量。
+上轮计划中的 SHHPC 独立 GPU 重新验收，由下述用户确认的本地验收方案取代。
+Torch 的小缓存吞吐不代表 SHHPC strict-v3 的全量 I/O 或生成质量。
 
-`formal_acceptance.sbatch` 与 `formal.sbatch` 支持 `STIFFLOW_FORMAL_CONFIG`；默认仍为
-原配置。SHHPC 可在仓库外的可写目录生成候选配置文件，保持代码 worktree 清洁。
-下列命令在现有 SHHPC allocation 内、已加载 etflow 环境后执行；路径由该集群实际设置：
+### 2026-10-14：4090D 正式配置与本地最大分子验收
+
+单卡 job `19803828` 已完成（gl031 / NVIDIA L40S，退出0:0，535 GPU秒，无重排）。
+实际运行代码为 `b5ab58509fb347d1ae466f8e63df03580e8a6e89`，tracked diff为空；
+后续 `7bffe00e1388bbd816f9a6c382cf9812ebdc15a1` 仅关闭速度测试中的 Lightning 自动重排。
+共享算法文件哈希未变，真实报告已通过 `formal.require_torch_runtime` 检查。
+验收摘要见 [results/torch-runtime-acceptance-20261014.json](results/torch-runtime-acceptance-20261014.json)。
+
+正式配置采用 [configs/qm9-formal-4090d.yaml](configs/qm9-formal-4090d.yaml)：
+FP32，microbatch32×累积4，有效batch128，workers2 / prefetch2 / pin_memory=false，
+20层 / hidden160，AdamW 7e-4，250k更新，seeds42/43/44；物理标签和监督仍为float64。
+显存以24 GiB的90%为优选线、95%为硬上限，计入设备非PyTorch占用；
+实际训练设allocator上限并检查forward/backward和validation的显存。
+
+本地冻结legacy train中选取 `CCCCCCCCC` 和 `CCCCCCC(C)C` 的原始构象：
+均为29原子 / 9重原子，达到[GEOM QM9记录的最大原子数](https://www.nature.com/articles/s41597-022-01288-4)。
+两条物理标签共耗时0.212秒，完整准备60.981秒（含导入、身份核对和写入），保持speed_only。
+缓存为 `cache/torch-speed/max29-20261014/manifest.json`；每个压力batch全部由29原子分子构成。
+三方法均完成2次预热+6次计时更新：峰值allocated10.05 GiB、reserved10.25 GiB、
+整卡实际占用10.81 GiB，约24 GiB预算的45.03%，没有OOM，microbatch保留32。
+本集群没有4090D；用L40S限制24 GiB作显存代理，不能据此给出4090D的实际吞吐或通信性能。
+
+三方法还用原有16分子缓存完成正式stream RNG的连续40更新与20+恢复20更新，
+模型、优化器、scheduler、目标/torch/CUDA RNG、样本游标及gradient queue均在
+rtol1e-6 / atol1e-7下通过比较；每次完整运行消费5120样本，loss/gradient/parameter均有限。
+相关CPU检查14项通过，随后加入正式门禁和运行显存检查的13项复测通过；
+Ruff、Black、脚本语法、实际环境导入和真实报告门禁检查通过。
+
+单卡小缓存、workers0、global-draw监督下，三方法稳定吞吐为130.76 / 131.21 / 131.51 samples/s。
+precision的有效batch128/256/512分别为130.76/131.98/130.48 samples/s：增大后+0.93% / -0.21%，
+没有明确效率收益，因此保持有效batch128；不据这些短训练改变学习率或样本预算。
+
+两卡DDP仅评测，尚不用于正式训练。实现每卡32×累积2、全局batch128，不使用会补齐重复
+样本的DistributedSampler；按全局draw ID生成相同监督，正式单卡默认stream RNG保持原样。
+计划对照三方法裁剪前梯度和loss，并比较DDP连续40与20+恢复20的checkpoint。
+job `19804304` 已提交，固定代码为 `7bffe00e1388bbd816f9a6c382cf9812ebdc15a1`，
+仍受QoS并发/公共GPU资源限制排队，**没有双卡实测结果**；不会取消其它任务来释放GPU。
+DDP输出位置为 `runs/torch-runtime/7bffe00-ddp/summary.json`，评测状态见
+[results/torch-runtime-ddp-20261014.json](results/torch-runtime-ddp-20261014.json)。
+原有658 GPU秒加本轮单卡535秒，已用1193秒（19分53秒）；双卡allocation最多18分钟，
+关闭requeue，内部990秒截止，未来最多2160 GPU秒，总上限3353秒（55分53秒），仍在原一小时预算内。
+排队时间不计GPU用量，双卡完成后再用sacct实际elapsed核对。
+
+#### SHHPC下一步
+
+使用该配置和已同步的Torch验收记录，不再单独提交 `formal_acceptance.sbatch`。
+`runtime_acceptance: torch_runtime` 门禁核对算法文件哈希、配置、三方法正式stream恢复及
+29原子压力结果；完整生产缓存、划分、标签哈希和resume签名检查保留。
+默认旧配置的SHHPC验收门禁不变。SHHPC遇到问题时返回实际commit、日志和设备占用，
+本轮不把DDP切入正式训练，也不把tiny-cache吞吐外推到91.8 GB的正式缓存。
+
+在SHHPC现有工作区快进到本次交接commit，复用已完成的strict-v3 train/val标签。
+references用新代码在新目录CPU重导出，核对val/test覆盖和 `stereo_variation_rows`。
+环境、数据路径及CPU_ARGS / GPU_ARGS由当地现有配置提供；以下命令不代表Torch已提交SHHPC作业。
 
 ```bash
-export STIFFLOW_FORMAL_CONFIG="$STIFFLOW_CANDIDATE_CONFIG_DIR/qm9-formal-b32-a4.yaml"
-python - <<'PY'
-import os
-from pathlib import Path
-import yaml
-cfg = yaml.safe_load(Path('configs/qm9-formal.yaml').read_text())
-cfg['batch_size'] = 32
-cfg['profiles']['formal'].update(accumulate_grad_batches=4, num_workers=2,
-                                 prefetch_factor=2, pin_memory=False)
-path = Path(os.environ['STIFFLOW_FORMAL_CONFIG'])
-path.parent.mkdir(parents=True, exist_ok=True)
-with path.open('x') as stream:
-    yaml.safe_dump(cfg, stream, sort_keys=False)
-PY
-# STIFFLOW_REFERENCE_ROOT 和 STIFFLOW_ACCEPTANCE_ROOT 均使用新目录。
+export STIFFLOW_FORMAL_CONFIG="$STIFFLOW_WORKSPACE/stifflow-v1/configs/qm9-formal-4090d.yaml"
+export STIFFLOW_ACCEPTANCE="$STIFFLOW_WORKSPACE/stifflow-v1/results/torch-runtime-acceptance-20261014.json"
+# STIFFLOW_FROZEN_DATA、TRAIN_LABELS、VAL_LABELS使用SHHPC已验收的完整缓存；REFERENCE_ROOT使用新目录。
 sbatch "${CPU_ARGS[@]}" scripts/formal_task.sbatch formal references \
   --manifest "$STIFFLOW_FROZEN_DATA" --config "$STIFFLOW_FORMAL_CONFIG" \
   --output "$STIFFLOW_REFERENCE_ROOT"
-sbatch "${GPU_ARGS[@]}" scripts/formal_acceptance.sbatch
+# references完成后，RUN_ROOT使用新目录；每个array任务单卡，N取当地允许的并发数。
+sbatch "${GPU_ARGS[@]}" --array=0-8%"$N" scripts/formal.sbatch
 ```
 
-验收通过且确认稳定吞吐、最大分子显存及全量 I/O 后，再按前节命令启动九次正式训练。
-保留同一个 `STIFFLOW_FORMAL_CONFIG`、代码 SHA 和验收清单，不把候选验收与默认配置混用。
-本轮未在 Torch 启动正式训练，未获取 SHHPC 原始日志；其历史耗时仍只是 README 回报值。
-
-### 4090D 配置与本地最大分子 / 双卡测量
-
-本轮按用户指示在 Torch 进行小规模 GPU 验证；完成后不再要求 SHHPC 单独提交
-`formal_acceptance.sbatch`。新配置 `configs/qm9-formal-4090d.yaml` 保留正式 FP32、
-20 层 / hidden160、有效 batch128、250k 更新及原学习率，初始 microbatch32×累积4，
-显存按 24 GiB 的 90% 作为优选线、95% 为硬上限，并计入非 PyTorch 的设备占用。
-
-`stifflow.runtime_benchmark` 复用现有训练与计时入口，用本地冻结 legacy train 中
-两种 29 原子 / 9 重原子分子的真实原始构象填满每个压力 batch；仅生成两个轻量
-物理标签，缓存保持 speed_only。Torch 无 4090D，使用 L40S 和 24 GiB allocator
-上限作代理验证，不能据此证明 4090D 的驱动显存或 PCIe 通信性能。
-
-两卡 DDP 只评测：每卡32×累积2、全局有效 batch128，每个全局 draw ID 只出现一次。
-按 draw ID 的监督 RNG 仅用于单卡 / DDP 等监督比较，正式单卡默认 stream RNG 不变。
-检查三方法的裁剪前梯度、loss，以及连续40更新与20+恢复20更新的 checkpoint 状态。
-本轮结果尚待 GPU 作业返回；相关 CPU 检查已通过，不能当作 GPU 验收结果。
-单卡 / 两卡 allocation 上限为12 / 18分钟，关闭 requeue；加上既有658 GPU秒，
-最多3538 GPU秒，均计入原有一小时预算。验收记录与实际 GPU秒在作业完成后补充。
-
-`runtime_acceptance: torch_runtime` 配置只接受同算法文件哈希、同配置、三方法正式
-stream RNG 40更新恢复通过且29原子显存合格的 Torch 记录；原有完整生产缓存、划分、
-标签哈希与 resume 签名检查继续执行。默认旧配置的 SHHPC 验收门禁保持原样。
+Alternative A仍为 `55009a52c2a00b2b379275c9553e3eead3922884`，benchmark仍为
+`cbeb314bcd1f99f2a7354477592791f6151821a7`，参考为 `80f82d7d142bc3872412d2966a8d71ed14462b18`。
+全量SHHPC训练/生成与4090D实卡运行未执行；GPU速度测试不提供收敛或生成质量结论。
 
 ## 历史 CPU 实现与验收记录
 
