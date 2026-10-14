@@ -471,16 +471,58 @@ Ruff、Black、脚本语法、实际环境导入和真实报告门禁检查通�
 precision的有效batch128/256/512分别为130.76/131.98/130.48 samples/s：增大后+0.93% / -0.21%，
 没有明确效率收益，因此保持有效batch128；不据这些短训练改变学习率或样本预算。
 
-两卡DDP仅评测，尚不用于正式训练。实现每卡32×累积2、全局batch128，不使用会补齐重复
-样本的DistributedSampler；按全局draw ID生成相同监督，正式单卡默认stream RNG保持原样。
-计划对照三方法裁剪前梯度和loss，并比较DDP连续40与20+恢复20的checkpoint。
-job `19804304` 已提交，固定代码为 `7bffe00e1388bbd816f9a6c382cf9812ebdc15a1`，
-仍受QoS并发/公共GPU资源限制排队，**没有双卡实测结果**；不会取消其它任务来释放GPU。
-DDP输出位置为 `runs/torch-runtime/7bffe00-ddp/summary.json`，评测状态见
-[results/torch-runtime-ddp-20261014.json](results/torch-runtime-ddp-20261014.json)。
-原有658 GPU秒加本轮单卡535秒，已用1193秒（19分53秒）；双卡allocation最多18分钟，
-关闭requeue，内部990秒截止，未来最多2160 GPU秒，总上限3353秒（55分53秒），仍在原一小时预算内。
-排队时间不计GPU用量，双卡完成后再用sacct实际elapsed核对。
+两卡DDP仅评测，正式训练本轮继续单卡。每卡32×累积2、全局batch128、workers0；
+按全局draw ID生成相同监督，不使用会补齐重复样本的DistributedSampler。
+正式单卡默认stream RNG和32×4配置保持不变。
+
+#### 双卡恢复debug与复测（2026-10-14）
+
+原作业 `19804304`（代码 `7bffe00e1388bbd816f9a6c382cf9812ebdc15a1`，gl031）
+退出1:0，实际278秒×2 GPU。三方法显存、稳定吞吐已完成，precision / Alternative A
+恢复通过，但control的40更新恢复比较失败。前20更新loss完全一致，恢复后第22更新
+才出现约2.08e-8相对loss差，最终模型最大绝对差1.714e-3，489个张量超过原比较门槛。
+样本游标、数据/配置签名、目标/torch RNG和scheduler一致；优化器及裁剪历史有差异。
+
+诊断 job `19807600`（gl045，153秒×2，退出0:0）在固定
+`dbeb803d11846e2bb17bb93e87df1654121e95f8` 上独立重跑旧control连续40更新，
+与原连续训练的模型差值为0，逐更新loss完全相同。只关闭 `gradient_as_bucket_view`，
+再运行连续40与20+恢复20：模型差值为0，优化器、scheduler、每rank RNG、游标及
+裁剪历史均通过原检查。诊断脚本及哈希记录在结果摘要中，原日志/checkpoint未覆盖。
+
+修复 commit `0818c67df984bedde64a43d948960666bfbd0a8e` 将DDP梯度bucket别名默认关闭，
+设置写入case和checkpoint签名，防止混用不同策略的恢复记录；单卡行为不变。
+[PyTorch说明](https://github.com/pytorch/pytorch/blob/v2.4.1/torch/nn/parallel/distributed.py)
+指出该选项使用通信bucket的梯度视图，视图在首轮后生效；本次实测确认该优化会影响
+本配置恢复后的浮点梯度存储/裁剪/更新。比较容差仍为rtol1e-6 / atol1e-7，未放宽。
+失败信息现保留具体参数路径、张量误差统计或标量差值；初始梯度对照先于长恢复测试保存。
+运行脚本允许 `STIFFLOW_RUNTIME_SECONDS` 缩短内部截止时间，仍受原CLI上限约束。
+
+复测 job `19808783` 固定上述修复commit，gl066 / 两张NVIDIA L40S，退出0:0，
+实际298秒×2 GPU；allocation上限8分钟、内部390秒截止、关闭requeue。
+三方法2次预热+12次稳定更新的结果：
+
+| 方法 | 单卡32×4 samples/s | 两卡每卡32×2 samples/s | 墙钟加速 | 每样本GPU时间比 |
+| --- | ---: | ---: | ---: | ---: |
+| precision | 130.76 | 227.83 | 1.74× | 1.148 |
+| Alternative A | 131.21 | 229.76 | 1.75× | 1.142 |
+| control | 131.51 | 241.87 | 1.84× | 1.087 |
+
+三方法的单/双卡初始loss相同，裁剪前梯度相对L2差4.63e-8至4.73e-8（门槛1e-4）。
+三方法连续40与20+恢复20全部通过；每次完整运行消费5120样本。29原子最大分子压力
+检查全部通过，每卡峰值设备占用11.18 GiB，约24 GiB预算46.57%，未OOM或出现非有限值。
+同一样本预算下，双卡减少墙钟时间，但GPU时间增加约9%–15%。单卡与复测双卡位于
+不同节点，不能把旧/新双卡速度差完全归因于bucket设置；tiny-cache吞吐不代表全量I/O。
+
+相关CPU检查 `tests/test_runtime.py`、`tests/test_speed.py` 和既有checkpoint比较测试，
+9 passed / 2 warnings（85.17秒）；Ruff、Black、bash语法、实际导入路径和原单卡验收
+门禁检查通过。共享数学/标签/模型/生产训练文件未修改，已有标签和单卡GPU验收继续可用。
+
+完整本地报告为 `runs/torch-runtime/0818c67-ddp-fixed/summary.json`，日志为
+`runs/torch-runtime/slurm-19808783.out`；诊断为 `runs/torch-runtime/ddp-debug-20261014/19807600/summary.json`。
+可同步摘要见 [results/torch-runtime-ddp-20261014.json](results/torch-runtime-ddp-20261014.json)，
+包括实际版本、环境、数据哈希、命令、各case、debug数值差和Slurm用量。
+累计GPU时间：既有658秒 + 单卡535秒 + 原失败双卡556秒 + 诊断306秒 + 复测596秒
+= **2651秒（44分11秒）**；原3600秒预算剩949秒（15分49秒），不自动追加测试。
 
 #### SHHPC下一步
 

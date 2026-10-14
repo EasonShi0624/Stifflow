@@ -1,41 +1,1594 @@
 {
-  "status": "queued",
-  "formal_adoption": false,
-  "gpu_validation": "not_run",
-  "job_id": 19804304,
-  "expected_code_commit": "7bffe00e1388bbd816f9a6c382cf9812ebdc15a1",
+  "status": "completed",
+  "speed_only": true,
   "devices": 2,
-  "method_scope": [
-    "precision",
-    "alternative_a",
-    "control"
+  "cases": [
+    {
+      "case": {
+        "method": "precision",
+        "microbatch": 32,
+        "effective_batch": 128,
+        "accumulation": 2,
+        "runtime": "optimized",
+        "precision": "32-true",
+        "workers": 0,
+        "prefetch": 2,
+        "pin_memory": false,
+        "devices": 2,
+        "target_rng_mode": "global_draw",
+        "gradient_as_bucket_view": false
+      },
+      "stress": false,
+      "profiled": false,
+      "status": "completed",
+      "startup_seconds": 7.310403506737202,
+      "start_step": 0,
+      "global_step": 8,
+      "consumed_samples": 1024,
+      "peak_allocated_bytes": 10824913408,
+      "peak_reserved_bytes": 11242831872,
+      "peak_device_used_bytes": 12000165888,
+      "peak_reserved_whole_case_bytes": 11242831872,
+      "measured_updates": 6,
+      "seconds_per_update": 1.0257574975645791,
+      "median_seconds_per_update": 1.0252334759570658,
+      "p90_seconds_per_update": 1.0273439539596438,
+      "std_seconds_per_update": 0.0011993596010714685,
+      "samples_per_second": 124.78582930556786,
+      "atoms_per_second": 3618.789049861468,
+      "wall_seconds": 13.79447673400864,
+      "per_rank_memory": [
+        [
+          11242831872,
+          12000165888
+        ],
+        [
+          11242831872,
+          12000165888
+        ]
+      ],
+      "stage": "maximum",
+      "maximum": true,
+      "update_mean_loss_range": [
+        493.3683853149414,
+        34081.26173400879
+      ]
+    },
+    {
+      "case": {
+        "method": "alternative_a",
+        "microbatch": 32,
+        "effective_batch": 128,
+        "accumulation": 2,
+        "runtime": "optimized",
+        "precision": "32-true",
+        "workers": 0,
+        "prefetch": 2,
+        "pin_memory": false,
+        "devices": 2,
+        "target_rng_mode": "global_draw",
+        "gradient_as_bucket_view": false
+      },
+      "stress": false,
+      "profiled": false,
+      "status": "completed",
+      "startup_seconds": 3.336611029226333,
+      "start_step": 0,
+      "global_step": 8,
+      "consumed_samples": 1024,
+      "peak_allocated_bytes": 10824913408,
+      "peak_reserved_bytes": 11244929024,
+      "peak_device_used_bytes": 12002263040,
+      "peak_reserved_whole_case_bytes": 11244929024,
+      "measured_updates": 6,
+      "seconds_per_update": 1.0269688092327367,
+      "median_seconds_per_update": 1.0279707706067711,
+      "p90_seconds_per_update": 1.0293920005206019,
+      "std_seconds_per_update": 0.0030131149621613154,
+      "samples_per_second": 124.63864418202795,
+      "atoms_per_second": 3614.5206812788106,
+      "wall_seconds": 9.81937463209033,
+      "per_rank_memory": [
+        [
+          11244929024,
+          12002263040
+        ],
+        [
+          11244929024,
+          12002263040
+        ]
+      ],
+      "stage": "maximum",
+      "maximum": true,
+      "update_mean_loss_range": [
+        317.1046142578125,
+        571.7978820800781
+      ]
+    },
+    {
+      "case": {
+        "method": "control",
+        "microbatch": 32,
+        "effective_batch": 128,
+        "accumulation": 2,
+        "runtime": "optimized",
+        "precision": "32-true",
+        "workers": 0,
+        "prefetch": 2,
+        "pin_memory": false,
+        "devices": 2,
+        "target_rng_mode": "global_draw",
+        "gradient_as_bucket_view": false
+      },
+      "stress": false,
+      "profiled": false,
+      "status": "completed",
+      "startup_seconds": 3.5594656011089683,
+      "start_step": 0,
+      "global_step": 8,
+      "consumed_samples": 1024,
+      "peak_allocated_bytes": 10824913408,
+      "peak_reserved_bytes": 11242831872,
+      "peak_device_used_bytes": 12000165888,
+      "peak_reserved_whole_case_bytes": 11242831872,
+      "measured_updates": 6,
+      "seconds_per_update": 1.0231306279699008,
+      "median_seconds_per_update": 1.022872741566971,
+      "p90_seconds_per_update": 1.0241826276760548,
+      "std_seconds_per_update": 0.0009064341741572099,
+      "samples_per_second": 125.10621469125407,
+      "atoms_per_second": 3628.080226046368,
+      "wall_seconds": 10.013122661970556,
+      "per_rank_memory": [
+        [
+          11242831872,
+          12000165888
+        ],
+        [
+          11242831872,
+          12000165888
+        ]
+      ],
+      "stage": "maximum",
+      "maximum": true,
+      "update_mean_loss_range": [
+        328.33849334716797,
+        580.5052795410156
+      ]
+    },
+    {
+      "case": {
+        "method": "precision",
+        "microbatch": 32,
+        "effective_batch": 128,
+        "accumulation": 2,
+        "runtime": "optimized",
+        "precision": "32-true",
+        "workers": 0,
+        "prefetch": 2,
+        "pin_memory": false,
+        "devices": 2,
+        "target_rng_mode": "global_draw",
+        "gradient_as_bucket_view": false
+      },
+      "stress": false,
+      "profiled": false,
+      "status": "completed",
+      "startup_seconds": 3.2413530838675797,
+      "start_step": 0,
+      "global_step": 14,
+      "consumed_samples": 1792,
+      "peak_allocated_bytes": 6276035584,
+      "peak_reserved_bytes": 7415529472,
+      "peak_device_used_bytes": 8172863488,
+      "peak_reserved_whole_case_bytes": 7415529472,
+      "measured_updates": 12,
+      "seconds_per_update": 0.5618209854001179,
+      "median_seconds_per_update": 0.5681755067780614,
+      "p90_seconds_per_update": 0.5839831228833645,
+      "std_seconds_per_update": 0.020683143970004363,
+      "samples_per_second": 227.83057829148353,
+      "atoms_per_second": 4552.161749847415,
+      "wall_seconds": 10.226527121849358,
+      "per_rank_memory": [
+        [
+          7415529472,
+          8172863488
+        ],
+        [
+          7757365248,
+          8514699264
+        ]
+      ],
+      "stage": "throughput",
+      "maximum": false,
+      "update_mean_loss_range": [
+        238.0749855041504,
+        19498.204162597656
+      ]
+    },
+    {
+      "case": {
+        "method": "precision",
+        "microbatch": 32,
+        "effective_batch": 128,
+        "accumulation": 2,
+        "runtime": "optimized",
+        "precision": "32-true",
+        "workers": 0,
+        "prefetch": 2,
+        "pin_memory": false,
+        "devices": 2,
+        "target_rng_mode": "global_draw",
+        "gradient_as_bucket_view": false
+      },
+      "stress": false,
+      "profiled": false,
+      "status": "completed",
+      "startup_seconds": 0.424251152202487,
+      "start_step": 0,
+      "global_step": 1,
+      "consumed_samples": 128,
+      "peak_allocated_bytes": 5786776064,
+      "peak_reserved_bytes": 6020923392,
+      "peak_device_used_bytes": 6778257408,
+      "peak_reserved_whole_case_bytes": 6020923392,
+      "measured_updates": 1,
+      "seconds_per_update": 1.5903505980968475,
+      "median_seconds_per_update": 1.5903505980968475,
+      "p90_seconds_per_update": 1.5903505980968475,
+      "std_seconds_per_update": 0.0,
+      "samples_per_second": 80.4853974671849,
+      "atoms_per_second": 1558.1469915912826,
+      "wall_seconds": 2.204117921181023,
+      "per_rank_memory": [
+        [
+          6020923392,
+          6778257408
+        ],
+        [
+          5395972096,
+          6153306112
+        ]
+      ],
+      "stage": "gradient",
+      "maximum": false,
+      "update_mean_loss_range": [
+        256.79421615600586,
+        256.79421615600586
+      ]
+    },
+    {
+      "case": {
+        "method": "precision",
+        "microbatch": 32,
+        "effective_batch": 128,
+        "accumulation": 2,
+        "runtime": "optimized",
+        "precision": "32-true",
+        "workers": 0,
+        "prefetch": 2,
+        "pin_memory": false,
+        "devices": 2,
+        "target_rng_mode": "global_draw",
+        "gradient_as_bucket_view": false
+      },
+      "stress": false,
+      "profiled": false,
+      "status": "completed",
+      "startup_seconds": 0.39363068621605635,
+      "start_step": 0,
+      "global_step": 40,
+      "consumed_samples": 5120,
+      "peak_allocated_bytes": 6734667264,
+      "peak_reserved_bytes": 9315549184,
+      "peak_device_used_bytes": 10072883200,
+      "peak_reserved_whole_case_bytes": 9315549184,
+      "measured_updates": 40,
+      "seconds_per_update": 0.5857156864833086,
+      "median_seconds_per_update": 0.561461626784876,
+      "p90_seconds_per_update": 0.5879044541157782,
+      "std_seconds_per_update": 0.15870231741763946,
+      "samples_per_second": 218.53606272443184,
+      "atoms_per_second": 4423.306494581703,
+      "wall_seconds": 24.347553501371294,
+      "per_rank_memory": [
+        [
+          9315549184,
+          10072883200
+        ],
+        [
+          8233418752,
+          8990752768
+        ]
+      ],
+      "stage": "resume-continuous",
+      "maximum": false,
+      "update_mean_loss_range": [
+        175.77408981323242,
+        19498.204162597656
+      ]
+    },
+    {
+      "case": {
+        "method": "precision",
+        "microbatch": 32,
+        "effective_batch": 128,
+        "accumulation": 2,
+        "runtime": "optimized",
+        "precision": "32-true",
+        "workers": 0,
+        "prefetch": 2,
+        "pin_memory": false,
+        "devices": 2,
+        "target_rng_mode": "global_draw",
+        "gradient_as_bucket_view": false
+      },
+      "stress": false,
+      "profiled": false,
+      "status": "completed",
+      "startup_seconds": 1.0137643087655306,
+      "start_step": 0,
+      "global_step": 20,
+      "consumed_samples": 2560,
+      "peak_allocated_bytes": 6276035584,
+      "peak_reserved_bytes": 7417626624,
+      "peak_device_used_bytes": 8174960640,
+      "peak_reserved_whole_case_bytes": 7417626624,
+      "measured_updates": 20,
+      "seconds_per_update": 0.6111506304470822,
+      "median_seconds_per_update": 0.5580653403885663,
+      "p90_seconds_per_update": 0.5861509775277227,
+      "std_seconds_per_update": 0.2359363882742904,
+      "samples_per_second": 209.44100132296788,
+      "atoms_per_second": 4210.827694176498,
+      "wall_seconds": 13.724307061173022,
+      "per_rank_memory": [
+        [
+          7417626624,
+          8174960640
+        ],
+        [
+          8231321600,
+          8988655616
+        ]
+      ],
+      "stage": "resume-partial",
+      "maximum": false,
+      "update_mean_loss_range": [
+        238.0749855041504,
+        19498.204162597656
+      ]
+    },
+    {
+      "case": {
+        "method": "precision",
+        "microbatch": 32,
+        "effective_batch": 128,
+        "accumulation": 2,
+        "runtime": "optimized",
+        "precision": "32-true",
+        "workers": 0,
+        "prefetch": 2,
+        "pin_memory": false,
+        "devices": 2,
+        "target_rng_mode": "global_draw",
+        "gradient_as_bucket_view": false
+      },
+      "stress": false,
+      "profiled": false,
+      "status": "completed",
+      "startup_seconds": 1.243304711766541,
+      "start_step": 20,
+      "global_step": 40,
+      "consumed_samples": 5120,
+      "peak_allocated_bytes": 6741850624,
+      "peak_reserved_bytes": 8065646592,
+      "peak_device_used_bytes": 8822980608,
+      "peak_reserved_whole_case_bytes": 8065646592,
+      "measured_updates": 20,
+      "seconds_per_update": 0.630401850072667,
+      "median_seconds_per_update": 0.5874876675661653,
+      "p90_seconds_per_update": 0.6018962079659105,
+      "std_seconds_per_update": 0.2063850909531031,
+      "samples_per_second": 203.0450893905932,
+      "atoms_per_second": 4137.281639797466,
+      "wall_seconds": 14.439181525725871,
+      "per_rank_memory": [
+        [
+          8065646592,
+          8822980608
+        ],
+        [
+          7405043712,
+          8162377728
+        ]
+      ],
+      "stage": "resume-resumed",
+      "maximum": false,
+      "update_mean_loss_range": [
+        175.77408981323242,
+        532.5497016906738
+      ]
+    },
+    {
+      "case": {
+        "method": "alternative_a",
+        "microbatch": 32,
+        "effective_batch": 128,
+        "accumulation": 2,
+        "runtime": "optimized",
+        "precision": "32-true",
+        "workers": 0,
+        "prefetch": 2,
+        "pin_memory": false,
+        "devices": 2,
+        "target_rng_mode": "global_draw",
+        "gradient_as_bucket_view": false
+      },
+      "stress": false,
+      "profiled": false,
+      "status": "completed",
+      "startup_seconds": 3.284700731281191,
+      "start_step": 0,
+      "global_step": 14,
+      "consumed_samples": 1792,
+      "peak_allocated_bytes": 6276035584,
+      "peak_reserved_bytes": 7415529472,
+      "peak_device_used_bytes": 8172863488,
+      "peak_reserved_whole_case_bytes": 7415529472,
+      "measured_updates": 12,
+      "seconds_per_update": 0.557108714710921,
+      "median_seconds_per_update": 0.5637157310266048,
+      "p90_seconds_per_update": 0.5766149232629687,
+      "std_seconds_per_update": 0.022277347707228164,
+      "samples_per_second": 229.75766958953085,
+      "atoms_per_second": 4590.665937306447,
+      "wall_seconds": 10.190924546215683,
+      "per_rank_memory": [
+        [
+          7415529472,
+          8172863488
+        ],
+        [
+          7757365248,
+          8514699264
+        ]
+      ],
+      "stage": "throughput",
+      "maximum": false,
+      "update_mean_loss_range": [
+        108.49920272827148,
+        220.66586303710938
+      ]
+    },
+    {
+      "case": {
+        "method": "alternative_a",
+        "microbatch": 32,
+        "effective_batch": 128,
+        "accumulation": 2,
+        "runtime": "optimized",
+        "precision": "32-true",
+        "workers": 0,
+        "prefetch": 2,
+        "pin_memory": false,
+        "devices": 2,
+        "target_rng_mode": "global_draw",
+        "gradient_as_bucket_view": false
+      },
+      "stress": false,
+      "profiled": false,
+      "status": "completed",
+      "startup_seconds": 0.40702489856630564,
+      "start_step": 0,
+      "global_step": 1,
+      "consumed_samples": 128,
+      "peak_allocated_bytes": 5786776064,
+      "peak_reserved_bytes": 6020923392,
+      "peak_device_used_bytes": 6778257408,
+      "peak_reserved_whole_case_bytes": 6020923392,
+      "measured_updates": 1,
+      "seconds_per_update": 1.525297864805907,
+      "median_seconds_per_update": 1.525297864805907,
+      "p90_seconds_per_update": 1.525297864805907,
+      "std_seconds_per_update": 0.0,
+      "samples_per_second": 83.91803525948546,
+      "atoms_per_second": 1624.6007138516015,
+      "wall_seconds": 2.1201265789568424,
+      "per_rank_memory": [
+        [
+          6020923392,
+          6778257408
+        ],
+        [
+          5395972096,
+          6153306112
+        ]
+      ],
+      "stage": "gradient",
+      "maximum": false,
+      "update_mean_loss_range": [
+        183.3861312866211,
+        183.3861312866211
+      ]
+    },
+    {
+      "case": {
+        "method": "alternative_a",
+        "microbatch": 32,
+        "effective_batch": 128,
+        "accumulation": 2,
+        "runtime": "optimized",
+        "precision": "32-true",
+        "workers": 0,
+        "prefetch": 2,
+        "pin_memory": false,
+        "devices": 2,
+        "target_rng_mode": "global_draw",
+        "gradient_as_bucket_view": false
+      },
+      "stress": false,
+      "profiled": false,
+      "status": "completed",
+      "startup_seconds": 0.403547789901495,
+      "start_step": 0,
+      "global_step": 40,
+      "consumed_samples": 5120,
+      "peak_allocated_bytes": 6734667264,
+      "peak_reserved_bytes": 9315549184,
+      "peak_device_used_bytes": 10072883200,
+      "peak_reserved_whole_case_bytes": 9315549184,
+      "measured_updates": 40,
+      "seconds_per_update": 0.584896628127899,
+      "median_seconds_per_update": 0.5641792074311525,
+      "p90_seconds_per_update": 0.5850837126839906,
+      "std_seconds_per_update": 0.1463844454308284,
+      "samples_per_second": 218.8420890879376,
+      "atoms_per_second": 4429.500659445537,
+      "wall_seconds": 24.285589619074017,
+      "per_rank_memory": [
+        [
+          9315549184,
+          10072883200
+        ],
+        [
+          8233418752,
+          8990752768
+        ]
+      ],
+      "stage": "resume-continuous",
+      "maximum": false,
+      "update_mean_loss_range": [
+        79.83048248291016,
+        220.66586303710938
+      ]
+    },
+    {
+      "case": {
+        "method": "alternative_a",
+        "microbatch": 32,
+        "effective_batch": 128,
+        "accumulation": 2,
+        "runtime": "optimized",
+        "precision": "32-true",
+        "workers": 0,
+        "prefetch": 2,
+        "pin_memory": false,
+        "devices": 2,
+        "target_rng_mode": "global_draw",
+        "gradient_as_bucket_view": false
+      },
+      "stress": false,
+      "profiled": false,
+      "status": "completed",
+      "startup_seconds": 0.8223466193303466,
+      "start_step": 0,
+      "global_step": 20,
+      "consumed_samples": 2560,
+      "peak_allocated_bytes": 6276035584,
+      "peak_reserved_bytes": 7417626624,
+      "peak_device_used_bytes": 8174960640,
+      "peak_reserved_whole_case_bytes": 7417626624,
+      "measured_updates": 20,
+      "seconds_per_update": 0.5876258749747649,
+      "median_seconds_per_update": 0.5399118200875819,
+      "p90_seconds_per_update": 0.5615650588180869,
+      "std_seconds_per_update": 0.22583174316348104,
+      "samples_per_second": 217.8256701264165,
+      "atoms_per_second": 4379.402115522083,
+      "wall_seconds": 13.10383223136887,
+      "per_rank_memory": [
+        [
+          7417626624,
+          8174960640
+        ],
+        [
+          8231321600,
+          8988655616
+        ]
+      ],
+      "stage": "resume-partial",
+      "maximum": false,
+      "update_mean_loss_range": [
+        104.2814998626709,
+        220.66586303710938
+      ]
+    },
+    {
+      "case": {
+        "method": "alternative_a",
+        "microbatch": 32,
+        "effective_batch": 128,
+        "accumulation": 2,
+        "runtime": "optimized",
+        "precision": "32-true",
+        "workers": 0,
+        "prefetch": 2,
+        "pin_memory": false,
+        "devices": 2,
+        "target_rng_mode": "global_draw",
+        "gradient_as_bucket_view": false
+      },
+      "stress": false,
+      "profiled": false,
+      "status": "completed",
+      "startup_seconds": 1.5570616740733385,
+      "start_step": 20,
+      "global_step": 40,
+      "consumed_samples": 5120,
+      "peak_allocated_bytes": 6741850624,
+      "peak_reserved_bytes": 8065646592,
+      "peak_device_used_bytes": 8822980608,
+      "peak_reserved_whole_case_bytes": 8065646592,
+      "measured_updates": 20,
+      "seconds_per_update": 0.5915007694158703,
+      "median_seconds_per_update": 0.5536356901284307,
+      "p90_seconds_per_update": 0.5772639855276793,
+      "std_seconds_per_update": 0.17158261257127505,
+      "samples_per_second": 216.39870414100207,
+      "atoms_per_second": 4409.3771891043325,
+      "wall_seconds": 13.848512378055602,
+      "per_rank_memory": [
+        [
+          8065646592,
+          8822980608
+        ],
+        [
+          7405043712,
+          8162377728
+        ]
+      ],
+      "stage": "resume-resumed",
+      "maximum": false,
+      "update_mean_loss_range": [
+        79.83048248291016,
+        111.66497611999512
+      ]
+    },
+    {
+      "case": {
+        "method": "control",
+        "microbatch": 32,
+        "effective_batch": 128,
+        "accumulation": 2,
+        "runtime": "optimized",
+        "precision": "32-true",
+        "workers": 0,
+        "prefetch": 2,
+        "pin_memory": false,
+        "devices": 2,
+        "target_rng_mode": "global_draw",
+        "gradient_as_bucket_view": false
+      },
+      "stress": false,
+      "profiled": false,
+      "status": "completed",
+      "startup_seconds": 2.2822185321711004,
+      "start_step": 0,
+      "global_step": 14,
+      "consumed_samples": 1792,
+      "peak_allocated_bytes": 6276035584,
+      "peak_reserved_bytes": 7415529472,
+      "peak_device_used_bytes": 8172863488,
+      "peak_reserved_whole_case_bytes": 7415529472,
+      "measured_updates": 12,
+      "seconds_per_update": 0.5292069617426023,
+      "median_seconds_per_update": 0.5306278569623828,
+      "p90_seconds_per_update": 0.5483760739210993,
+      "std_seconds_per_update": 0.019843671544241666,
+      "samples_per_second": 241.8713457179672,
+      "atoms_per_second": 4832.70286463829,
+      "wall_seconds": 8.857224158011377,
+      "per_rank_memory": [
+        [
+          7415529472,
+          8172863488
+        ],
+        [
+          7757365248,
+          8514699264
+        ]
+      ],
+      "stage": "throughput",
+      "maximum": false,
+      "update_mean_loss_range": [
+        102.79026985168457,
+        217.01243591308594
+      ]
+    },
+    {
+      "case": {
+        "method": "control",
+        "microbatch": 32,
+        "effective_batch": 128,
+        "accumulation": 2,
+        "runtime": "optimized",
+        "precision": "32-true",
+        "workers": 0,
+        "prefetch": 2,
+        "pin_memory": false,
+        "devices": 2,
+        "target_rng_mode": "global_draw",
+        "gradient_as_bucket_view": false
+      },
+      "stress": false,
+      "profiled": false,
+      "status": "completed",
+      "startup_seconds": 0.5697177308611572,
+      "start_step": 0,
+      "global_step": 1,
+      "consumed_samples": 128,
+      "peak_allocated_bytes": 5786776064,
+      "peak_reserved_bytes": 6020923392,
+      "peak_device_used_bytes": 6778257408,
+      "peak_reserved_whole_case_bytes": 6020923392,
+      "measured_updates": 1,
+      "seconds_per_update": 1.354400014039129,
+      "median_seconds_per_update": 1.354400014039129,
+      "p90_seconds_per_update": 1.354400014039129,
+      "std_seconds_per_update": 0.0,
+      "samples_per_second": 94.50679169610673,
+      "atoms_per_second": 1829.5924204918163,
+      "wall_seconds": 2.1272404161281884,
+      "per_rank_memory": [
+        [
+          6020923392,
+          6778257408
+        ],
+        [
+          5395972096,
+          6153306112
+        ]
+      ],
+      "stage": "gradient",
+      "maximum": false,
+      "update_mean_loss_range": [
+        180.1397819519043,
+        180.1397819519043
+      ]
+    },
+    {
+      "case": {
+        "method": "control",
+        "microbatch": 32,
+        "effective_batch": 128,
+        "accumulation": 2,
+        "runtime": "optimized",
+        "precision": "32-true",
+        "workers": 0,
+        "prefetch": 2,
+        "pin_memory": false,
+        "devices": 2,
+        "target_rng_mode": "global_draw",
+        "gradient_as_bucket_view": false
+      },
+      "stress": false,
+      "profiled": false,
+      "status": "completed",
+      "startup_seconds": 0.373084323015064,
+      "start_step": 0,
+      "global_step": 40,
+      "consumed_samples": 5120,
+      "peak_allocated_bytes": 6734667264,
+      "peak_reserved_bytes": 9315549184,
+      "peak_device_used_bytes": 10072883200,
+      "peak_reserved_whole_case_bytes": 9315549184,
+      "measured_updates": 40,
+      "seconds_per_update": 0.5588126996881329,
+      "median_seconds_per_update": 0.543365812394768,
+      "p90_seconds_per_update": 0.5645373394247144,
+      "std_seconds_per_update": 0.11468095928899837,
+      "samples_per_second": 229.05707059169444,
+      "atoms_per_second": 4636.258269445016,
+      "wall_seconds": 23.28228201298043,
+      "per_rank_memory": [
+        [
+          9315549184,
+          10072883200
+        ],
+        [
+          8233418752,
+          8990752768
+        ]
+      ],
+      "stage": "resume-continuous",
+      "maximum": false,
+      "update_mean_loss_range": [
+        79.32415962219238,
+        217.01243591308594
+      ]
+    },
+    {
+      "case": {
+        "method": "control",
+        "microbatch": 32,
+        "effective_batch": 128,
+        "accumulation": 2,
+        "runtime": "optimized",
+        "precision": "32-true",
+        "workers": 0,
+        "prefetch": 2,
+        "pin_memory": false,
+        "devices": 2,
+        "target_rng_mode": "global_draw",
+        "gradient_as_bucket_view": false
+      },
+      "stress": false,
+      "profiled": false,
+      "status": "completed",
+      "startup_seconds": 0.845873296726495,
+      "start_step": 0,
+      "global_step": 20,
+      "consumed_samples": 2560,
+      "peak_allocated_bytes": 6276035584,
+      "peak_reserved_bytes": 7417626624,
+      "peak_device_used_bytes": 8174960640,
+      "peak_reserved_whole_case_bytes": 7417626624,
+      "measured_updates": 20,
+      "seconds_per_update": 0.5703340132022277,
+      "median_seconds_per_update": 0.5312602005433291,
+      "p90_seconds_per_update": 0.5590063198469579,
+      "std_seconds_per_update": 0.17638786979125096,
+      "samples_per_second": 224.42989026960606,
+      "atoms_per_second": 4512.180477455607,
+      "wall_seconds": 12.780545605812222,
+      "per_rank_memory": [
+        [
+          7417626624,
+          8174960640
+        ],
+        [
+          8231321600,
+          8988655616
+        ]
+      ],
+      "stage": "resume-partial",
+      "maximum": false,
+      "update_mean_loss_range": [
+        102.70398139953613,
+        217.01243591308594
+      ]
+    },
+    {
+      "case": {
+        "method": "control",
+        "microbatch": 32,
+        "effective_batch": 128,
+        "accumulation": 2,
+        "runtime": "optimized",
+        "precision": "32-true",
+        "workers": 0,
+        "prefetch": 2,
+        "pin_memory": false,
+        "devices": 2,
+        "target_rng_mode": "global_draw",
+        "gradient_as_bucket_view": false
+      },
+      "stress": false,
+      "profiled": false,
+      "status": "completed",
+      "startup_seconds": 1.0465543908067048,
+      "start_step": 20,
+      "global_step": 40,
+      "consumed_samples": 5120,
+      "peak_allocated_bytes": 6741850624,
+      "peak_reserved_bytes": 8065646592,
+      "peak_device_used_bytes": 8822980608,
+      "peak_reserved_whole_case_bytes": 8065646592,
+      "measured_updates": 20,
+      "seconds_per_update": 0.5861208266345784,
+      "median_seconds_per_update": 0.5480501861311495,
+      "p90_seconds_per_update": 0.5721135734580457,
+      "std_seconds_per_update": 0.1705726223145403,
+      "samples_per_second": 218.3850055882805,
+      "atoms_per_second": 4449.850408789639,
+      "wall_seconds": 13.231367443688214,
+      "per_rank_memory": [
+        [
+          8065646592,
+          8822980608
+        ],
+        [
+          7405043712,
+          8162377728
+        ]
+      ],
+      "stage": "resume-resumed",
+      "maximum": false,
+      "update_mean_loss_range": [
+        79.32415962219238,
+        105.96511840820312
+      ]
+    }
   ],
-  "microbatch_per_rank": 32,
-  "accumulation": 2,
-  "global_effective_batch": 128,
-  "target_rng_mode": "global_draw",
-  "data_scope": "Torch local legacy train speed-only caches",
-  "allocation_wall_limit_seconds": 1080,
-  "runtime_deadline_seconds": 990,
-  "reason": "QoS concurrent GPU limits and public GPU resource availability",
-  "single_report": "results/torch-runtime-acceptance-20261014.json",
-  "pending_output": "/scratch/ys6132/project/0_stiff_flow_matching/26Fall_DL/runs/torch-runtime/7bffe00-ddp/summary.json",
-  "planned_checks": [
-    "maximum29 memory per rank",
-    "single/DDP unclipped gradient relative L2 <= 1e-4",
-    "equal supervision loss rtol/atol 1e-5",
-    "DDP40 vs20+resume20 model/optimizer/scheduler/RNG/cursor/clipping state"
-  ],
-  "actual_ddp_gpu_seconds": 0,
-  "cumulative_gpu_budget": {
-    "limit_seconds": 3600,
-    "previous_gpu_seconds": 658,
-    "new_single_gpu_seconds": 535,
-    "used_seconds": 1193,
-    "pending_maximum_gpu_seconds": 2160,
-    "maximum_total_seconds": 3353
+  "checks": {
+    "precision-gradient": {
+      "relative_l2": 4.734329550615257e-08,
+      "loss_relative": 0.0,
+      "passed": true
+    },
+    "precision-resume": {
+      "passed": true,
+      "updates": 40,
+      "consumed_samples": 5120
+    },
+    "alternative_a-gradient": {
+      "relative_l2": 4.625509930633598e-08,
+      "loss_relative": 0.0,
+      "passed": true
+    },
+    "alternative_a-resume": {
+      "passed": true,
+      "updates": 40,
+      "consumed_samples": 5120
+    },
+    "control-gradient": {
+      "relative_l2": 4.68293919198004e-08,
+      "loss_relative": 0.0,
+      "passed": true
+    },
+    "control-resume": {
+      "passed": true,
+      "updates": 40,
+      "consumed_samples": 5120
+    }
   },
-  "limitations": "DDP is implemented and queued; no speedup, communication, or DDP recovery result is claimed.",
-  "last_observed_utc": "2026-10-14T14:13:11.036834+00:00",
-  "last_observed_slurm_state": "PENDING|(QOSGrpGRES)"
+  "config": {
+    "seed": 42,
+    "dataset_seed": 42,
+    "training_seeds": [
+      42,
+      43,
+      44
+    ],
+    "generation_seed": 42,
+    "row_rng_domain": 2,
+    "batch_size": 32,
+    "source": {
+      "sigma0": 1.0,
+      "rho": 1.0
+    },
+    "model_args": {
+      "network_type": "TorchMDDynamics",
+      "hidden_channels": 160,
+      "num_layers": 20,
+      "num_rbf": 64,
+      "rbf_type": "expnorm",
+      "trainable_rbf": true,
+      "activation": "silu",
+      "neighbor_embedding": true,
+      "cutoff_lower": 0.0,
+      "cutoff_upper": 10.0,
+      "max_z": 100,
+      "node_attr_dim": 10,
+      "edge_attr_dim": 3,
+      "attn_activation": "silu",
+      "num_heads": 8,
+      "distance_influence": "both",
+      "reduce_op": "sum",
+      "qk_norm": true,
+      "clip_during_norm": true,
+      "so3_equivariant": true,
+      "output_layer_norm": true,
+      "sigma": 0.0,
+      "prior_type": "gaussian",
+      "optimizer_type": "AdamW",
+      "lr": 0.0007,
+      "weight_decay": 1e-08,
+      "lr_scheduler_type": "CosineAnnealingWarmupRestarts",
+      "first_cycle_steps": 250000,
+      "cycle_mult": 1.0,
+      "max_lr": 0.0007,
+      "min_lr": 1e-08,
+      "warmup_steps": 0,
+      "gamma": 0.05,
+      "last_epoch": -1,
+      "lr_scheduler_monitor": "val/loss",
+      "lr_scheduler_interval": "step",
+      "lr_scheduler_frequency": 1,
+      "parity_switch": null,
+      "sample_time_dist": "uniform"
+    },
+    "profiles": {
+      "formal": {
+        "train_molecules": "all",
+        "val_molecules": "all",
+        "steps": 250000,
+        "accumulate_grad_batches": 4,
+        "num_workers": 2,
+        "validation_rows": 4096,
+        "validation_every": 5000,
+        "recovery_every": 500,
+        "snapshot_every": 25000,
+        "prefetch_factor": 2,
+        "pin_memory": false
+      }
+    },
+    "evaluation": {
+      "monitor_molecules": 512,
+      "steps": 50,
+      "reference_ratio": 2
+    },
+    "runtime_acceptance": "torch_runtime",
+    "gpu_memory": {
+      "budget_gib": 24,
+      "preferred_fraction": 0.9,
+      "hard_fraction": 0.95
+    }
+  },
+  "config_file": {
+    "path": "/scratch/ys6132/project/0_stiff_flow_matching/26Fall_DL/stifflow-v1/configs/qm9-formal-4090d.yaml",
+    "bytes": 1480,
+    "sha256": "da9a8cc007ef705426155853949ac33d54ab4bb694e95b03db4a01b347d75b1d"
+  },
+  "data": {
+    "path": "/scratch/ys6132/project/0_stiff_flow_matching/26Fall_DL/cache/torch-speed/19784028/manifest.json",
+    "bytes": 37430,
+    "sha256": "5b751c690caeb2132d6535053439ef4efe4171e07b9d922367e525412e09434f"
+  },
+  "maximum_data": {
+    "path": "/scratch/ys6132/project/0_stiff_flow_matching/26Fall_DL/cache/torch-speed/max29-20261014/manifest.json",
+    "bytes": 4933,
+    "sha256": "5eba23bd36300f1d2016f79000eddee94948bb5ac241426016a2d4390530a345"
+  },
+  "gpu": {
+    "name": "NVIDIA L40S",
+    "total_bytes": 47695921152,
+    "virtual_budget_gib": 24
+  },
+  "allocator_fraction": 0.5037321615538718,
+  "provenance": {
+    "repos": {
+      "ETFlow-reference": {
+        "path": "/scratch/ys6132/project/0_stiff_flow_matching/26Fall_DL/ETFlow-reference",
+        "head": "80f82d7d142bc3872412d2966a8d71ed14462b18",
+        "branch": "main",
+        "status": "",
+        "diff": "",
+        "untracked": []
+      },
+      "stifflow-v1": {
+        "path": "/scratch/ys6132/project/0_stiff_flow_matching/26Fall_DL/stifflow-v1",
+        "head": "0818c67df984bedde64a43d948960666bfbd0a8e",
+        "branch": "stifflow-v1",
+        "status": "?? formulation/\n",
+        "diff": "",
+        "untracked": [
+          {
+            "path": "/scratch/ys6132/project/0_stiff_flow_matching/26Fall_DL/stifflow-v1/formulation/StifFlow_core_formulation_v1.pdf",
+            "bytes": 364944,
+            "sha256": "5374c6f2cb600ef800f12f1840d1e4495c371a8fd1877bbe32809ef2a154a988"
+          },
+          {
+            "path": "/scratch/ys6132/project/0_stiff_flow_matching/26Fall_DL/stifflow-v1/formulation/StifFlow_core_formulation_v1.tex",
+            "bytes": 32392,
+            "sha256": "422efa327fdb6284ee37b61500f41d109263cc77ed81759d0f772a5b5f390d42"
+          }
+        ]
+      },
+      "stifflow-v1-alternative-A": {
+        "path": "/scratch/ys6132/project/0_stiff_flow_matching/26Fall_DL/stifflow-v1-alternative-A",
+        "head": "55009a52c2a00b2b379275c9553e3eead3922884",
+        "branch": "alternative-a",
+        "status": "?? formulation/\n",
+        "diff": "",
+        "untracked": [
+          {
+            "path": "/scratch/ys6132/project/0_stiff_flow_matching/26Fall_DL/stifflow-v1-alternative-A/formulation/StifFlow_v1_Alternative_A..tex",
+            "bytes": 63448,
+            "sha256": "7ca92270d16e992aa4c2162a14628b7398f906a31e2a571339034d006ea148f0"
+          },
+          {
+            "path": "/scratch/ys6132/project/0_stiff_flow_matching/26Fall_DL/stifflow-v1-alternative-A/formulation/StifFlow_v1_Alternative_A.pdf",
+            "bytes": 441061,
+            "sha256": "ecbbc2a76e269bd75774642f1e81997c88330f0379c2c1f2621aa9612111ef82"
+          }
+        ]
+      },
+      "stifflow-v1-benchmark": {
+        "path": "/scratch/ys6132/project/0_stiff_flow_matching/26Fall_DL/stifflow-v1-benchmark",
+        "head": "cbeb314bcd1f99f2a7354477592791f6151821a7",
+        "branch": "benchmark-harness",
+        "status": "",
+        "diff": "",
+        "untracked": []
+      }
+    },
+    "formulations": [
+      {
+        "path": "/scratch/ys6132/project/0_stiff_flow_matching/26Fall_DL/stifflow-v1/formulation/StifFlow_core_formulation_v1.pdf",
+        "bytes": 364944,
+        "sha256": "5374c6f2cb600ef800f12f1840d1e4495c371a8fd1877bbe32809ef2a154a988"
+      },
+      {
+        "path": "/scratch/ys6132/project/0_stiff_flow_matching/26Fall_DL/stifflow-v1/formulation/StifFlow_core_formulation_v1.tex",
+        "bytes": 32392,
+        "sha256": "422efa327fdb6284ee37b61500f41d109263cc77ed81759d0f772a5b5f390d42"
+      },
+      {
+        "path": "/scratch/ys6132/project/0_stiff_flow_matching/26Fall_DL/stifflow-v1-alternative-A/formulation/StifFlow_v1_Alternative_A..tex",
+        "bytes": 63448,
+        "sha256": "7ca92270d16e992aa4c2162a14628b7398f906a31e2a571339034d006ea148f0"
+      },
+      {
+        "path": "/scratch/ys6132/project/0_stiff_flow_matching/26Fall_DL/stifflow-v1-alternative-A/formulation/StifFlow_v1_Alternative_A.pdf",
+        "bytes": 441061,
+        "sha256": "ecbbc2a76e269bd75774642f1e81997c88330f0379c2c1f2621aa9612111ef82"
+      }
+    ],
+    "official_pairs": {
+      "qm9-o3": {
+        "config": {
+          "path": "/scratch/ys6132/project/0_stiff_flow_matching/26Fall_DL/ETFlow-reference/configs/qm9-o3.yaml",
+          "bytes": 2184,
+          "sha256": "3bf9936eca6497ff5c55f06e980cda20d24f8119bf55b0f13d4b97e92c624cec"
+        },
+        "checkpoint": {
+          "path": "/scratch/ys6132/project/0_stiff_flow_matching/26Fall_DL/dataset/ET-Flow_zenodo/qm9-o3.ckpt",
+          "bytes": 100681751,
+          "sha256": "c2cd6e889b61409333b0803beb80a8da36092e9d8ed7f57dc65212243ae51d5f"
+        }
+      },
+      "drugs-o3": {
+        "config": {
+          "path": "/scratch/ys6132/project/0_stiff_flow_matching/26Fall_DL/ETFlow-reference/configs/drugs-o3.yaml",
+          "bytes": 2150,
+          "sha256": "cdcc9b2aa154a161c1a9b7ca88bc734f7102b40b5f5ceeccccfd729994632ef3"
+        },
+        "checkpoint": {
+          "path": "/scratch/ys6132/project/0_stiff_flow_matching/26Fall_DL/dataset/ET-Flow_zenodo/drugs-o3.ckpt",
+          "bytes": 100676519,
+          "sha256": "a24ae9a1fed2708696929308ed1dc10ab167fd66a2d51c44a4afb6c11badccb2"
+        }
+      },
+      "drugs-so3": {
+        "config": {
+          "path": "/scratch/ys6132/project/0_stiff_flow_matching/26Fall_DL/ETFlow-reference/configs/drugs-so3.yaml",
+          "bytes": 2122,
+          "sha256": "1a130ea8fab64834180663022e2895fe495bc9a1c02ff54b04c54f139d0069bb"
+        },
+        "checkpoint": {
+          "path": "/scratch/ys6132/project/0_stiff_flow_matching/26Fall_DL/dataset/ET-Flow_zenodo/drugs-so3.ckpt",
+          "bytes": 109393319,
+          "sha256": "0a18e82860d1a39573f0d9a627a639b6b48e53a3f3d7697329cbac21fe6f55a1"
+        }
+      }
+    }
+  },
+  "versions": {
+    "torch": "2.4.1",
+    "lightning": "2.6.6",
+    "numpy": "1.26.4",
+    "scipy": "1.17.1",
+    "rdkit": "2026.3.6",
+    "torch-geometric": "2.6.1",
+    "torch-cluster": "1.6.3"
+  },
+  "allocation": {
+    "SLURM_JOB_ID": "19808783",
+    "SLURM_JOB_NODELIST": "gl066",
+    "SLURM_JOB_GPUS": "0,2",
+    "SLURM_JOB_PARTITION": "l40s_public"
+  },
+  "limitations": "L40S 24 GiB memory proxy and 16-molecule local legacy speed-only cohort, not SHHPC strict-v3 full-cache I/O. Single-card gl031 and fixed DDP gl066; node variation prevents attributing timing changes solely to the alias setting. DDP assessment only; formal single-card stream RNG and configuration remain unchanged.",
+  "runtime_code": {
+    "stifflow": {
+      "model": "4f8884be7a97e7fd78d35854ccaa8ebb9370b10cdd8b8e5a728762e1d876865a",
+      "training": "6dd87ae1bf5d774e31594fda755385f78a7771e8c7ca496938200ce72cf64c71",
+      "targets": "6a7066c81f2111ddaf8e238c27cd4acb432e3479e6ebac8899a41969d4084c22",
+      "source": "5b53f07c34a99b091d1bc41e9d1622e568369875add388bb7328e367797c1c7d",
+      "precision": "41495c5d4959d53bd444af3af4bed0575c1fc62cef35d39af0b19ac9473235a3",
+      "geometry": "bb4197819b1420b4633681e4cdee69ec418a305d7a04bc8890f2a2ebff4e0e7f",
+      "features": "623149c7b92436efac69be4e1032c4e171caa7237c0083369e71188a39d76aa8",
+      "packed_data": "a10cfdf6c1e5813558f8079bb4b913ee26b8c7aaa1b9f8b17280fc61c7ba7b02",
+      "formal_checkpoints": "e30fef8b5efac7e627cdfed49fed508830d09f7d9d2b8900a9348bfce0eadb4a"
+    },
+    "dependencies": {
+      "ETFlow-reference": "80f82d7d142bc3872412d2966a8d71ed14462b18",
+      "stifflow-v1-alternative-A": "55009a52c2a00b2b379275c9553e3eead3922884",
+      "stifflow-v1-benchmark": "cbeb314bcd1f99f2a7354477592791f6151821a7"
+    }
+  },
+  "selected_microbatch": 32,
+  "maximum_memory_fraction": 0.4657491048177083,
+  "within_preferred_memory": true,
+  "selected_config": {
+    "seed": 42,
+    "dataset_seed": 42,
+    "training_seeds": [
+      42,
+      43,
+      44
+    ],
+    "generation_seed": 42,
+    "row_rng_domain": 2,
+    "batch_size": 32,
+    "source": {
+      "sigma0": 1.0,
+      "rho": 1.0
+    },
+    "model_args": {
+      "network_type": "TorchMDDynamics",
+      "hidden_channels": 160,
+      "num_layers": 20,
+      "num_rbf": 64,
+      "rbf_type": "expnorm",
+      "trainable_rbf": true,
+      "activation": "silu",
+      "neighbor_embedding": true,
+      "cutoff_lower": 0.0,
+      "cutoff_upper": 10.0,
+      "max_z": 100,
+      "node_attr_dim": 10,
+      "edge_attr_dim": 3,
+      "attn_activation": "silu",
+      "num_heads": 8,
+      "distance_influence": "both",
+      "reduce_op": "sum",
+      "qk_norm": true,
+      "clip_during_norm": true,
+      "so3_equivariant": true,
+      "output_layer_norm": true,
+      "sigma": 0.0,
+      "prior_type": "gaussian",
+      "optimizer_type": "AdamW",
+      "lr": 0.0007,
+      "weight_decay": 1e-08,
+      "lr_scheduler_type": "CosineAnnealingWarmupRestarts",
+      "first_cycle_steps": 250000,
+      "cycle_mult": 1.0,
+      "max_lr": 0.0007,
+      "min_lr": 1e-08,
+      "warmup_steps": 0,
+      "gamma": 0.05,
+      "last_epoch": -1,
+      "lr_scheduler_monitor": "val/loss",
+      "lr_scheduler_interval": "step",
+      "lr_scheduler_frequency": 1,
+      "parity_switch": null,
+      "sample_time_dist": "uniform"
+    },
+    "profiles": {
+      "formal": {
+        "train_molecules": "all",
+        "val_molecules": "all",
+        "steps": 250000,
+        "accumulate_grad_batches": 4,
+        "num_workers": 2,
+        "validation_rows": 4096,
+        "validation_every": 5000,
+        "recovery_every": 500,
+        "snapshot_every": 25000,
+        "prefetch_factor": 2,
+        "pin_memory": false
+      }
+    },
+    "evaluation": {
+      "monitor_molecules": 512,
+      "steps": 50,
+      "reference_ratio": 2
+    },
+    "runtime_acceptance": "torch_runtime",
+    "gpu_memory": {
+      "budget_gib": 24,
+      "preferred_fraction": 0.9,
+      "hard_fraction": 0.95
+    }
+  },
+  "maximum_atoms": 29,
+  "elapsed_seconds": 292.30870066024363,
+  "kind": "torch_ddp_assessment",
+  "formal_adoption": false,
+  "local_report": "/scratch/ys6132/project/0_stiff_flow_matching/26Fall_DL/runs/torch-runtime/0818c67-ddp-fixed/summary.json",
+  "comparison": [
+    {
+      "method": "precision",
+      "single_samples_per_second": 130.75628734415423,
+      "ddp_samples_per_second": 227.83057829148353,
+      "speedup": 1.7424062958580877,
+      "gpu_seconds_per_sample_ratio": 1.1478379094211517,
+      "single_seconds_per_update": 0.9789204221063604,
+      "ddp_seconds_per_update": 0.5618209854001179,
+      "ddp_std_seconds_per_update": 0.020683143970004363
+    },
+    {
+      "method": "alternative_a",
+      "single_samples_per_second": 131.2088661840946,
+      "ddp_samples_per_second": 229.75766958953085,
+      "speedup": 1.7510834158658595,
+      "gpu_seconds_per_sample_ratio": 1.142150043726534,
+      "single_seconds_per_update": 0.9755438311646382,
+      "ddp_seconds_per_update": 0.557108714710921,
+      "ddp_std_seconds_per_update": 0.022277347707228164
+    },
+    {
+      "method": "control",
+      "single_samples_per_second": 131.5127164143093,
+      "ddp_samples_per_second": 241.8713457179672,
+      "speedup": 1.8391479722462054,
+      "gpu_seconds_per_sample_ratio": 1.0874600794395795,
+      "single_seconds_per_update": 0.9732899105874822,
+      "ddp_seconds_per_update": 0.5292069617426023,
+      "ddp_std_seconds_per_update": 0.019843671544241666
+    }
+  ],
+  "maximum_pressure": {
+    "atoms": 29,
+    "microbatch_per_rank": 32,
+    "maximum_device_used_bytes_per_rank": [
+      12002263040,
+      12002263040
+    ],
+    "maximum_fraction_of_24_gib": 0.4657491048177083
+  },
+  "debug": {
+    "prototype": {
+      "path": "/scratch/ys6132/project/0_stiff_flow_matching/26Fall_DL/runs/torch-runtime/ddp-debug-20261014/probe.py",
+      "bytes": 8136,
+      "sha256": "61c788c10537cc8b9815a5ecb6403656dcb8f490e0289421067f9268c7801df4"
+    },
+    "original_recovery": {
+      "checks": {
+        "global_step": {
+          "passed": true
+        },
+        "consumed_samples": {
+          "passed": true
+        },
+        "training_signature": {
+          "passed": true
+        },
+        "stifflow_rng": {
+          "passed": true
+        },
+        "torch_rng": {
+          "passed": true
+        },
+        "distributed_states": {
+          "passed": false,
+          "error": "Resume value differs: distributed_states.ranks[0].gradient_queue[0]"
+        },
+        "gradient_queue": {
+          "passed": false,
+          "error": "Resume value differs: gradient_queue[0]"
+        },
+        "lr_schedulers": {
+          "passed": true
+        },
+        "optimizer_states": {
+          "passed": false,
+          "error": "optimizer_states[0].state.0.exp_avg"
+        }
+      },
+      "model_max_abs": 0.0017143487930297852,
+      "model_relative_l2": 4.236860975544896e-06,
+      "failing_model_tensors": 489,
+      "largest": [
+        {
+          "name": "network.representation_model.attention_layers.10.vec_proj.weight",
+          "max_abs": 0.0017143487930297852,
+          "elements_above_tolerance": 74935
+        },
+        {
+          "name": "network.representation_model.attention_layers.10.o_proj.weight",
+          "max_abs": 0.00130356103181839,
+          "elements_above_tolerance": 72411
+        },
+        {
+          "name": "network.representation_model.attention_layers.12.vec_proj.weight",
+          "max_abs": 0.0010726824402809143,
+          "elements_above_tolerance": 73389
+        },
+        {
+          "name": "network.representation_model.attention_layers.1.vec_proj.weight",
+          "max_abs": 0.0010715872049331665,
+          "elements_above_tolerance": 75281
+        },
+        {
+          "name": "network.representation_model.attention_layers.9.o_proj.weight",
+          "max_abs": 0.001060672104358673,
+          "elements_above_tolerance": 71832
+        }
+      ]
+    },
+    "independent_replay": {
+      "checks": {
+        "global_step": {
+          "passed": true
+        },
+        "consumed_samples": {
+          "passed": true
+        },
+        "training_signature": {
+          "passed": true
+        },
+        "stifflow_rng": {
+          "passed": true
+        },
+        "torch_rng": {
+          "passed": true
+        },
+        "distributed_states": {
+          "passed": true
+        },
+        "gradient_queue": {
+          "passed": true
+        },
+        "lr_schedulers": {
+          "passed": true
+        },
+        "optimizer_states": {
+          "passed": true
+        }
+      },
+      "model_max_abs": 0.0,
+      "model_relative_l2": 0.0,
+      "failing_model_tensors": 0,
+      "largest": []
+    },
+    "replay_loss_equal": true,
+    "checks": {
+      "precision-original-gradient": {
+        "relative_l2": 4.734329550615257e-08,
+        "passed": true
+      },
+      "alternative_a-original-gradient": {
+        "relative_l2": 4.625509930633598e-08,
+        "passed": true
+      },
+      "control-original-gradient": {
+        "relative_l2": 4.68293919198004e-08,
+        "passed": true
+      },
+      "separate-gradient-resume": {
+        "passed": true,
+        "updates": 40,
+        "consumed_samples": 5120
+      }
+    },
+    "separate_gradient_recovery": {
+      "checks": {
+        "global_step": {
+          "passed": true
+        },
+        "consumed_samples": {
+          "passed": true
+        },
+        "training_signature": {
+          "passed": true
+        },
+        "stifflow_rng": {
+          "passed": true
+        },
+        "torch_rng": {
+          "passed": true
+        },
+        "distributed_states": {
+          "passed": true
+        },
+        "gradient_queue": {
+          "passed": true
+        },
+        "lr_schedulers": {
+          "passed": true
+        },
+        "optimizer_states": {
+          "passed": true
+        }
+      },
+      "model_max_abs": 0.0,
+      "model_relative_l2": 0.0,
+      "failing_model_tensors": 0,
+      "largest": []
+    },
+    "prototype_code_commit": "dbeb803d11846e2bb17bb93e87df1654121e95f8",
+    "fixed_code_commit": "0818c67df984bedde64a43d948960666bfbd0a8e",
+    "reason": "Gradient bucket views changed the resumed CUDA gradient storage; independent legacy replay was identical, disabling views made control recovery pass with zero model difference. Comparison tolerances remain unchanged."
+  },
+  "gpu_budget": {
+    "limit_gpu_seconds": 3600,
+    "used_gpu_seconds": 2651,
+    "remaining_gpu_seconds": 949,
+    "slurm_receipts": [
+      {
+        "job_id": 19784028,
+        "gpus": 1,
+        "elapsed_seconds": 557,
+        "gpu_seconds": 557,
+        "state": "COMPLETED"
+      },
+      {
+        "job_id": 19786218,
+        "gpus": 1,
+        "elapsed_seconds": 101,
+        "gpu_seconds": 101,
+        "state": "COMPLETED"
+      },
+      {
+        "job_id": 19803828,
+        "gpus": 1,
+        "elapsed_seconds": 535,
+        "gpu_seconds": 535,
+        "state": "COMPLETED"
+      },
+      {
+        "job_id": 19804304,
+        "gpus": 2,
+        "elapsed_seconds": 278,
+        "gpu_seconds": 556,
+        "state": "FAILED",
+        "exit_code": "1:0"
+      },
+      {
+        "job_id": 19807600,
+        "gpus": 2,
+        "elapsed_seconds": 153,
+        "gpu_seconds": 306,
+        "state": "COMPLETED",
+        "exit_code": "0:0"
+      },
+      {
+        "job_id": 19808783,
+        "gpus": 2,
+        "elapsed_seconds": 298,
+        "gpu_seconds": 596,
+        "state": "COMPLETED",
+        "exit_code": "0:0"
+      }
+    ]
+  },
+  "validation": {
+    "cpu_command": "python -m pytest -q tests/test_runtime.py tests/test_speed.py tests/test_official_data.py::test_checkpoint_comparison_detects_a_changed_optimizer_or_rng",
+    "cpu_result": "9 passed, 2 warnings, 85.17 seconds",
+    "checkpoint_rtol": 1e-06,
+    "checkpoint_atol": 1e-07,
+    "gradient_relative_l2_max": 0.0001,
+    "loss_rtol": 1e-05,
+    "loss_atol": 1e-05,
+    "original_single_acceptance_gate": "passed after DDP-only code fix"
+  },
+  "commands": {
+    "entry": [
+      "python",
+      "-u",
+      "-m",
+      "stifflow.runtime_benchmark",
+      "--devices",
+      "2",
+      "--manifest",
+      "/scratch/ys6132/project/0_stiff_flow_matching/26Fall_DL/cache/torch-speed/19784028/manifest.json",
+      "--stress-manifest",
+      "/scratch/ys6132/project/0_stiff_flow_matching/26Fall_DL/cache/torch-speed/max29-20261014/manifest.json",
+      "--output",
+      "/scratch/ys6132/project/0_stiff_flow_matching/26Fall_DL/runs/torch-runtime/0818c67-ddp-fixed",
+      "--max-seconds",
+      "390",
+      "--single-report",
+      "/scratch/ys6132/project/0_stiff_flow_matching/26Fall_DL/runs/torch-runtime/b5ab585-single/summary.json"
+    ],
+    "allocation": "sbatch --account=torch_pr_1034_general --gres=gpu:2 --constraint=l40s --nodes=1 --ntasks=2 --ntasks-per-node=2 --cpus-per-task=4 --mem=32G --time=00:08:00 scripts/torch_runtime.sbatch",
+    "runtime_seconds_environment": 390,
+    "expected_commit": "0818c67df984bedde64a43d948960666bfbd0a8e"
+  }
 }
