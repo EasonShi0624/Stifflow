@@ -17,7 +17,7 @@ seed="${seeds[$((index % 3))]}"
 base="$STIFFLOW_RUN_ROOT/$method-seed$seed"
 mkdir -p "$base"
 python -m stifflow.preflight --gpu --warmup --output "$base/preflight-$SLURM_JOB_ID.json"
-args=(--config configs/qm9-formal.yaml --profile formal --method "$method" --seed "$seed"
+args=(--config "${STIFFLOW_FORMAL_CONFIG:-configs/qm9-formal.yaml}" --profile formal --method "$method" --seed "$seed"
       --train-labels "$STIFFLOW_TRAIN_LABELS" --val-labels "$STIFFLOW_VAL_LABELS"
       --acceptance "$STIFFLOW_ACCEPTANCE" --checkpoint-dir "$base/checkpoints"
       --output "$base/segments/$SLURM_JOB_ID")

@@ -11,6 +11,9 @@ export STIFFLOW_SPEED_START_EPOCH="$(date +%s)"
 : "${STIFFLOW_SPEED_CACHE:?Set external small-cache root}"
 : "${STIFFLOW_EXPECTED_COMMIT:?Pin the benchmark code SHA}"
 source "$STIFFLOW_WORKSPACE/stifflow-v1/scripts/shhpc_env.sh"
+# Multiprocessing sockets need node-local storage, not the shared cache filesystem.
+export TMPDIR="${SLURM_TMPDIR:-/tmp}/stifflow-speed-$SLURM_JOB_ID"
+mkdir -p "$TMPDIR"
 [[ "$(git rev-parse HEAD)" == "$STIFFLOW_EXPECTED_COMMIT" ]] || { echo "Wrong code SHA" >&2; exit 2; }
 git diff --exit-code --quiet
 git diff --cached --exit-code --quiet

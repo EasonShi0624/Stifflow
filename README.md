@@ -384,6 +384,89 @@ Torch 小缓存吞吐不能代替 SHHPC strict-v3 全量 I/O；最终公共配�
 `test_formal_cache`、`test_formal_training`、`test_formal_evaluation`、`test_speed`、
 `test_paths`，41 passed，0 failed/0 skipped；线程数 1，轻量 worker 最多 1。
 
+### 2026-10-14 Torch 同卡实测与 SHHPC 下一步
+
+Torch job `19784028` 已完成，退出 `0:0`，`gl004` 的单张 NVIDIA L40S（47.696 GB）
+实际分配 9m17s，约 0.155 GPU 小时；未自动重排。运行代码为
+`12edaa5a926a353626dc99be1a91a0b469e9f8d4`，tracked diff 为空。
+Alternative A 为 `55009a52c2a00b2b379275c9553e3eead3922884`，benchmark 为
+`cbeb314bcd1f99f2a7354477592791f6151821a7`。小型结果记录见
+[results/torch-speed-20261014-l40s.json](results/torch-speed-20261014-l40s.json)，
+完整本地报告为 `runs/torch-speed/19784028/summary.json`，日志为
+`runs/torch-speed/slurm-19784028.out`；缓存和 checkpoint 均在仓库外。
+
+同卡 baseline 保留旧 dense precision target、逐参数 host 有限性判断和阻塞图传输，
+其余模型/训练设置共用。baseline 计时 6 更新；32×4 候选复测 12 更新；各自预热 2 更新。
+下表固定有效 batch 128、FP32；候选使用 tiny-cache 最快的 worker0，baseline 为 worker2。
+
+| 方法 | baseline 8×16 秒/更新 | 候选 32×4 秒/更新 | 候选 samples/s | 同卡加速 |
+| --- | ---: | ---: | ---: | ---: |
+| precision | 1.699 | 0.969 ± 0.037 | 132.16 | 1.75× |
+| Alternative A | 1.726 | 0.966 ± 0.037 | 132.57 | 1.79× |
+| control | 1.707 | 0.963 ± 0.037 | 132.91 | 1.77× |
+
+同为 worker2 时，precision 的 microbatch 8/16/32/64/128 分别为
+1.642/1.086/0.993/1.029/1.084 秒/更新；32×4 的显存保留量约 7.89 GB，
+本 cohort 最大 25 原子压力检查约 8.24 GB。microbatch256 的两次独立压力探针均 OOM，
+脚本记录失败并释放显存；其余 34 个 case 完成。真实全量数据的最大原子数仍须在 SHHPC 核查。
+
+有效 batch256 的 32×8 为 130.55 samples/s，batch512 的 32×16 为 128.39 samples/s；
+把 microbatch 提至128反而下降至119.13/117.56 samples/s，本轮没有增大有效 batch 的依据。
+worker0/2/4 在32×4下为131.27/129.13/129.51 samples/s；pinned memory 为131.15，
+收益不足以支持全量 I/O 改为 worker0。此次最佳 worker0 无需 prefetch；脚本支持非零 worker
+的 prefetch2/4 对照，本轮没有再运行 prefetch4。
+
+BF16 的三方法分别为126.81/129.60/129.98 samples/s，显存保留量约6.20 GB，
+比 FP32 略慢；batch256/512 的 BF16 为127.16/126.33 samples/s。
+固定监督 BF16 loss 相对差1.38e-4、预测相对 L2 差2.37%、梯度相对 L2 差3.28%，均有限；
+保持正式 FP32。FP32 的16×1与4×4固定监督梯度相对 L2 差2.35e-6，通过一致性检查。
+GPU 连续4更新与2+恢复2更新的模型、优化器、scheduler、路径/torch/CUDA RNG、
+样本游标及裁剪状态完全一致，已消费512样本。
+
+独立 profiler 的 host `aten::item` 次数9537→1062，stream synchronization 次数
+12156→2789；float64 target 的 CPU 区间18.01→10.75 ms/更新。此对照同时改变
+microbatch/累积与检查实现，不能把全部收益归给某一项；profiling 有额外开销，未计入吞吐表。
+物理标签预处理0.296秒、整个小缓存准备4.174秒，单列于结果。共享临时目录导致 worker
+清理时出现 EBUSY 警告，未阻断测试；后续 Torch 脚本改用节点本地临时目录，已做 shell 检查，
+没有为该目录修正重复申请 GPU。
+
+SHHPC 下一轮先验证 FP32 32×4，继续有效 batch128、250k更新、seeds42/43/44、原学习率。
+复用已完成的 strict-v3 train/val 标签，无需重做 freeze/Hessian；references 用新代码在新目录
+重导出，核对全部 val/test 覆盖和 `stereo_variation_rows`。随后用正式缓存做三方法40更新及恢复
+验收，分开记录 import、首次分片校验、稳定更新、验证和 checkpoint 耗时，不将全过程耗时
+除以40作为稳定吞吐。Torch 的16分子 legacy cohort 不能外推 SHHPC 的91.8 GB缓存吞吐，
+也不能验证正式训练或生成质量。
+
+`formal_acceptance.sbatch` 与 `formal.sbatch` 支持 `STIFFLOW_FORMAL_CONFIG`；默认仍为
+原配置。SHHPC 可在仓库外的可写目录生成候选配置文件，保持代码 worktree 清洁。
+下列命令在现有 SHHPC allocation 内、已加载 etflow 环境后执行；路径由该集群实际设置：
+
+```bash
+export STIFFLOW_FORMAL_CONFIG="$STIFFLOW_CANDIDATE_CONFIG_DIR/qm9-formal-b32-a4.yaml"
+python - <<'PY'
+import os
+from pathlib import Path
+import yaml
+cfg = yaml.safe_load(Path('configs/qm9-formal.yaml').read_text())
+cfg['batch_size'] = 32
+cfg['profiles']['formal'].update(accumulate_grad_batches=4, num_workers=2,
+                                 prefetch_factor=2, pin_memory=False)
+path = Path(os.environ['STIFFLOW_FORMAL_CONFIG'])
+path.parent.mkdir(parents=True, exist_ok=True)
+with path.open('x') as stream:
+    yaml.safe_dump(cfg, stream, sort_keys=False)
+PY
+# STIFFLOW_REFERENCE_ROOT 和 STIFFLOW_ACCEPTANCE_ROOT 均使用新目录。
+sbatch "${CPU_ARGS[@]}" scripts/formal_task.sbatch formal references \
+  --manifest "$STIFFLOW_FROZEN_DATA" --config "$STIFFLOW_FORMAL_CONFIG" \
+  --output "$STIFFLOW_REFERENCE_ROOT"
+sbatch "${GPU_ARGS[@]}" scripts/formal_acceptance.sbatch
+```
+
+验收通过且确认稳定吞吐、最大分子显存及全量 I/O 后，再按前节命令启动九次正式训练。
+保留同一个 `STIFFLOW_FORMAL_CONFIG`、代码 SHA 和验收清单，不把候选验收与默认配置混用。
+本轮未在 Torch 启动正式训练，未获取 SHHPC 原始日志；其历史耗时仍只是 README 回报值。
+
 ## 历史 CPU 实现与验收记录
 
 按用户后续指示，暂缓 GPU 验收，先实现可在 CPU 检查的后续部分。

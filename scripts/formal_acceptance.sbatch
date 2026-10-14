@@ -7,6 +7,6 @@ source "$STIFFLOW_WORKSPACE/stifflow-v1/scripts/shhpc_env.sh"
 : "${STIFFLOW_TRAIN_LABELS:?Set merged training manifest}"
 : "${STIFFLOW_VAL_LABELS:?Set merged validation manifest}"
 : "${STIFFLOW_ACCEPTANCE_ROOT:?Set a fresh external acceptance directory}"
-python -m stifflow.formal acceptance --config configs/qm9-formal.yaml \
+python -m stifflow.formal acceptance --config "${STIFFLOW_FORMAL_CONFIG:-configs/qm9-formal.yaml}" \
     --train-labels "$STIFFLOW_TRAIN_LABELS" --val-labels "$STIFFLOW_VAL_LABELS" \
     --output "$STIFFLOW_ACCEPTANCE_ROOT"
