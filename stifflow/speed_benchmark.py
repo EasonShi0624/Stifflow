@@ -16,6 +16,7 @@ import torch
 import yaml
 from etflow.models.loss import batchwise_mse_loss
 from lightning.pytorch import Callback, Trainer, seed_everything
+from lightning.pytorch.plugins.environments import SLURMEnvironment
 from lightning.pytorch.strategies import DDPStrategy
 from torch_geometric.data import Batch
 
@@ -289,6 +290,7 @@ def run_case(
                 else "auto"
             ),
             use_distributed_sampler=False,
+            plugins=[SLURMEnvironment(auto_requeue=False)],
             max_steps=stop,
             max_epochs=-1,
             accumulate_grad_batches=spec["accumulation"],
