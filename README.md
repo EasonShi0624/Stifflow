@@ -304,8 +304,23 @@ v3 列表存在 81 条固有跨组歧义（train 77、val 4），test 无未解�
 （`stifflow/freeze_data.py`；受影响条目本地见
 `runs/etflow-official/freeze-ambiguous-strict.json`）。冻结清单
 `cache/qm9-v3-freeze-strict/manifest.json`（variant `qm9-v3-clean-v1`）。
-全量标签分片完成：train 109/109、val 10/10（job 4183844/4183845）；mmap 合并与
-references 正在进行，结果见后续记录。
+全量标签分片完成：train 109/109、val 10/10（job 4183844/4183845）；mmap 合并完成
+（job 4184229/4184230：train 1,650,255 行 / packed 91,831,100,092 B、val 62,648 行；
+`cache/qm9-v3-packed-strict/{train,val}/manifest.json`，schema3 completed）。
+
+新接口验收通过（job 4221188，42m58s；`cache/qm9-v3-acceptance-strict/workflow.json`）：
+三方法 40 更新连续 vs 20+恢复，`verify_resume` 全部一致，peak GPU memory 1.9GB。
+**实测吞吐（正式配置 batch8×累加16）**：precision ≈9.9 s/update、alternative_a ≈7.9、
+control ≈4.1；换算 250k updates 每次约 28.7/22.7/11.8 天，9 次合计约 190 GPU-天。
+按用户决定**先不启动正式训练**，将吞吐与预算分析回传 Torch 调整正式配置后再执行。
+
+未完成的阻塞项：`formal references` 在 `official_data.load_molecule` 的跨构象签名检查上
+失败。第一类为分离片段物种（例 `qm9:C=C1ON=C(N)C1=O.N`），已把连通性检查移出
+`load_molecule`（连通性是 stiffness 标签域约束，references 需覆盖全部冻结分子）；
+第二类为同一分子不同构象的**键列表顺序**不同（例 `qm9:NCC=C([N][O])[C@H]1CO1`，
+position 3428，26 行，bonds 2 种变体），需要 Torch 决定是否改为无序/集合比较。
+本地已应用“立体容忍 + 移除连通性检查”补丁；由于该补丁改变代码 diff，现有
+acceptance 签名将失效，Torch 调整后需重新跑 `formal_acceptance`。
 
 ## 历史 CPU 实现与验收记录
 
