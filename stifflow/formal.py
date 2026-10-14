@@ -236,7 +236,12 @@ def export_references(dataset, data_manifest, config, output):
             "selection": "all frozen split molecules; independent of stiffness availability",
         }
         for entry in dataset.candidates(split, cfg["dataset_seed"]):
-            molecule = dataset.load_molecule(entry, split, allow_stereo_variation=True)
+            molecule = dataset.load_molecule(
+                entry,
+                split,
+                allow_stereo_variation=True,
+                allow_topology_variation=True,
+            )
             selected = molecule["conformers"]
             mol = selected[0]["rd_mol"]
             graph_from_mol(mol)  # Check graph-only model features before training.
@@ -257,7 +262,8 @@ def export_references(dataset, data_manifest, config, output):
                     "cache": fingerprint(directory / filename),
                     "reference_chirality": tetrahedral_chirality(mol, positions),
                     "stereo_variation_rows": molecule["stereo_variation_rows"],
-                    "conditioning_graph": "first official conformer; reference stereo differences recorded",
+                    "topology_variation_rows": molecule["topology_variation_rows"],
+                    "conditioning_graph": "first official conformer; reference stereo/topology differences recorded",
                 }
             )
         atomic_json(directory / "manifest.json", reference)

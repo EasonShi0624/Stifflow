@@ -209,6 +209,28 @@ def test_stereo_variation_requires_explicit_reference_mode(official):
     assert graph_signatures(left)[1] != graph_signatures(right)[1]
 
 
+def test_topology_variation_requires_explicit_reference_mode(official):
+    from stifflow.data import graph_from_mol
+
+    dataset, _, root = official
+    with (root / "dataset/rdkit_folder/molecule-0.pickle").open("rb") as stream:
+        mol = pickle.load(stream)["conformers"][0]["rd_mol"]
+    first = graph_from_mol(mol)
+    changed = copy.deepcopy(first)
+    changed["bond_types"][0] = (
+        "DOUBLE" if first["bond_types"][0] != "DOUBLE" else "SINGLE"
+    )  # Indexed topology differs across rows (labels stay strict, references opt in).
+    entry = dataset.groups("train")[0]
+    with patch(
+        "stifflow.official_data.graph_from_mol", side_effect=[first, changed]
+    ), pytest.raises(ValueError, match="topology"):
+        dataset.load_molecule(entry, "train")
+    with patch("stifflow.official_data.graph_from_mol", side_effect=[first, changed]):
+        loaded = dataset.load_molecule(entry, "train", allow_topology_variation=True)
+    assert loaded["topology_variation_rows"] == [entry["row_ids"][1]]
+    assert loaded["stereo_variation_rows"] == []
+
+
 def test_molecule_leakage_is_rejected_even_when_rows_do_not_overlap(official):
     dataset, _, _ = official
     dataset.keys = dataset.keys.astype(object)

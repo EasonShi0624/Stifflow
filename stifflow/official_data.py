@@ -181,7 +181,15 @@ class OfficialDataset:
             key=lambda g: hashlib.sha256(f"{seed}:{g['id']}".encode()).hexdigest(),
         )
 
-    def load_molecule(self, entry, split, limit=None, *, allow_stereo_variation=False):
+    def load_molecule(
+        self,
+        entry,
+        split,
+        limit=None,
+        *,
+        allow_stereo_variation=False,
+        allow_topology_variation=False,
+    ):
         if self.summary is None:
             self.summary = json.loads(self.summary_path.read_text())
         index = entry["inventory_index"]
@@ -195,7 +203,7 @@ class OfficialDataset:
         if len(conformers) != int(self.conformers[index]):
             raise ValueError("Raw conformer count differs from official inventory")
         rows = entry["row_ids"] if limit is None else entry["row_ids"][:limit]
-        selected, graph, stereo_variations = [], None, []
+        selected, graph, stereo_variations, topology_variations = [], None, [], []
         for row in rows:
             raw_index = row - int(self.row_offsets[index])
             if not 0 <= raw_index < len(conformers):
@@ -214,7 +222,15 @@ class OfficialDataset:
                 order_signature = signature
                 first_stereo = stereo_signature
             elif signature != order_signature:
-                raise ValueError("Atom order or topology varies across official rows")
+                if not allow_topology_variation:
+                    raise ValueError(
+                        "Atom order or topology varies across official rows"
+                    )
+                # GEOM conformers of a few molecules reattach equivalent hydrogens,
+                # so the indexed topology differs across rows. References keep the
+                # first-conformer conditioning graph and record the divergent rows;
+                # labels and formal training remain strict (opt-in only).
+                topology_variations.append(row)
             elif stereo_signature != first_stereo:
                 if not allow_stereo_variation:
                     raise ValueError(
@@ -258,6 +274,7 @@ class OfficialDataset:
             "conformers": selected,
             "source": fingerprint(path),
             "stereo_variation_rows": stereo_variations,
+            "topology_variation_rows": topology_variations,
         }
 
 
