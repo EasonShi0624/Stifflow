@@ -67,9 +67,16 @@ def scalar_records():
     ]
 
 
-def fit_scalar(root, stop, resume=None, directory=None):
+def fit_scalar(
+    root, stop, resume=None, directory=None, signature=None, records=None, num_workers=1
+):
     seed_everything(42)
     model = ScalarModule()
+    model.save_hyperparameters({"method": "control", "seed": 42})
+    if signature is not None:
+        model.training_signature = signature
+    micro = signature["microbatch"] if signature else 2
+    accumulation = signature["accumulate_grad_batches"] if signature else 2
     start = 0
     if resume:
         start = torch.load(resume, map_location="cpu", weights_only=False)[
@@ -77,7 +84,7 @@ def fit_scalar(root, stop, resume=None, directory=None):
         ]
     callback = FormalCheckpoints(
         directory or root / "checkpoints",
-        effective_batch=4,
+        effective_batch=micro * accumulation,
         recovery_every=1,
         snapshot_every=2,
     )
@@ -86,7 +93,7 @@ def fit_scalar(root, stop, resume=None, directory=None):
         devices=1,
         max_steps=stop,
         max_epochs=-1,
-        accumulate_grad_batches=2,
+        accumulate_grad_batches=accumulation,
         deterministic=True,
         callbacks=[callback],
         enable_checkpointing=False,
@@ -97,14 +104,14 @@ def fit_scalar(root, stop, resume=None, directory=None):
         default_root_dir=root,
     )
     loader = make_loader(
-        scalar_records(),
-        2,
+        records if records is not None else scalar_records(),
+        micro,
         4,
         42,
         sampling="uniform_conformer_rows",
-        accumulate_grad_batches=2,
+        accumulate_grad_batches=accumulation,
         consumed_samples=start,
-        num_workers=1,
+        num_workers=num_workers,
     )
     trainer.fit(model, train_dataloaders=loader, ckpt_path=resume)
     root.mkdir(exist_ok=True)

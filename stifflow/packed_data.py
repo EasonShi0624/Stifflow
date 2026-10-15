@@ -1,6 +1,7 @@
 """Bounded CPU float64 reads; no full dense label array is copied into RAM."""
 
 from collections import OrderedDict
+from copy import deepcopy
 from functools import lru_cache
 from pathlib import Path
 
@@ -9,6 +10,35 @@ import numpy as np
 from .geometry import centered_basis
 from .preflight import fingerprint
 from .source import Source
+
+
+def relocate_manifest(manifest, manifest_path, cache_root):
+    """Relocate only packed arrays in memory; canonical manifest bytes stay frozen."""
+    if manifest.get("schema_version") != 3 or manifest.get("split") not in (
+        "train",
+        "val",
+        "test",
+    ):
+        raise ValueError("Relocation requires a version-3 packed split")
+    source = Path(manifest_path).resolve().parent
+    root = Path(cache_root).resolve()
+    destination = (root / manifest["split"]).resolve()
+    if not destination.is_relative_to(root):
+        raise ValueError("Packed split escapes staging root")
+    relocated = deepcopy(manifest)
+    files = [relocated["row_index"]]
+    for kind in ("graph_shards", "factor_shards"):
+        for shard in relocated[kind]:
+            files.extend(shard["files"].values())
+    for item in files:
+        path = Path(item["path"]).resolve()
+        if not path.is_relative_to(source):
+            raise ValueError("Packed array escapes canonical split")
+        target = (destination / path.relative_to(source)).resolve()
+        if not target.is_relative_to(destination):
+            raise ValueError("Packed array escapes staging split")
+        item["path"] = str(target)
+    return relocated
 
 
 @lru_cache(maxsize=64)

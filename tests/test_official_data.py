@@ -13,6 +13,7 @@ from rdkit import Chem
 from stifflow.geometry import centered, centered_basis
 from stifflow.official_data import (
     OfficialDataset,
+    align_reference,
     build_manifest,
     graph_signatures,
     validate_label_manifest,
@@ -225,10 +226,98 @@ def test_topology_variation_requires_explicit_reference_mode(official):
         "stifflow.official_data.graph_from_mol", side_effect=[first, changed]
     ), pytest.raises(ValueError, match="topology"):
         dataset.load_molecule(entry, "train")
-    with patch("stifflow.official_data.graph_from_mol", side_effect=[first, changed]):
-        loaded = dataset.load_molecule(entry, "train", allow_topology_variation=True)
-    assert loaded["topology_variation_rows"] == [entry["row_ids"][1]]
-    assert loaded["stereo_variation_rows"] == []
+    with patch(
+        "stifflow.official_data.graph_from_mol",
+        side_effect=[first, changed, changed, first],
+    ), pytest.raises(ValueError, match="topology"):
+        dataset.load_molecule(entry, "train", allow_topology_variation=True)
+
+
+def test_reference_heavy_permutation_is_aligned_without_changing_geometry():
+    from rdkit.Chem import AllChem, rdMolAlign
+
+    mol = Chem.AddHs(Chem.MolFromSmiles("CCCO"))
+    assert AllChem.EmbedMolecule(mol, randomSeed=42) == 0
+    permutation = list(range(mol.GetNumAtoms()))
+    permutation[0], permutation[1] = permutation[1], permutation[0]
+    changed = Chem.RenumberAtoms(mol, permutation)
+    wrong = Chem.Mol(mol)
+    for atom, xyz in enumerate(changed.GetConformer().GetPositions()):
+        wrong.GetConformer().SetAtomPosition(atom, xyz)
+    assert rdMolAlign.GetBestRMS(wrong, mol) > 0.5
+    aligned, mapping = align_reference(mol, changed)
+    np.testing.assert_array_equal(
+        aligned.GetConformer().GetPositions(),
+        changed.GetConformer().GetPositions()[mapping],
+    )
+    assert rdMolAlign.GetBestRMS(aligned, mol) < 1e-7
+    broken = Chem.RWMol(mol)
+    broken.GetBondWithIdx(0).SetBondType(Chem.BondType.DOUBLE)
+    with pytest.raises(ValueError, match="topology"):
+        align_reference(mol, broken.GetMol())
+
+
+def test_reference_permutation_keeps_chiral_metadata():
+    from stifflow.data import graph_from_mol
+
+    left = Chem.AddHs(Chem.MolFromSmiles("F[C@](Cl)(Br)I"))
+    right = Chem.AddHs(Chem.MolFromSmiles("F[C@@](Cl)(Br)I"))
+    reordered = Chem.RenumberAtoms(right, list(reversed(range(right.GetNumAtoms()))))
+    aligned, _ = align_reference(left, reordered)
+    assert (
+        graph_signatures(graph_from_mol(left))[0]
+        == graph_signatures(graph_from_mol(aligned))[0]
+    )
+    assert (
+        graph_signatures(graph_from_mol(left))[1]
+        != graph_signatures(graph_from_mol(aligned))[1]
+    )
+
+
+@pytest.mark.parametrize("stereo", [False, True])
+def test_reference_hydrogen_mapping_records_stereo_independently(official, stereo):
+    from stifflow.data import graph_from_mol
+
+    dataset, _, root = official
+    path = root / "dataset/rdkit_folder/molecule-1.pickle"
+    with path.open("rb") as stream:
+        raw = pickle.load(stream)
+    mol = raw["conformers"][1]["rd_mol"]
+    permutation = list(range(mol.GetNumAtoms()))
+    permutation[2], permutation[-1] = permutation[-1], permutation[2]
+    mol = Chem.RenumberAtoms(mol, permutation)
+    raw["conformers"][1]["rd_mol"] = mol
+    with path.open("wb") as stream:
+        pickle.dump(raw, stream)
+    # Fixture-only memmap copy follows its own raw row before any alignment.
+    row = dataset.groups("train")[1]["row_ids"][1]
+    begin, end = dataset.ranges[row]
+    dataset.atomic = np.array(dataset.atomic)
+    dataset.atomic[begin:end, 2:] = mol.GetConformer().GetPositions().astype(np.float32)
+
+    def metadata(value):
+        result = graph_from_mol(value)
+        if stereo and np.isclose(
+            value.GetConformer().GetPositions().mean(),
+            mol.GetConformer().GetPositions().mean(),
+        ):
+            result["cip_codes"][0] = "R"
+        return result
+
+    with patch("stifflow.official_data.graph_from_mol", side_effect=metadata):
+        loaded = dataset.load_molecule(
+            dataset.groups("train")[1],
+            "train",
+            allow_topology_variation=True,
+            allow_stereo_variation=True,
+        )
+    assert loaded["topology_variation_rows"] == [row]
+    assert loaded["stereo_variation_rows"] == ([row] if stereo else [])
+    record = loaded["reference_atom_mappings"][0]
+    np.testing.assert_array_equal(
+        loaded["conformers"][1]["positions"],
+        dataset.atomic[begin:end, 2:][record["canonical_to_raw"]],
+    )
 
 
 def test_molecule_leakage_is_rejected_even_when_rows_do_not_overlap(official):

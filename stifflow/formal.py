@@ -21,10 +21,41 @@ from .smoke import external_directory
 
 METHODS = ("precision", "alternative_a", "control")
 SEEDS = (42, 43, 44)
+IO_CHANGED_FILES = {
+    "packed_data",
+    "training",
+    "formal_checkpoints",
+    "formal",
+    "official_data",
+}
+IO_CHECKS = (
+    "reader_equivalence",
+    "recovery_and_migration",
+    "staging_safety",
+    "reference_mapping",
+    "acceptance_guards",
+)
+
+
+def content_sha256(value):
+    return hashlib.sha256(
+        json.dumps(
+            value, sort_keys=True, separators=(",", ":"), allow_nan=False
+        ).encode()
+    ).hexdigest()
 
 
 def runtime_code_signature():
     """Hash executed algorithm files, so a results-only commit does not invalidate evidence."""
+    dependencies = {}
+    for name in (
+        "ETFlow-reference",
+        "stifflow-v1-alternative-A",
+        "stifflow-v1-benchmark",
+    ):
+        if git(WORKSPACE / name, "diff", "HEAD", "--binary"):
+            raise ValueError(f"Runtime dependency has uncommitted changes: {name}")
+        dependencies[name] = git(WORKSPACE / name, "rev-parse", "HEAD").strip()
     files = (
         "model",
         "training",
@@ -35,6 +66,8 @@ def runtime_code_signature():
         "features",
         "packed_data",
         "formal_checkpoints",
+        "formal",
+        "official_data",
     )
     return {
         "stifflow": {
@@ -43,25 +76,41 @@ def runtime_code_signature():
             ]
             for name in files
         },
-        "dependencies": {
-            name: git(WORKSPACE / name, "rev-parse", "HEAD").strip()
-            for name in (
-                "ETFlow-reference",
-                "stifflow-v1-alternative-A",
-                "stifflow-v1-benchmark",
-            )
-        },
+        "dependencies": dependencies,
     }
 
 
-def require_torch_runtime(report, cfg):
+def require_torch_runtime(report, cfg, compatibility=None):
     """Runtime-only evidence; production label/data validation remains in training."""
+    current = runtime_code_signature()
+    if report.get("runtime_code") != current:
+        baseline = report.get("runtime_code", {})
+        if (
+            not compatibility
+            or compatibility.get("kind") != "io_compatibility"
+            or compatibility.get("schema_version") != 1
+            or compatibility.get("status") != "completed"
+            or compatibility.get("acceptance_content_sha256") != content_sha256(report)
+            or compatibility.get("baseline_runtime_code") != baseline
+            or compatibility.get("runtime_code") != current
+            or compatibility.get("checks") != dict.fromkeys(IO_CHECKS, True)
+            or current.get("dependencies") != baseline.get("dependencies")
+            or set(current.get("stifflow", {}))
+            != set(baseline.get("stifflow", {})) | {"formal", "official_data"}
+            or any(
+                current["stifflow"].get(name) != digest
+                for name, digest in baseline.get("stifflow", {}).items()
+                if name not in IO_CHANGED_FILES
+            )
+        ):
+            raise ValueError(
+                "Torch runtime code differs without matching reviewed I/O compatibility evidence"
+            )
     if (
         report.get("kind") != "torch_runtime"
         or report.get("status") != "completed"
         or report.get("devices") != 1
         or report.get("selected_config") != cfg
-        or report.get("runtime_code") != runtime_code_signature()
         or report.get("maximum_atoms") != 29
     ):
         raise ValueError(
@@ -94,6 +143,30 @@ def require_torch_runtime(report, cfg):
             raise ValueError(
                 "Maximum-atom memory evidence exceeds the configured ceiling"
             )
+
+
+def formal_training_signature(train, val, cfg, seed, accepted):
+    """Stable run identity; execution paths and Git provenance are recorded separately."""
+    accumulation = cfg["profiles"]["formal"]["accumulate_grad_batches"]
+    return {
+        "signature_version": 2,
+        "train": fingerprint(train)["sha256"],
+        "val": fingerprint(val)["sha256"],
+        "config": cfg,
+        "profile": "formal",
+        "training_seed": seed,
+        "dataset_seed": cfg["dataset_seed"],
+        "microbatch": cfg["batch_size"],
+        "effective_batch_size": cfg["batch_size"] * accumulation,
+        "accumulate_grad_batches": accumulation,
+        "row_rng_domain": cfg["row_rng_domain"],
+        "sampling": "uniform_conformer_rows",
+        "official_data": read_json(train)["data_manifest"]["sha256"],
+        "runtime_scope": {
+            "acceptance_content_sha256": content_sha256(accepted),
+            "runtime_code": accepted["runtime_code"],
+        },
+    }
 
 
 def acceptance_signature(train, val, config, prov):
@@ -263,7 +336,8 @@ def export_references(dataset, data_manifest, config, output):
                     "reference_chirality": tetrahedral_chirality(mol, positions),
                     "stereo_variation_rows": molecule["stereo_variation_rows"],
                     "topology_variation_rows": molecule["topology_variation_rows"],
-                    "conditioning_graph": "first official conformer; reference stereo/topology differences recorded",
+                    "reference_atom_mappings": molecule["reference_atom_mappings"],
+                    "conditioning_graph": "first official conformer; isomorphic references reordered to this graph",
                 }
             )
         atomic_json(directory / "manifest.json", reference)

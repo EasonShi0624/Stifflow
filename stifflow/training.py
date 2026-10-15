@@ -7,6 +7,7 @@ from pathlib import Path
 
 import numpy as np
 
+from .cache_io import atomic_json
 from .official_data import KIND, SAMPLING, validate_label_manifest, validate_label_pair
 from .preflight import WORKSPACE, fingerprint, provenance
 from .smoke import external_directory
@@ -53,7 +54,9 @@ def advance_cursor(consumed, supervision, rank=0, world_size=1):
     return consumed + len(supervision) * world_size
 
 
-def load_records(manifest_path, split, count, method, source_config):
+def load_records(
+    manifest_path, split, count, method, source_config, packed_cache_root=None
+):
     from rdkit import Chem
 
     from .features import graph_from_mol
@@ -63,6 +66,8 @@ def load_records(manifest_path, split, count, method, source_config):
 
     manifest_path = Path(manifest_path).resolve()
     manifest = json.loads(manifest_path.read_text())
+    if packed_cache_root is not None and manifest.get("schema_version") != 3:
+        raise ValueError("Packed relocation requires version-3 labels")
     if manifest.get("speed_only"):
         raise ValueError(
             "Speed-only caches cannot be used for model training/evaluation"
@@ -88,7 +93,7 @@ def load_records(manifest_path, split, count, method, source_config):
         )
     if manifest.get("schema_version") == 3:
         from .formal_cache import signature
-        from .packed_data import PackedRecords
+        from .packed_data import PackedRecords, relocate_manifest
 
         current = signature(
             manifest["data_manifest"]["path"],
@@ -103,7 +108,14 @@ def load_records(manifest_path, split, count, method, source_config):
 
         if count not in (None, "all", len(manifest["records"])):
             raise ValueError("Formal training uses the complete shared accepted cohort")
-        return PackedRecords(manifest, method)
+        return PackedRecords(
+            (
+                relocate_manifest(manifest, manifest_path, packed_cache_root)
+                if packed_cache_root is not None
+                else manifest
+            ),
+            method,
+        )
     eligible = [r for r in manifest["records"] if r["split"] == split]
     if count in (None, "all"):
         count = len(eligible)
@@ -302,6 +314,8 @@ def main():
     parser.add_argument("--seed", type=int)
     parser.add_argument("--checkpoint-dir", type=external_directory)
     parser.add_argument("--acceptance", type=Path)
+    parser.add_argument("--io-compatibility", type=Path)
+    parser.add_argument("--packed-cache-root", type=Path)
     parser.add_argument("--output", type=external_directory, required=True)
     parser.add_argument("--resume", type=Path)
     parser.add_argument("--stop-after", type=int)
@@ -361,9 +375,15 @@ def main():
         profile["train_molecules"],
         args.method,
         cfg["source"],
+        args.packed_cache_root,
     )
     val = load_records(
-        args.val_labels, "val", profile["val_molecules"], args.method, cfg["source"]
+        args.val_labels,
+        "val",
+        profile["val_molecules"],
+        args.method,
+        cfg["source"],
+        args.packed_cache_root,
     )
     train_metadata = train.records if formal else train
     val_metadata = val.records if formal else val
@@ -394,17 +414,21 @@ def main():
         "profile": args.profile,
     }
     run_provenance = provenance()
+    accepted = None
+    compatibility = (
+        json.loads(args.io_compatibility.read_text()) if args.io_compatibility else None
+    )
     if formal:
         from .formal import acceptance_signature, require_torch_runtime
 
-        if max_steps > 40:
+        if max_steps > 40 or cfg.get("runtime_acceptance") == "torch_runtime":
             if args.acceptance is None:
                 parser.error(
                     "Formal training requires --acceptance from the new 40-update/resume checks"
                 )
             accepted = json.loads(args.acceptance.read_text())
             if cfg.get("runtime_acceptance") == "torch_runtime":
-                require_torch_runtime(accepted, cfg)
+                require_torch_runtime(accepted, cfg, compatibility)
             elif (
                 accepted.get("status") != "completed"
                 or accepted.get("methods") != ["precision", "alternative_a", "control"]
@@ -433,6 +457,24 @@ def main():
         model.training_signature.update(
             sampling=sampling, official_data=train_manifest["data_manifest"]["sha256"]
         )
+    if formal and cfg.get("runtime_acceptance") == "torch_runtime":
+        from .formal import formal_training_signature
+
+        model.training_signature = formal_training_signature(
+            args.train_labels, args.val_labels, cfg, seed, accepted
+        )
+    model.execution_provenance = {
+        "provenance": run_provenance,
+        "packed_cache_root": (
+            str(args.packed_cache_root.resolve()) if args.packed_cache_root else None
+        ),
+        "acceptance": fingerprint(args.acceptance) if args.acceptance else None,
+        "io_compatibility": (
+            fingerprint(args.io_compatibility) if args.io_compatibility else None
+        ),
+    }
+    if args.resume and "checkpoint_migration" in saved:
+        model.checkpoint_migration = saved["checkpoint_migration"]
     if args.resume and saved.get("training_signature") != model.training_signature:
         raise ValueError("Resume dataset, seed or configuration differs")
     consumed = (
@@ -480,7 +522,11 @@ def main():
             )
         },
         "status": "started",
+        "training_signature": model.training_signature,
+        "checkpoint_migration": getattr(model, "checkpoint_migration", None),
+        "execution_provenance": model.execution_provenance,
     }
+    atomic_json(args.output / "manifest.json", report)
     callbacks = [
         ModelCheckpoint(
             dirpath=args.output / "checkpoints",
@@ -572,7 +618,7 @@ def main():
         if formal:
             train.close()
             val.close()
-        (args.output / "manifest.json").write_text(json.dumps(report, indent=2))
+        atomic_json(args.output / "manifest.json", report)
 
 
 if __name__ == "__main__":

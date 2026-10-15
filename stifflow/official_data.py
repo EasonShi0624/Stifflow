@@ -64,6 +64,26 @@ def verified_path(record):
     return path
 
 
+def align_reference(reference, mol):
+    """Return an isomorphic molecule in reference order, without coordinate matching."""
+    mapping = mol.GetSubstructMatch(reference, useChirality=False)
+    if (
+        len(mapping) != reference.GetNumAtoms()
+        or mol.GetNumAtoms() != reference.GetNumAtoms()
+        or mol.GetNumBonds() != reference.GetNumBonds()
+    ):
+        raise ValueError(
+            "Reference topology is not isomorphic to its conditioning graph"
+        )
+    aligned = Chem.RenumberAtoms(mol, list(mapping))
+    if (
+        graph_signatures(graph_from_mol(aligned))[0]
+        != graph_signatures(graph_from_mol(reference))[0]
+    ):
+        raise ValueError("Reference topology/atom mapping could not be verified")
+    return aligned, list(mapping)
+
+
 class OfficialDataset:
     def __init__(self, specification):
         if (
@@ -204,6 +224,7 @@ class OfficialDataset:
             raise ValueError("Raw conformer count differs from official inventory")
         rows = entry["row_ids"] if limit is None else entry["row_ids"][:limit]
         selected, graph, stereo_variations, topology_variations = [], None, [], []
+        atom_mappings = []
         for row in rows:
             raw_index = row - int(self.row_offsets[index])
             if not 0 <= raw_index < len(conformers):
@@ -216,27 +237,6 @@ class OfficialDataset:
             conf = conformers[raw_index]
             mol = Chem.Mol(conf["rd_mol"])
             metadata = graph_from_mol(mol)
-            signature, stereo_signature = graph_signatures(metadata)
-            if graph is None:
-                graph = metadata
-                order_signature = signature
-                first_stereo = stereo_signature
-            elif signature != order_signature:
-                if not allow_topology_variation:
-                    raise ValueError(
-                        "Atom order or topology varies across official rows"
-                    )
-                # GEOM conformers of a few molecules reattach equivalent hydrogens,
-                # so the indexed topology differs across rows. References keep the
-                # first-conformer conditioning graph and record the divergent rows;
-                # labels and formal training remain strict (opt-in only).
-                topology_variations.append(row)
-            elif stereo_signature != first_stereo:
-                if not allow_stereo_variation:
-                    raise ValueError(
-                        "Stereochemistry varies across official label rows"
-                    )
-                stereo_variations.append(row)
             if (
                 not np.isfinite(block).all()
                 or not np.array_equal(block[:, 0], metadata["atomic_numbers"])
@@ -251,6 +251,28 @@ class OfficialDataset:
                     "Official memmap differs from raw atom order/coordinates/energy"
                 )
             positions = np.array(block[:, 2:], dtype=np.float64)
+            signature, stereo_signature = graph_signatures(metadata)
+            if graph is None:
+                graph = metadata
+                order_signature = signature
+                first_stereo = stereo_signature
+            elif signature != order_signature:
+                if not allow_topology_variation:
+                    raise ValueError(
+                        "Atom order or topology varies across official rows"
+                    )
+                reference = selected[0]["rd_mol"]
+                mol, mapping = align_reference(reference, mol)
+                signature, stereo_signature = graph_signatures(graph_from_mol(mol))
+                positions = positions[mapping].copy()
+                topology_variations.append(row)
+                atom_mappings.append({"row_id": row, "canonical_to_raw": list(mapping)})
+            if selected and stereo_signature != first_stereo:
+                if not allow_stereo_variation:
+                    raise ValueError(
+                        "Stereochemistry varies across official label rows"
+                    )
+                stereo_variations.append(row)
             weight = float(conf["boltzmannweight"])
             if not np.isfinite(weight) or weight < 0:
                 raise ValueError("Invalid original conformer weight")
@@ -275,6 +297,7 @@ class OfficialDataset:
             "source": fingerprint(path),
             "stereo_variation_rows": stereo_variations,
             "topology_variation_rows": topology_variations,
+            "reference_atom_mappings": atom_mappings,
         }
 
 

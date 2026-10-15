@@ -1,6 +1,26 @@
-# StifFlow：官方 memmap 接入与受控 pilot
+# StifFlow：官方 memmap 接入与正式训练
 
-当前路线锁定：保留 main@80f82d7 的现有 SO(3) backbone，数据使用
+## 2026-10-15：SHHPC 正式训练修复交接
+
+修复分支 `torch/shhpc-training-safety` 基于 SHHPC
+`867e75649ac66f50f05c2831d0d7e50bd8e43301`，保留已开始的训练进度：
+
+- 原 GPU receipt 不变，新增精确绑定代码哈希与 CPU 检查的 I/O 兼容记录。
+- canonical manifest 不再改写；本地 staging、job ID 和代码提交记录与训练身份分开。
+- 私有 staging、复制空间锁及 checkpoint 单写入锁保护源数据和其他作业。
+- references 同步映射原子与坐标，真实拓扑变化报错；完整 checkpoint 可向新目录受控迁移。
+
+入口、配置、环境变量和迁移命令见 [SHHPC 交接说明](scripts/shhpc/README.md)。
+CPU 回归 **64 passed / 106.89 s**，覆盖旧/新 reader、旧 staging 哈希重建、
+`32×4` 标量训练连续/迁移恢复、目录与并发保护、reference 排列及 stereo。
+兼容记录为 [shhpc-io-compatibility-20261015.json](results/shhpc-io-compatibility-20261015.json)。
+未新增 GPU 验证、处理真实 checkpoint 或重导出全量 references；这些运行产物尚未提供。
+SHHPC 先交接旧作业完整版本与运行记录，在有效 checkpoint 后切换代码并迁移，
+不能将修复版直接接到旧 owner 目录或在运行过程中替换代码。
+
+## 先前 pilot 路线记录
+
+pilot 路线保留 main@80f82d7 的现有 SO(3) backbone，数据使用
 clean-sde@2f20cadeb047b7dc7cd3a363c729373f288c2d08 对应的 **v3 QM9 scaffold**
 memmap；三方法共用 128 个 train / 32 个 val 分子的全部官方构象。
 Torch 实现接口与轻量检查，真实标签计算、官方生成、Lightning 验收和 pilot 由 SHHPC 执行。
