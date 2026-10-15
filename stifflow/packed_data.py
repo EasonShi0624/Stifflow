@@ -17,10 +17,11 @@ def basis(atoms):
 
 
 class PackedRecords:
-    def __init__(self, manifest, method, max_open_parts=16, graph_cache_size=64):
+    def __init__(self, manifest, method, max_open_parts=None, graph_cache_size=64):
         if (
             method not in ("precision", "alternative_a", "control")
-            or min(max_open_parts, graph_cache_size) < 1
+            or (max_open_parts is not None and max_open_parts < 1)
+            or graph_cache_size < 1
         ):
             raise ValueError("Invalid method or cache bounds")
         self.manifest = manifest
@@ -41,6 +42,19 @@ class PackedRecords:
             or not np.array_equal(self.index[:, 2], expected)
         ):
             raise ValueError("Packed row/label pairing differs")
+        # Uniform sampling draws from every molecule, so each batch touches many
+        # shard indices. Opening a packed shard costs a stat plus an np.load(mmap)
+        # per field, which is ~1 ms on GPFS, so the previous fixed LRU of 16 parts
+        # thrashed and re-opened shards on almost every sample once a cache held
+        # hundreds of shards (e.g. 123 graph + 388 factor for the frozen train
+        # split). Keep every shard open by default: mmaps are lazy and the
+        # descriptor cost is negligible against the 65536 default limit (a
+        # 511-shard cache uses ~2555 descriptors). Pass an explicit bound to cap
+        # descriptors for unusually large caches.
+        if max_open_parts is None:
+            max_open_parts = max(
+                1, len(manifest["graph_shards"]) + len(manifest["factor_shards"])
+            )
         self.max_open_parts = max_open_parts
         self.graph_cache_size = graph_cache_size
         self.parts = OrderedDict()

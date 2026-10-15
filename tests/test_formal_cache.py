@@ -129,6 +129,21 @@ def test_pack_reads_paired_rows_and_bounds_memory_for_all_methods(frozen):
         assert all(s["label"] is None for s in snapshots) == (method == "control")
 
 
+def test_default_part_cache_is_sized_from_the_manifest(frozen):
+    report = pack(frozen, build(frozen))
+    total = len(report["graph_shards"]) + len(report["factor_shards"])
+    store = PackedRecords(report, "precision")
+    assert total >= 1
+    assert store.max_open_parts == total
+    for i, record in enumerate(report["records"]):
+        for j in range(len(record["row_ids"])):
+            store.sample(i, j)
+    assert len(store.parts) <= total
+    store.close()
+    # An explicit bound still wins, so callers can cap open descriptors.
+    assert PackedRecords(report, "precision", max_open_parts=1).max_open_parts == 1
+
+
 def test_worker_and_packing_resume_protects_completed_results(frozen):
     paths = build(frozen)
     before = [p.read_bytes() for p in paths]
