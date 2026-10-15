@@ -1,0 +1,165 @@
+{
+  "schema_version": 1,
+  "kind": "io_compatibility",
+  "status": "completed",
+  "scope": "CPU-verified I/O placement, checkpoint identity/metadata and reference atom permutations; inherits original GPU evidence, contains no new GPU measurements",
+  "reviewed_parent_commit": "867e75649ac66f50f05c2831d0d7e50bd8e43301",
+  "implementation_commit": "5c607192c5071970b4543a67275a536bc5fa93cd",
+  "legacy_source_commits": [
+    "e463b16543f1365baab731e4da909d6f6cc8e2e6",
+    "793d502d86e521039d8f641480cd3960ef2c81d1",
+    "52091a92957a3c9a2ce0e0b47428310dd0a1f1f5",
+    "867e75649ac66f50f05c2831d0d7e50bd8e43301"
+  ],
+  "acceptance_path": "results/torch-runtime-batch-4090d-20261014.json",
+  "acceptance_file_sha256": "8c6d98802d7dd44f5e1fde2a87e914e4f7023f3b0a6faeada40dfeae744b4a31",
+  "acceptance_content_sha256": "04f4fe8fb18ec5adc042ede499e738a648627260378bca8b32cc910d4b50a0a1",
+  "baseline_runtime_code": {
+    "stifflow": {
+      "model": "4f8884be7a97e7fd78d35854ccaa8ebb9370b10cdd8b8e5a728762e1d876865a",
+      "training": "6dd87ae1bf5d774e31594fda755385f78a7771e8c7ca496938200ce72cf64c71",
+      "targets": "6a7066c81f2111ddaf8e238c27cd4acb432e3479e6ebac8899a41969d4084c22",
+      "source": "5b53f07c34a99b091d1bc41e9d1622e568369875add388bb7328e367797c1c7d",
+      "precision": "41495c5d4959d53bd444af3af4bed0575c1fc62cef35d39af0b19ac9473235a3",
+      "geometry": "bb4197819b1420b4633681e4cdee69ec418a305d7a04bc8890f2a2ebff4e0e7f",
+      "features": "623149c7b92436efac69be4e1032c4e171caa7237c0083369e71188a39d76aa8",
+      "packed_data": "a10cfdf6c1e5813558f8079bb4b913ee26b8c7aaa1b9f8b17280fc61c7ba7b02",
+      "formal_checkpoints": "e30fef8b5efac7e627cdfed49fed508830d09f7d9d2b8900a9348bfce0eadb4a"
+    },
+    "dependencies": {
+      "ETFlow-reference": "80f82d7d142bc3872412d2966a8d71ed14462b18",
+      "stifflow-v1-alternative-A": "55009a52c2a00b2b379275c9553e3eead3922884",
+      "stifflow-v1-benchmark": "cbeb314bcd1f99f2a7354477592791f6151821a7"
+    }
+  },
+  "runtime_code": {
+    "stifflow": {
+      "model": "4f8884be7a97e7fd78d35854ccaa8ebb9370b10cdd8b8e5a728762e1d876865a",
+      "training": "7d8f200cfba12920cd79c656822c9b2cb4be56cce131f5a13ee2feead1d51484",
+      "targets": "6a7066c81f2111ddaf8e238c27cd4acb432e3479e6ebac8899a41969d4084c22",
+      "source": "5b53f07c34a99b091d1bc41e9d1622e568369875add388bb7328e367797c1c7d",
+      "precision": "41495c5d4959d53bd444af3af4bed0575c1fc62cef35d39af0b19ac9473235a3",
+      "geometry": "bb4197819b1420b4633681e4cdee69ec418a305d7a04bc8890f2a2ebff4e0e7f",
+      "features": "623149c7b92436efac69be4e1032c4e171caa7237c0083369e71188a39d76aa8",
+      "packed_data": "cf376e6f4cc7a48752ea690ab6f054d73378e7659de8737857e61a3cb2d29f62",
+      "formal_checkpoints": "ea2f5490576f265a1deea9fcd23f51235af9f2869d929506ee23e7fb1b51605f",
+      "formal": "f16084eb230ff03556075a08f254ad2f1ec786db5d1fc96d12cf4c480e9238be",
+      "official_data": "6a537d6272809c59adbda0e7ad2647f1ffab4937fe9410bd5adb153c1f5806e1"
+    },
+    "dependencies": {
+      "ETFlow-reference": "80f82d7d142bc3872412d2966a8d71ed14462b18",
+      "stifflow-v1-alternative-A": "55009a52c2a00b2b379275c9553e3eead3922884",
+      "stifflow-v1-benchmark": "cbeb314bcd1f99f2a7354477592791f6151821a7"
+    }
+  },
+  "changed_runtime_files": [
+    "formal",
+    "formal_checkpoints",
+    "official_data",
+    "packed_data",
+    "training"
+  ],
+  "checks": {
+    "reader_equivalence": true,
+    "recovery_and_migration": true,
+    "staging_safety": true,
+    "reference_mapping": true,
+    "acceptance_guards": true
+  },
+  "cpu_test_evidence": {
+    "passed": 64,
+    "pytest_reported_seconds": 106.89,
+    "junit_seconds": 106.885,
+    "junit_sha256": "5ade89faca465a5d2911536b53e1c4a4a86cb9e3df6b8d52a327595cc707bd94",
+    "python": "/scratch/ys6132/programs/miniforge3/envs/etflow/bin/python",
+    "command": [
+      "/scratch/ys6132/programs/miniforge3/envs/etflow/bin/python",
+      "-m",
+      "pytest",
+      "tests/test_io_compatibility.py",
+      "tests/test_migrate_run.py",
+      "tests/test_official_data.py",
+      "tests/test_formal_training.py",
+      "tests/test_runtime.py",
+      "tests/test_formal_cache.py",
+      "tests/test_formal_evaluation.py",
+      "-q",
+      "-x",
+      "-o",
+      "cache_dir=/tmp/stifflow-safety-pytest",
+      "--basetemp=/tmp/stifflow-safety-unit",
+      "--junitxml=/tmp/stifflow-safety-tests.xml"
+    ],
+    "thread_limits": {
+      "OMP_NUM_THREADS": 1,
+      "OPENBLAS_NUM_THREADS": 1,
+      "MKL_NUM_THREADS": 1,
+      "NUMEXPR_NUM_THREADS": 1
+    },
+    "cases_by_check": {
+      "reader_equivalence": [
+        "test_old_and_new_reader_are_identical_across_cache_evictions",
+        "test_relocation_confines_paths_and_still_detects_corruption",
+        "test_default_part_cache_is_sized_from_the_manifest"
+      ],
+      "recovery_and_migration": [
+        "test_exact_migration_comparison_does_not_use_resume_tolerance",
+        "test_migration_and_path_relocation_preserve_scalar_recovery[False]",
+        "test_migration_and_path_relocation_preserve_scalar_recovery[True]",
+        "test_legacy_staging_hash_is_reconstructed_exactly",
+        "test_migration_rejects_unknown_or_incomplete_state_before_writing",
+        "test_lightning_accumulation_resume_cursor_optimizer_and_retention"
+      ],
+      "staging_safety": [
+        "test_staging_rejects_unsafe_inputs_without_touching_data[equal]",
+        "test_staging_rejects_unsafe_inputs_without_touching_data[nested]",
+        "test_staging_rejects_unsafe_inputs_without_touching_data[ancestor]",
+        "test_staging_rejects_unsafe_inputs_without_touching_data[existing]",
+        "test_staging_rejects_unsafe_inputs_without_touching_data[split]",
+        "test_staging_rejects_unsafe_inputs_without_touching_data[zero]",
+        "test_staging_rejects_unsafe_inputs_without_touching_data[symlink]",
+        "test_interrupted_copy_is_not_published",
+        "test_checkpoint_directory_has_only_one_writer",
+        "test_concurrent_staging_has_separate_outputs_and_serialized_copies",
+        "test_staged_wrapper_restarts_same_job_in_private_attempts"
+      ],
+      "reference_mapping": [
+        "test_topology_variation_requires_explicit_reference_mode",
+        "test_reference_heavy_permutation_is_aligned_without_changing_geometry",
+        "test_reference_permutation_keeps_chiral_metadata",
+        "test_reference_hydrogen_mapping_records_stereo_independently[False]",
+        "test_reference_hydrogen_mapping_records_stereo_independently[True]",
+        "test_reference_coverage_is_independent_of_hessian_availability"
+      ],
+      "acceptance_guards": [
+        "test_io_acceptance_preserves_algorithm_config_and_dependency_guards",
+        "test_runtime_signature_rejects_dirty_dependencies",
+        "test_runtime_receipt_scope_code_recovery_and_memory_gate"
+      ]
+    },
+    "migration_state_comparison": {
+      "rtol": 0,
+      "atol": 0,
+      "check_dtype_shape_and_types": true
+    },
+    "resume_comparison": {
+      "rtol": 1e-06,
+      "atol": 1e-07
+    }
+  },
+  "additional_checks": {
+    "ruff": "passed",
+    "black_check": "passed",
+    "bash_n": "passed",
+    "git_diff_check": "passed",
+    "original_gpu_receipt_unchanged": true,
+    "legacy_commits_and_unchanged_algorithm_hashes": "passed",
+    "cli_help_with_required_pythonpath": "passed",
+    "committed_receipt_guard": "passed"
+  },
+  "not_run": {
+    "gpu_validation": "Reuse original acceptance as requested; no GPU work performed",
+    "production_checkpoint_migration": "Requires SHHPC checkpoint and legacy run receipt; only scalar fixture migration executed",
+    "full_reference_export": "Requires SHHPC data and CPU allocation; only synthetic reference fixtures checked"
+  }
+}
