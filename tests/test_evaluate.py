@@ -9,6 +9,7 @@ import numpy as np
 from rdkit import Chem
 from rdkit.Chem import AllChem
 from stifflow_benchmark.evaluate import conformer_mol, evaluate, tetrahedral_chirality
+from stifflow_benchmark.generate import validate_resume
 from stifflow_benchmark.summarize import summarize
 
 
@@ -102,6 +103,204 @@ class EvaluationTest(unittest.TestCase):
             path.write_text(json.dumps(manifest))
             with self.assertRaisesRegex(ValueError, "duplicate"):
                 evaluate(path)
+
+    def test_disconnected_molecules_and_staged_label_normalization(self):
+        mol = Chem.MolFromSmiles("C.C")
+        positions = np.array([[0.0, 0.0, 0.0], [3.0, 0.0, 0.0]])
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            np.savez(
+                root / "disconnected.npz",
+                pos_ref=positions[None],
+                pos_gen=np.stack([positions, positions]),
+                atomic_numbers=[6, 6],
+            )
+            manifest = {
+                "schema_version": 1,
+                "method": "precision",
+                "baseline_kind": "controlled",
+                "seed": 42,
+                "split": "synthetic_unit_test",
+                "training_budget": {"steps": 0},
+                "config": {},
+                "generation": {"nfe": None},
+                "provenance": {},
+                "records": [
+                    {
+                        "id": "disconnected",
+                        "status": "ok",
+                        "npz": "disconnected.npz",
+                        "molblock": Chem.MolToMolBlock(conformer_mol(mol, positions)),
+                    }
+                ],
+            }
+            path = root / "manifest.json"
+            path.write_text(json.dumps(manifest))
+            strict = evaluate(path, [0.05, 0.5])
+            self.assertEqual(strict["aggregate"]["failed"], 1)
+            self.assertIn("disconnected", strict["records"][0]["reason"])
+            allowed = evaluate(path, [0.05, 0.5], allow_disconnected=True)
+            self.assertEqual(allowed["aggregate"]["failed"], 0)
+            self.assertEqual(allowed["aggregate"]["multi_fragment_molecules"], 1)
+            self.assertIn("multi-fragment", allowed["protocol"]["connectivity"])
+
+        def report(train, val, official="data"):
+            return {
+                "run": {
+                    "method": "precision",
+                    "baseline_kind": "controlled",
+                    "seed": 42,
+                    "split": "synthetic",
+                    "training_budget": {"steps": 0},
+                    "training_data": {
+                        "train": train,
+                        "val": val,
+                        "official_data": official,
+                        "training_seed": 42,
+                    },
+                    "input_manifest": {"sha256": "references"},
+                    "config": {"model": {"method": "precision", "seed": 42, "x": 1}},
+                    "generation": {},
+                },
+                "protocol": {"thresholds": [0.05, 0.5]},
+                "records": [{"id": "molecule"}],
+                "aggregate": {"attempted": 1, "succeeded": 1, "failed": 0},
+            }
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            first = root / "first.json"
+            second = root / "second.json"
+            other_data = root / "other-data.json"
+            first.write_text(json.dumps(report("staged-a", "staged-b")))
+            second.write_text(json.dumps(report("staged-c", "staged-d")))
+            other_data.write_text(
+                json.dumps(report("staged-a", "staged-b", official="other"))
+            )
+            with self.assertRaisesRegex(ValueError, "Controlled runs differ"):
+                summarize([first, second])
+            normalized = summarize([first, second], normalize_staged_labels=True)
+            self.assertEqual(len(normalized["runs"]), 2)
+            self.assertIn("data_identity", normalized)
+            self.assertEqual(
+                normalized["runs"][0]["staged_label_manifests"],
+                {"train": "staged-a", "val": "staged-b"},
+            )
+            with self.assertRaisesRegex(ValueError, "Controlled runs differ"):
+                summarize([first, other_data], normalize_staged_labels=True)
+
+    def test_resume_validation_skips_completed_and_rejects_changes(self):
+        checkpoint = {
+            "hyper_parameters": {"method": "precision", "seed": 42},
+            "global_step": 250000,
+            "training_signature": {"official_data": "data"},
+        }
+        checkpoint_fingerprint = {"sha256": "checkpoint"}
+        input_fingerprint = {"sha256": "references"}
+        current_provenance = {"repos": {"stifflow-v1": {"head": "head", "diff": ""}}}
+        specification = {
+            "split": "val",
+            "records": [{"id": "a"}, {"id": "b"}],
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory)
+            np.savez(
+                output / "a.npz",
+                pos_ref=np.zeros((1, 2, 3)),
+                pos_gen=np.zeros((2, 2, 3)),
+                atomic_numbers=[6, 6],
+            )
+            report = {
+                "schema_version": 1,
+                "method": "precision",
+                "baseline_kind": "controlled",
+                "seed": 42,
+                "split": "val",
+                "config": {"model": checkpoint["hyper_parameters"], "steps": 50},
+                "training_budget": {"steps": 250000},
+                "training_data": checkpoint["training_signature"],
+                "checkpoint": checkpoint_fingerprint,
+                "input_manifest": input_fingerprint,
+                "provenance": current_provenance,
+                "records": [
+                    {"id": "a", "status": "ok", "npz": "a.npz"},
+                    {"id": "b", "status": "failed", "reason": "interrupted"},
+                ],
+            }
+            done = validate_resume(
+                report,
+                specification,
+                output,
+                checkpoint_fingerprint,
+                input_fingerprint,
+                checkpoint,
+                "precision",
+                42,
+                50,
+                current_provenance,
+            )
+            self.assertEqual(list(done), ["a"])
+            changed = dict(report) | {"checkpoint": {"sha256": "other"}}
+            with self.assertRaisesRegex(ValueError, "checkpoint differs"):
+                validate_resume(
+                    changed,
+                    specification,
+                    output,
+                    checkpoint_fingerprint,
+                    input_fingerprint,
+                    checkpoint,
+                    "precision",
+                    42,
+                    50,
+                    current_provenance,
+                )
+            changed = dict(report) | {"provenance": {"repos": {}}}
+            with self.assertRaisesRegex(ValueError, "different code revisions"):
+                validate_resume(
+                    changed,
+                    specification,
+                    output,
+                    checkpoint_fingerprint,
+                    input_fingerprint,
+                    checkpoint,
+                    "precision",
+                    42,
+                    50,
+                    current_provenance,
+                )
+            changed = dict(report) | {"config": {"model": {}, "steps": 50}}
+            with self.assertRaisesRegex(ValueError, "configuration differs"):
+                validate_resume(
+                    changed,
+                    specification,
+                    output,
+                    checkpoint_fingerprint,
+                    input_fingerprint,
+                    checkpoint,
+                    "precision",
+                    42,
+                    50,
+                    current_provenance,
+                )
+            changed = dict(report) | {
+                "records": [
+                    {"id": "a", "status": "ok", "npz": "a.npz"},
+                    {"id": "a", "status": "failed"},
+                ]
+            }
+            with self.assertRaisesRegex(ValueError, "duplicate or unexpected"):
+                validate_resume(
+                    changed,
+                    specification,
+                    output,
+                    checkpoint_fingerprint,
+                    input_fingerprint,
+                    checkpoint,
+                    "precision",
+                    42,
+                    50,
+                    current_provenance,
+                )
 
 
 if __name__ == "__main__":

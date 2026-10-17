@@ -22,6 +22,9 @@ mean/median for successful molecules, as well as attempted coverage with failure
 MAT over all attempts is undefined when any molecule fails, and is emitted as null. Tetrahedral CIP
 agreement is reported separately for specified centers; no E/Z accuracy metric is claimed. Achiral
 molecules are excluded from that chirality denominator. RMSD alone must not be read as stereo validity.
+Multi-fragment molecules are rejected by default; pass `--allow-disconnected` to evaluate them with
+the same RMSD/chirality protocol. Formal StifFlow evaluation opts in because the frozen val split
+contains a few multi-fragment QM9 species, and records the count in `aggregate.multi_fragment_molecules`.
 
 The run manifest is JSON:
 
@@ -70,6 +73,12 @@ The model checkpoint carries its source configuration; changing the inference so
 Steps 25/50/100 are available for later validation sensitivity checks. Runtime, NFE and peak GPU
 memory are recorded per molecule; stiffness label cost remains in preprocessing manifests.
 
+Long generations atomically rewrite `manifest.json` every `--flush-every` processed molecules
+(default 50). Pass `--resume` with the same checkpoint/reference/config to skip records whose NPZ
+file and stored fingerprint are intact; failed or interrupted molecules are regenerated. Resume is
+rejected if the checkpoint, reference manifest, sampler/model configuration, training signature or
+code provenance changed.
+
 No GPU generation, controlled pilot, formal test-set evaluation or DRUGS experiment has been run.
 
 ```bash
@@ -78,6 +87,9 @@ python -m stifflow_benchmark.summarize runs/precision/evaluation.json \
 ```
 
 The summarizer refuses controlled comparisons with different molecule IDs, split, seed, training
-budget, source/model configuration, integration steps or evaluation protocol. External pretrained
-ET-Flow remains a separately identified row. Comparing different NFE settings is a separate validation
-sensitivity study, not one matched comparison table.
+budget, source/model configuration, integration steps or evaluation protocol. When training staged
+the byte-identical label cache onto node-local storage and rewrote absolute paths, pass
+`--normalize-staged-labels`: the frozen `official_data` hash remains the canonical data identity,
+while each run's staged `train`/`val` manifest hashes are recorded as evidence instead of being
+compared. External pretrained ET-Flow remains a separately identified row. Comparing different NFE
+settings is a separate validation sensitivity study, not one matched comparison table.
