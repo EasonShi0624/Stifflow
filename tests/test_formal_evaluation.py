@@ -8,13 +8,17 @@ import numpy as np
 import pytest
 import torch
 import yaml
-from test_formal_cache import frozen as frozen  # noqa: PLC0414
-from test_official_data import official as official  # noqa: PLC0414
-
 from stifflow.cache_io import atomic_json, read_json
-from stifflow.formal import evaluate_generated, export_references, generate
+from stifflow.formal import (
+    evaluate_generated,
+    export_references,
+    generate,
+    summarize,
+)
 from stifflow.official_data import OfficialDataset
 from stifflow.preflight import fingerprint
+from test_formal_cache import frozen as frozen  # noqa: PLC0414
+from test_official_data import official as official  # noqa: PLC0414
 
 
 def references(frozen):
@@ -115,3 +119,156 @@ def test_row_streams_do_not_collide_with_training_or_validation_targets():
                 [seed, draw, cfg["row_rng_domain"]]
             ).bit_generator.state
             assert all(state != target for target in target_states)
+
+
+def _summary_report(method, seed, train, val, official="data"):
+    metrics = {
+        "mat_r_mean": 0.5,
+        "mat_r_median": 0.5,
+        "mat_p_mean": 0.5,
+        "mat_p_median": 0.5,
+        "cov_r_mean": [0.4, 0.6],
+        "cov_r_median": [0.4, 0.6],
+        "cov_p_mean": [0.4, 0.6],
+        "cov_p_median": [0.4, 0.6],
+    }
+    return {
+        "complete": True,
+        "run": {
+            "method": method,
+            "baseline_kind": "controlled",
+            "seed": 42,
+            "split": "test",
+            "training_budget": {"steps": 250000},
+            "training_data": {
+                "train": train,
+                "val": val,
+                "official_data": official,
+                "training_seed": seed,
+                "config": {"x": 1},
+                "code": {"stifflow-v1": {"head": "head", "diff": ""}},
+            },
+            "input_manifest": {"sha256": "references"},
+            "config": {"model": {"method": method, "seed": seed, "x": 1}, "steps": 50},
+            "formal": {
+                "stage": "final",
+                "training_seed": seed,
+                "generation_seed": 42,
+                "expected_molecules": 1,
+            },
+            "generation": {},
+        },
+        "protocol": {"thresholds": [0.05, 0.5]},
+        "records": [{"id": "molecule"}],
+        "aggregate": {
+            "attempted": 1,
+            "succeeded": 1,
+            "failed": 0,
+            "successful_only": metrics,
+            "chirality": {"fraction": 0.5},
+        },
+    }
+
+
+def test_summary_normalizes_staged_label_manifest_hashes(tmp_path):
+    methods = ("precision", "alternative_a", "control")
+    paths = []
+    for seed in (42, 43, 44):
+        for method in methods:
+            report = _summary_report(
+                method,
+                seed,
+                f"staged-train-{method}-{seed}",
+                f"staged-val-{method}-{seed}",
+            )
+            path = tmp_path / f"{method}-{seed}.json"
+            atomic_json(path, report)
+            paths.append(path)
+    with pytest.raises(ValueError, match="differ beyond method/training seed"):
+        summarize(paths)
+    summary = summarize(paths, normalize_staged_labels=True)
+    assert summary["complete"]
+    assert len(summary["staged_label_manifests"]) == 9
+    assert summary["data_identity"]["canonical"].startswith("training_signature")
+    assert summary["per_seed"]["42"]["runs"][0]["staged_label_manifests"]
+
+    changed = _summary_report(
+        "precision",
+        42,
+        "staged-train-precision-42",
+        "staged-val-precision-42",
+        official="different-data",
+    )
+    changed_path = tmp_path / "changed.json"
+    atomic_json(changed_path, changed)
+    with pytest.raises(ValueError, match="differ beyond method/training seed"):
+        summarize([changed_path, *paths[1:]], normalize_staged_labels=True)
+
+
+def test_evaluate_generated_requests_multi_fragment_support(tmp_path):
+    generated = tmp_path / "generated.json"
+    output = tmp_path / "evaluation.json"
+    generated.write_text("{}")
+
+    def fake_evaluate(path, allow_disconnected=False):
+        assert allow_disconnected is True
+        return {
+            "run": {"formal": {"expected_molecules": 1}},
+            "aggregate": {"attempted": 1, "failed": 0},
+        }
+
+    with patch(
+        "stifflow_benchmark.evaluate.evaluate", side_effect=fake_evaluate
+    ), patch("stifflow.formal.provenance", return_value={}):
+        report = evaluate_generated(generated, output)
+    assert report["complete"]
+    assert read_json(output)["complete"]
+
+
+def test_generate_resume_reuses_existing_manifest(frozen):
+    manifest, config, reference = references(frozen)
+    cfg = yaml.safe_load(config.read_text())
+    root = frozen[2]
+    checkpoint = root / "weights.ckpt"
+    state = {
+        "global_step": 250000,
+        "hyper_parameters": {"method": "precision", "seed": 42},
+        "training_signature": {
+            "official_data": fingerprint(manifest)["sha256"],
+            "config": cfg,
+            "effective_batch_size": 128,
+            "training_seed": 42,
+        },
+    }
+    torch.save(state, checkpoint)
+    output = root / "resumed"
+    records = [
+        {"id": item["id"], "molblock": item["molblock"], "status": "failed"}
+        for item in read_json(reference)["records"]
+    ]
+    atomic_json(
+        output / "generated/manifest.json",
+        {"records": records, "generation": {}},
+    )
+    atomic_json(output / "workflow.json", {"commands": [], "status": "failed"})
+    seen = {}
+
+    def resume(_module, arguments, out, workflow):
+        seen["resume"] = "--resume" in arguments
+        path = out / "generated/manifest.json"
+        report = read_json(path)
+        report["records"] = [record | {"status": "ok"} for record in report["records"]]
+        atomic_json(path, report)
+        workflow["commands"].append({"seconds": 0.01})
+        return 0
+
+    with patch("stifflow.formal.run_command", side_effect=resume), patch(
+        "stifflow.formal.provenance", return_value={}
+    ):
+        workflow = generate(checkpoint, reference, config, output, "final", resume=True)
+    assert seen["resume"]
+    assert workflow["status"] == "completed"
+    assert all(
+        record["status"] == "ok"
+        for record in read_json(output / "generated/manifest.json")["records"]
+    )

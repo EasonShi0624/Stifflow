@@ -289,6 +289,24 @@ sbatch "${CPU_ARGS[@]}" scripts/formal_task.sbatch formal summarize \
 三个 seeds 汇总均值及样本标准差（ddof=1）。生成不读取 Hessian 缓存。
 出现非有限 loss/gradient/坐标或配对错误立即失败；手性低是监测风险，不自动删构象或改变方法。
 
+### 2026-10-18 评估工具补丁（staged manifest / 多片段 / 增量落盘）
+
+训练时 packed cache 被复制到节点本地并只重写 manifest 的绝对 `path`，因此九个 run 的
+`training_signature.train/val` 文件哈希不同。`formal summarize` 新增
+`--normalize-staged-labels`：以冻结的 `official_data` 哈希作为 canonical 数据身份，把每个 run 的
+staged train/val 哈希记录在 `staged_label_manifests` 中而不参与相等性比较；其他数据/配置差异
+仍然报错。benchmark 的 `summarize` 提供同名参数。
+
+formal 评测现在允许参考集中的多片段分子（val 12 个，test 0 个），并在报告 protocol 与
+`aggregate.multi_fragment_molecules` 中记录；benchmark CLI 默认仍拒绝，只有显式
+`--allow-disconnected` 才评测。这样 val 不会因 12 个多片段分子被判为不完整，test 主比较数值不变。
+
+`formal generate --resume` 复用已存在的 `generated/manifest.json`；benchmark 每
+`--flush-every`（默认 50）个分子原子写一次 manifest，并校验 checkpoint、参考清单、模型/采样配置、
+训练签名和代码 provenance。已完成且 NPZ 指纹完整的分子跳过，失败/中断的分子重生成。
+以上补丁只涉及生成/评测编排与报告，不改变训练目标、Euler50、2×参考数、seed42 或 RMSD 协议；
+训练 checkpoint 仍对应 `stifflow-v1@793d502`。
+
 SHHPC 回传完整代码 SHA、实际配置/输入哈希、环境、分片和过滤数量、作业命令与资源、
 新接口验收结果及指标摘要。数据、标签、checkpoint、构象和大量日志仍留在 Git 外。
 

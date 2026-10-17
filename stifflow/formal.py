@@ -110,7 +110,11 @@ def acceptance_signature(train, val, config, prov):
 
 def run_command(module, arguments, output, report):
     command = [sys.executable, "-m", module, *map(str, arguments)]
-    log = output / f"command-{len(report['commands']) + 1:02d}.log"
+    log_index = len(report["commands"]) + 1
+    log = output / f"command-{log_index:02d}.log"
+    while log.exists():
+        log_index += 1
+        log = output / f"command-{log_index:02d}.log"
     item = {"command": command, "log": str(log), "status": "started"}
     report["commands"].append(item)
     atomic_json(output / "workflow.json", report)
@@ -276,7 +280,7 @@ def export_references(dataset, data_manifest, config, output):
     return {split: len(r["records"]) for split, r in manifests.items()}
 
 
-def generate(checkpoint, references, config, output, stage):
+def generate(checkpoint, references, config, output, stage, resume=False):
     import torch
     import yaml
 
@@ -338,22 +342,34 @@ def generate(checkpoint, references, config, output, stage):
         raise ValueError("Final evaluation requires the entire frozen split")
     for item in reference["records"]:
         verified_path(item["cache"])
-    output.mkdir(parents=True, exist_ok=False)
-    workflow = {"commands": [], "status": "started"}
     directory = output / "generated"
+    if resume:
+        if not (directory / "manifest.json").is_file():
+            raise FileNotFoundError("Resume requires an existing generated manifest")
+        if (output / "workflow.json").is_file():
+            workflow = read_json(output / "workflow.json")
+        else:
+            workflow = {"commands": []}
+        workflow.update(status="started", resumed=True)
+    else:
+        output.mkdir(parents=True, exist_ok=False)
+        workflow = {"commands": [], "status": "started"}
+    arguments = [
+        references,
+        "--checkpoint",
+        checkpoint,
+        "--steps",
+        50,
+        "--seed",
+        cfg["generation_seed"],
+        "--output",
+        directory,
+    ]
+    if resume:
+        arguments.append("--resume")
     result = run_command(
         "stifflow_benchmark.generate",
-        [
-            references,
-            "--checkpoint",
-            checkpoint,
-            "--steps",
-            50,
-            "--seed",
-            cfg["generation_seed"],
-            "--output",
-            directory,
-        ],
+        arguments,
         output,
         workflow,
     )
@@ -419,12 +435,14 @@ def generate(checkpoint, references, config, output, stage):
     return workflow
 
 
-def evaluate_generated(generated, output):
+def evaluate_generated(generated, output, allow_disconnected=True):
     from stifflow_benchmark.evaluate import evaluate
 
     if output.exists():
         raise FileExistsError(output)
-    report = evaluate(generated)
+    # Formal references cover every frozen-split molecule, including the few
+    # multi-fragment QM9 species; the evaluator records that choice in protocol.
+    report = evaluate(generated, allow_disconnected=allow_disconnected)
     expected = report["run"]["formal"]["expected_molecules"]
     report["complete"] = (
         report["aggregate"]["attempted"] == expected
@@ -439,11 +457,12 @@ def evaluate_generated(generated, output):
     return report
 
 
-def summarize(paths):
+def summarize(paths, normalize_staged_labels=False):
     from stifflow_benchmark.summarize import summarize as compare_methods
 
     reports = [read_json(path) for path in paths]
     grouped, common = {}, None
+    staged_label_manifests = {}
     for path, report in zip(paths, reports):
         run = report["run"]
         seed = run["formal"]["training_seed"]
@@ -470,6 +489,13 @@ def summarize(paths):
             }
         )
         signature["data"].pop("training_seed")
+        if normalize_staged_labels:
+            for key in ("train", "val"):
+                if key not in signature["data"]:
+                    raise ValueError(f"Training data lacks staged {key} manifest hash")
+                staged_label_manifests.setdefault(f"{method}-seed{seed}", {})[key] = (
+                    signature["data"].pop(key)
+                )
         signature["config"]["model"].pop("seed")
         signature["config"]["model"].pop("method")
         if common is not None and signature != common:
@@ -479,7 +505,10 @@ def summarize(paths):
     if set(grouped) != {(s, m) for s in SEEDS for m in METHODS}:
         raise ValueError("All nine method/seed reports are required")
     per_seed = {
-        str(seed): compare_methods([grouped[seed, method][0] for method in METHODS])
+        str(seed): compare_methods(
+            [grouped[seed, method][0] for method in METHODS],
+            normalize_staged_labels=normalize_staged_labels,
+        )
         for seed in SEEDS
     }
     thresholds = np.asarray(reports[0]["protocol"]["thresholds"])
@@ -532,6 +561,15 @@ def summarize(paths):
         "per_seed": per_seed,
         "methods": methods,
         "signature": common,
+        "staged_label_manifests": staged_label_manifests,
+        "data_identity": (
+            {
+                "canonical": "training_signature.official_data (frozen data manifest)",
+                "normalization": "per-run staged train/val manifest path hashes are excluded from equality and recorded per run",
+            }
+            if normalize_staged_labels
+            else None
+        ),
         "reports": [fingerprint(path) for path in paths],
     }
 
@@ -551,6 +589,16 @@ def main():
     parser.add_argument("--references", type=Path)
     parser.add_argument("--stage", choices=("monitor", "final"), default="final")
     parser.add_argument("--reports", type=Path, nargs="+")
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="resume an existing formal generation directory",
+    )
+    parser.add_argument(
+        "--normalize-staged-labels",
+        action="store_true",
+        help="compare frozen data identity while recording per-run staged train/val hashes",
+    )
     args = parser.parse_args()
     if not os.getenv("SLURM_JOB_ID"):
         parser.error("Formal execution/evaluation belongs in an SHHPC allocation")
@@ -575,14 +623,21 @@ def main():
         )
     elif args.action == "generate":
         report = generate(
-            args.checkpoint, args.references, args.config, args.output, args.stage
+            args.checkpoint,
+            args.references,
+            args.config,
+            args.output,
+            args.stage,
+            resume=args.resume,
         )
     elif args.action == "evaluate":
         report = evaluate_generated(args.manifest, args.output)
     else:
         if args.output.exists():
             parser.error("Existing summary is protected")
-        report = summarize(args.reports)
+        report = summarize(
+            args.reports, normalize_staged_labels=args.normalize_staged_labels
+        )
         atomic_json(args.output, report)
     print(
         json.dumps(
