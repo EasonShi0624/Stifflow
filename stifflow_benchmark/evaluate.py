@@ -11,8 +11,9 @@ import rdkit
 from rdkit import Chem
 from rdkit.Chem import rdMolAlign
 from stifflow.preflight import fingerprint, provenance
+from stifflow.research_paths import METHODS as PATH_METHODS
 
-METHODS = {"precision", "alternative_a", "control", "etflow_pretrained"}
+METHODS = {*PATH_METHODS, "etflow_pretrained"}
 DEFAULT_THRESHOLDS = np.arange(0.05, 3.05, 0.05)
 
 
@@ -64,7 +65,7 @@ def tetrahedral_chirality(mol, generated):
     }
 
 
-def evaluate_record(record, base_dir, thresholds, ratio=2):
+def evaluate_record(record, base_dir, thresholds, ratio=2, allow_disconnected=False):
     """An attempted molecule is always returned, including explicit failures."""
     result = {"id": record["id"], "input_status": record["status"]}
     if record["status"] != "ok":
@@ -76,8 +77,11 @@ def evaluate_record(record, base_dir, thresholds, ratio=2):
         path = (base_dir / record["npz"]).resolve()
         result["input"] = fingerprint(path)
         mol = Chem.MolFromMolBlock(record["molblock"], removeHs=False, sanitize=True)
-        if mol is None or len(Chem.GetMolFrags(mol)) != 1:
-            raise ValueError("invalid or disconnected molecule")
+        if mol is None:
+            raise ValueError("invalid molecule")
+        result["multi_fragment"] = len(Chem.GetMolFrags(mol)) != 1
+        if result["multi_fragment"] and not allow_disconnected:
+            raise ValueError("disconnected molecule")
         n_atoms = mol.GetNumAtoms()
         with np.load(path, allow_pickle=False) as data:
             ref = data["pos_ref"]
@@ -159,6 +163,9 @@ def aggregate(records, n_thresholds):
         "succeeded": len(successful),
         "failed": total - len(successful),
         "success_fraction": len(successful) / total,
+        "multi_fragment_molecules": sum(
+            1 for r in successful if r.get("multi_fragment")
+        ),
         "successful_only": metrics,
         "attempted_coverage_failures_zero": attempted_cov,
         "attempted_mat": (
@@ -174,7 +181,9 @@ def aggregate(records, n_thresholds):
     }
 
 
-def evaluate(manifest_path, thresholds=DEFAULT_THRESHOLDS, ratio=2):
+def evaluate(
+    manifest_path, thresholds=DEFAULT_THRESHOLDS, ratio=2, allow_disconnected=False
+):
     manifest_path = Path(manifest_path).resolve()
     manifest = json.loads(manifest_path.read_text())
     thresholds = np.asarray(thresholds, dtype=np.float64)
@@ -216,7 +225,14 @@ def evaluate(manifest_path, thresholds=DEFAULT_THRESHOLDS, ratio=2):
         raise ValueError("duplicate attempted molecule ID")
     started = time.perf_counter()
     results = [
-        evaluate_record(r, manifest_path.parent, thresholds, ratio) for r in records
+        evaluate_record(
+            r,
+            manifest_path.parent,
+            thresholds,
+            ratio,
+            allow_disconnected=allow_disconnected,
+        )
+        for r in records
     ]
     return {
         "schema_version": 1,
@@ -231,6 +247,11 @@ def evaluate(manifest_path, thresholds=DEFAULT_THRESHOLDS, ratio=2):
             "generated_reference_ratio": ratio,
             "force_field_optimization": False,
             "partial_rmsd_failure": "entire molecule marked failed",
+            "connectivity": (
+                "multi-fragment reference molecules allowed"
+                if allow_disconnected
+                else "single-fragment molecules only"
+            ),
             "chirality": "all specified tetrahedral atom-index CIP labels; no E/Z metric",
         },
         "environment": {
@@ -254,10 +275,16 @@ def main():
         "--thresholds", type=float, nargs="+", default=DEFAULT_THRESHOLDS
     )
     parser.add_argument("--ratio", type=int, default=2)
+    parser.add_argument("--allow-disconnected", action="store_true")
     args = parser.parse_args()
     if args.output.exists():
         parser.error("output already exists; choose a new report path")
-    report = evaluate(args.manifest, args.thresholds, args.ratio)
+    report = evaluate(
+        args.manifest,
+        args.thresholds,
+        args.ratio,
+        allow_disconnected=args.allow_disconnected,
+    )
     report["evaluation_provenance"] = provenance()
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with args.output.open("x") as stream:
