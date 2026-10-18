@@ -1,0 +1,1205 @@
+{
+  "schema_version": 1,
+  "steps": 50,
+  "seed": 42,
+  "methods": {
+    "alternative_a": {
+      "checkpoint": "/gpfsnyu/scratch/ys6132/stifflow/runs/formal-4090d-staged/alternative_a-seed42/checkpoints/step-00250000.ckpt",
+      "equivariance": [
+        {
+          "id": "qm9:O=C1C[C@H](C2CCC2)O1",
+          "n_atoms": 19,
+          "rotation_equivariance_relative_error": [
+            3.1482478718608113e-07,
+            3.272582585448291e-07,
+            4.204575518979366e-07
+          ],
+          "translation_invariance_included": true,
+          "permutation_equivariance_relative_error": [
+            3.7745585320843415e-07,
+            2.447627417684756e-07
+          ]
+        },
+        {
+          "id": "qm9:OC[C@@H]1CC[C@H](CO)O1",
+          "n_atoms": 21,
+          "rotation_equivariance_relative_error": [
+            2.4019981614710814e-07,
+            2.733338945151943e-07,
+            2.2451222127470835e-07
+          ],
+          "translation_invariance_included": true,
+          "permutation_equivariance_relative_error": [
+            1.8298254098775163e-07,
+            1.8627343812597984e-07
+          ]
+        },
+        {
+          "id": "qm9:c1n[nH]c2c1COCO2",
+          "n_atoms": 15,
+          "rotation_equivariance_relative_error": [
+            3.2443754810121076e-07,
+            2.79771079777692e-07,
+            3.6488971828025807e-07
+          ],
+          "translation_invariance_included": true,
+          "permutation_equivariance_relative_error": [
+            1.9193508264817194e-07,
+            2.4738738407205517e-07
+          ]
+        },
+        {
+          "id": "qm9:c1nc2c([nH]1)[C@H]1C[C@@H]2O1",
+          "n_atoms": 15,
+          "rotation_equivariance_relative_error": [
+            2.399561778747917e-07,
+            2.6585314185739563e-07,
+            2.549214683057679e-07
+          ],
+          "translation_invariance_included": true,
+          "permutation_equivariance_relative_error": [
+            2.640770178747916e-07,
+            2.4791086234212206e-07
+          ]
+        },
+        {
+          "id": "qm9:N#C[C@]12[C@@H]3[C@@H]4C[C@H]1[C@H]2[C@@H]43",
+          "n_atoms": 16,
+          "rotation_equivariance_relative_error": [
+            2.569781072087694e-07,
+            1.926243944288794e-07,
+            2.760049963234863e-07
+          ],
+          "translation_invariance_included": true,
+          "permutation_equivariance_relative_error": [
+            2.1358578275936651e-07,
+            2.1240511945684977e-07
+          ]
+        },
+        {
+          "id": "qm9:C[C@H]1[C@@H]2[C@H]3C[C@H]([C@@H]3O)[C@H]12",
+          "n_atoms": 21,
+          "rotation_equivariance_relative_error": [
+            3.528655720774574e-07,
+            3.4252805387773034e-07,
+            4.3257988583265735e-07
+          ],
+          "translation_invariance_included": true,
+          "permutation_equivariance_relative_error": [
+            3.0181791297911686e-07,
+            2.3072082559165378e-07
+          ]
+        },
+        {
+          "id": "qm9:Nc1cc(=O)oc(N)n1",
+          "n_atoms": 14,
+          "rotation_equivariance_relative_error": [
+            2.2190819419385373e-07,
+            2.432699456405282e-07,
+            2.3652428099359108e-07
+          ],
+          "translation_invariance_included": true,
+          "permutation_equivariance_relative_error": [
+            2.2367377223554333e-07,
+            1.995748719956665e-07
+          ]
+        },
+        {
+          "id": "qm9:C#CCC[C@@H]1O[C@@H]1CO",
+          "n_atoms": 19,
+          "rotation_equivariance_relative_error": [
+            4.832192169432961e-07,
+            3.580206254372133e-07,
+            4.819483150404756e-07
+          ],
+          "translation_invariance_included": true,
+          "permutation_equivariance_relative_error": [
+            2.5159647830415967e-07,
+            2.6794394831888125e-07
+          ]
+        },
+        {
+          "id": "qm9:O=C1CC=CC2(CC2)C1",
+          "n_atoms": 19,
+          "rotation_equivariance_relative_error": [
+            3.421883952764217e-07,
+            3.11664423573155e-07,
+            3.22159876306683e-07
+          ],
+          "translation_invariance_included": true,
+          "permutation_equivariance_relative_error": [
+            2.6912455585688216e-07,
+            2.273040388902643e-07
+          ]
+        },
+        {
+          "id": "qm9:CNCc1n[nH]c(C)n1",
+          "n_atoms": 19,
+          "rotation_equivariance_relative_error": [
+            4.872756001074968e-07,
+            5.077301035184669e-07,
+            3.704712952342299e-07
+          ],
+          "translation_invariance_included": true,
+          "permutation_equivariance_relative_error": [
+            2.0175361521343102e-07,
+            2.1629971311032992e-07
+          ]
+        },
+        {
+          "id": "qm9:C[C@H]1[C@H]2CC=CC(=O)N21",
+          "n_atoms": 18,
+          "rotation_equivariance_relative_error": [
+            5.390052403729244e-07,
+            1.7978653423337405e-06,
+            1.0853058353038774e-06
+          ],
+          "translation_invariance_included": true,
+          "permutation_equivariance_relative_error": [
+            6.188080070218407e-07,
+            1.220097937875622e-06
+          ]
+        },
+        {
+          "id": "qm9:[NH][C]1N(C=O)C[C@@H]2CN12",
+          "n_atoms": 16,
+          "rotation_equivariance_relative_error": [
+            2.0322358848438202e-07,
+            2.966311778348819e-07,
+            1.9684217797508886e-07
+          ],
+          "translation_invariance_included": true,
+          "permutation_equivariance_relative_error": [
+            1.5890362419972954e-07,
+            1.6465545365647482e-07
+          ]
+        },
+        {
+          "id": "qm9:CC[C@@H](C)c1ccco1",
+          "n_atoms": 21,
+          "rotation_equivariance_relative_error": [
+            4.3847261893838143e-07,
+            3.106841319374435e-07,
+            3.136267937512673e-07
+          ],
+          "translation_invariance_included": true,
+          "permutation_equivariance_relative_error": [
+            1.7242171978020035e-07,
+            2.486025964628123e-07
+          ]
+        },
+        {
+          "id": "qm9:O=CCCn1nnnn1",
+          "n_atoms": 14,
+          "rotation_equivariance_relative_error": [
+            4.0666547296409937e-07,
+            4.3663918070890576e-07,
+            3.587232362316643e-07
+          ],
+          "translation_invariance_included": true,
+          "permutation_equivariance_relative_error": [
+            3.5302521150447437e-07,
+            2.861634283694586e-07
+          ]
+        },
+        {
+          "id": "qm9:CC[C@]12C[C@H](CCO1)C2",
+          "n_atoms": 23,
+          "rotation_equivariance_relative_error": [
+            5.115274642860214e-07,
+            9.80674372650754e-07,
+            6.518455700295171e-07
+          ],
+          "translation_invariance_included": true,
+          "permutation_equivariance_relative_error": [
+            5.374489927595162e-07,
+            5.05454512648694e-07
+          ]
+        },
+        {
+          "id": "qm9:c1[nH]cc2c1NCCO2",
+          "n_atoms": 17,
+          "rotation_equivariance_relative_error": [
+            3.073825440695413e-07,
+            3.610889192923575e-07,
+            2.772682826597651e-07
+          ],
+          "translation_invariance_included": true,
+          "permutation_equivariance_relative_error": [
+            2.3319820503562266e-07,
+            2.3209828761036376e-07
+          ]
+        },
+        {
+          "id": "qm9:C[C@H]1[C@H]2OC[C@H]3O[C@H]3[C@@H]12",
+          "n_atoms": 19,
+          "rotation_equivariance_relative_error": [
+            8.611716645300705e-07,
+            6.238111148598665e-07,
+            7.666783552165074e-07
+          ],
+          "translation_invariance_included": true,
+          "permutation_equivariance_relative_error": [
+            5.291782752089414e-07,
+            5.370897076209631e-07
+          ]
+        },
+        {
+          "id": "qm9:C[C@H]1[C@H]2COC(=O)CN21",
+          "n_atoms": 18,
+          "rotation_equivariance_relative_error": [
+            2.9424347764574857e-07,
+            3.4316734576139085e-07,
+            3.689424653394869e-07
+          ],
+          "translation_invariance_included": true,
+          "permutation_equivariance_relative_error": [
+            2.4218986145074694e-07,
+            2.471430170749963e-07
+          ]
+        },
+        {
+          "id": "qm9:N#C[C@]1(O)C[C@@H]2C[C@H]1N2",
+          "n_atoms": 17,
+          "rotation_equivariance_relative_error": [
+            3.7761348874585693e-07,
+            4.4832807127311496e-07,
+            1.1349564964712382e-06
+          ],
+          "translation_invariance_included": true,
+          "permutation_equivariance_relative_error": [
+            4.3162080196539833e-07,
+            3.93819923135144e-07
+          ]
+        },
+        {
+          "id": "qm9:O=c1[nH]nc([C@H]2CO2)[nH]1",
+          "n_atoms": 14,
+          "rotation_equivariance_relative_error": [
+            3.144072070953498e-07,
+            3.4426372130040964e-07,
+            2.4189324063481986e-07
+          ],
+          "translation_invariance_included": true,
+          "permutation_equivariance_relative_error": [
+            2.0023960422440636e-07,
+            3.2197232153608336e-07
+          ]
+        },
+        {
+          "id": "qm9:Cc1nocc1CO",
+          "n_atoms": 15,
+          "rotation_equivariance_relative_error": [
+            2.663407718681263e-07,
+            2.343438452954063e-07,
+            2.5377668080840487e-07
+          ],
+          "translation_invariance_included": true,
+          "permutation_equivariance_relative_error": [
+            1.7614421977200983e-07,
+            2.0675919895744198e-07
+          ]
+        },
+        {
+          "id": "qm9:C[C@H]1OC[C@](C)(C#N)O1",
+          "n_atoms": 18,
+          "rotation_equivariance_relative_error": [
+            4.948294806905537e-07,
+            3.2000042022927244e-07,
+            4.6100972768278853e-07
+          ],
+          "translation_invariance_included": true,
+          "permutation_equivariance_relative_error": [
+            3.2257324747952153e-07,
+            2.692107397477502e-07
+          ]
+        },
+        {
+          "id": "qm9:[NH][C]1O[C@H]2C=C[C@@H]1C2",
+          "n_atoms": 15,
+          "rotation_equivariance_relative_error": [
+            4.991870156260983e-07,
+            5.013660908362687e-07,
+            5.834704870645912e-07
+          ],
+          "translation_invariance_included": true,
+          "permutation_equivariance_relative_error": [
+            3.1725831334224874e-07,
+            4.187938367768883e-07
+          ]
+        },
+        {
+          "id": "qm9:CCN=C1COC(=O)N1",
+          "n_atoms": 17,
+          "rotation_equivariance_relative_error": [
+            2.68163001792913e-07,
+            3.1548827456090745e-07,
+            2.722818442135086e-07
+          ],
+          "translation_invariance_included": true,
+          "permutation_equivariance_relative_error": [
+            1.4443314059508934e-07,
+            1.9329069061296518e-07
+          ]
+        },
+        {
+          "id": "qm9:CNc1c(C)coc1C",
+          "n_atoms": 20,
+          "rotation_equivariance_relative_error": [
+            4.1163396441141165e-07,
+            4.4357604943235655e-07,
+            7.402052654005768e-07
+          ],
+          "translation_invariance_included": true,
+          "permutation_equivariance_relative_error": [
+            3.6775607664628864e-07,
+            4.830258556048672e-07
+          ]
+        },
+        {
+          "id": "qm9:CO[C@H]1COCC1(C)C",
+          "n_atoms": 23,
+          "rotation_equivariance_relative_error": [
+            5.30105231665573e-07,
+            5.378288955941668e-07,
+            3.570912331090301e-07
+          ],
+          "translation_invariance_included": true,
+          "permutation_equivariance_relative_error": [
+            3.2980559104348006e-07,
+            2.3693372475415073e-07
+          ]
+        },
+        {
+          "id": "qm9:O=CCNc1ccn[nH]1",
+          "n_atoms": 16,
+          "rotation_equivariance_relative_error": [
+            2.3073332112623235e-07,
+            2.676508901677913e-07,
+            3.0921278374607836e-07
+          ],
+          "translation_invariance_included": true,
+          "permutation_equivariance_relative_error": [
+            2.2447958828204842e-07,
+            2.5813552373298787e-07
+          ]
+        },
+        {
+          "id": "qm9:C[C@@H](O)[C@H]1CO[C]1[NH]",
+          "n_atoms": 17,
+          "rotation_equivariance_relative_error": [
+            7.793060174671928e-07,
+            1.667243240174561e-06,
+            1.1679327906483076e-06
+          ],
+          "translation_invariance_included": true,
+          "permutation_equivariance_relative_error": [
+            4.2782656669202573e-07,
+            5.151567309049568e-07
+          ]
+        },
+        {
+          "id": "qm9:C[C@]12C[C@H]1C[C@]2(O)CO",
+          "n_atoms": 21,
+          "rotation_equivariance_relative_error": [
+            3.134515218995754e-07,
+            2.822020581529409e-07,
+            2.586191299415261e-07
+          ],
+          "translation_invariance_included": true,
+          "permutation_equivariance_relative_error": [
+            1.972752417487792e-07,
+            2.457960507416574e-07
+          ]
+        },
+        {
+          "id": "qm9:C[C@@]12C[C@H]3C[C@]1(C=O)N32",
+          "n_atoms": 18,
+          "rotation_equivariance_relative_error": [
+            2.9723368816279974e-07,
+            2.7675830140594835e-07,
+            3.369710202400586e-07
+          ],
+          "translation_invariance_included": true,
+          "permutation_equivariance_relative_error": [
+            2.0820460873286372e-07,
+            2.0746313150479178e-07
+          ]
+        },
+        {
+          "id": "qm9:C[C@@]1(C#N)CN[C](N)[N]1",
+          "n_atoms": 17,
+          "rotation_equivariance_relative_error": [
+            2.516018276514579e-07,
+            2.0026663373421834e-07,
+            2.6895763114272063e-07
+          ],
+          "translation_invariance_included": true,
+          "permutation_equivariance_relative_error": [
+            2.0432951231930723e-07,
+            2.3427879554000238e-07
+          ]
+        },
+        {
+          "id": "qm9:CN=C1C[C@@](C)(CO)O1",
+          "n_atoms": 20,
+          "rotation_equivariance_relative_error": [
+            4.358396412528079e-07,
+            2.1810801646004023e-07,
+            3.4607638462848463e-07
+          ],
+          "translation_invariance_included": true,
+          "permutation_equivariance_relative_error": [
+            3.529727602105331e-07,
+            2.856510339404128e-07
+          ]
+        }
+      ],
+      "sampling_consistency": [
+        {
+          "id": "qm9:O=C1C[C@H](C2CCC2)O1",
+          "n_atoms": 19,
+          "rotation_endpoint_rmsd_angstrom": 2.989513901472756e-07,
+          "permutation_endpoint_rmsd_angstrom": 2.6448051926308835e-07,
+          "endpoint_scale_angstrom": 2.3386921882629395,
+          "rotation_relative": 1.2782844687625238e-07,
+          "permutation_relative": 1.1308906772358568e-07
+        },
+        {
+          "id": "qm9:OC[C@@H]1CC[C@H](CO)O1",
+          "n_atoms": 21,
+          "rotation_endpoint_rmsd_angstrom": 2.2950262193875647e-07,
+          "permutation_endpoint_rmsd_angstrom": 1.6401403968302475e-07,
+          "endpoint_scale_angstrom": 2.361128330230713,
+          "rotation_relative": 9.720040160474085e-08,
+          "permutation_relative": 6.946426315887644e-08
+        },
+        {
+          "id": "qm9:c1n[nH]c2c1COCO2",
+          "n_atoms": 15,
+          "rotation_endpoint_rmsd_angstrom": 2.97634302173153e-07,
+          "permutation_endpoint_rmsd_angstrom": 1.6652228396196733e-07,
+          "endpoint_scale_angstrom": 2.2187957763671875,
+          "rotation_relative": 1.3414227002922582e-07,
+          "permutation_relative": 7.505074857976007e-08
+        },
+        {
+          "id": "qm9:c1nc2c([nH]1)[C@H]1C[C@@H]2O1",
+          "n_atoms": 15,
+          "rotation_endpoint_rmsd_angstrom": 3.1843311423769496e-07,
+          "permutation_endpoint_rmsd_angstrom": 2.4221671424129454e-07,
+          "endpoint_scale_angstrom": 2.195272445678711,
+          "rotation_relative": 1.4505402956453782e-07,
+          "permutation_relative": 1.1033560536783786e-07
+        },
+        {
+          "id": "qm9:N#C[C@]12[C@@H]3[C@@H]4C[C@H]1[C@H]2[C@@H]43",
+          "n_atoms": 16,
+          "rotation_endpoint_rmsd_angstrom": 2.6713161003781764e-07,
+          "permutation_endpoint_rmsd_angstrom": 2.1211727130321378e-07,
+          "endpoint_scale_angstrom": 2.122946262359619,
+          "rotation_relative": 1.2583060380478276e-07,
+          "permutation_relative": 9.991645811488841e-08
+        },
+        {
+          "id": "qm9:C[C@H]1[C@@H]2[C@H]3C[C@H]([C@@H]3O)[C@H]12",
+          "n_atoms": 21,
+          "rotation_endpoint_rmsd_angstrom": 2.0527520881166964e-07,
+          "permutation_endpoint_rmsd_angstrom": 0.0007487154216505587,
+          "endpoint_scale_angstrom": 2.31598162651062,
+          "rotation_relative": 8.863421301012136e-08,
+          "permutation_relative": 0.0003232821077162917
+        },
+        {
+          "id": "qm9:Nc1cc(=O)oc(N)n1",
+          "n_atoms": 14,
+          "rotation_endpoint_rmsd_angstrom": 2.3006348942761377e-07,
+          "permutation_endpoint_rmsd_angstrom": 2.386784387908847e-07,
+          "endpoint_scale_angstrom": 2.375789165496826,
+          "rotation_relative": 9.683666074784156e-08,
+          "permutation_relative": 1.0046280295287572e-07
+        },
+        {
+          "id": "qm9:C#CCC[C@@H]1O[C@@H]1CO",
+          "n_atoms": 19,
+          "rotation_endpoint_rmsd_angstrom": 3.3145450075257484e-07,
+          "permutation_endpoint_rmsd_angstrom": 1.77413539859117e-07,
+          "endpoint_scale_angstrom": 2.6673221588134766,
+          "rotation_relative": 1.2426489228433436e-07,
+          "permutation_relative": 6.65137277373488e-08
+        },
+        {
+          "id": "qm9:O=C1CC=CC2(CC2)C1",
+          "n_atoms": 19,
+          "rotation_endpoint_rmsd_angstrom": 3.0330346512035734e-07,
+          "permutation_endpoint_rmsd_angstrom": 1.963725253517623e-07,
+          "endpoint_scale_angstrom": 2.3256444931030273,
+          "rotation_relative": 1.3041695152455136e-07,
+          "permutation_relative": 8.44378949293962e-08
+        },
+        {
+          "id": "qm9:CNCc1n[nH]c(C)n1",
+          "n_atoms": 19,
+          "rotation_endpoint_rmsd_angstrom": 2.9953975987904303e-07,
+          "permutation_endpoint_rmsd_angstrom": 1.509909992591929e-07,
+          "endpoint_scale_angstrom": 2.969926595687866,
+          "rotation_relative": 1.008576307286364e-07,
+          "permutation_relative": 5.083997681236354e-08
+        },
+        {
+          "id": "qm9:C[C@H]1[C@H]2CC=CC(=O)N21",
+          "n_atoms": 18,
+          "rotation_endpoint_rmsd_angstrom": 3.2378004986391566e-07,
+          "permutation_endpoint_rmsd_angstrom": 1.5594146418607124e-07,
+          "endpoint_scale_angstrom": 2.2546114921569824,
+          "rotation_relative": 1.4360791248968393e-07,
+          "permutation_relative": 6.91655590014235e-08
+        },
+        {
+          "id": "qm9:[NH][C]1N(C=O)C[C@@H]2CN12",
+          "n_atoms": 16,
+          "rotation_endpoint_rmsd_angstrom": 3.7292632728968565e-07,
+          "permutation_endpoint_rmsd_angstrom": 2.2243017383516417e-07,
+          "endpoint_scale_angstrom": 2.22469162940979,
+          "rotation_relative": 1.6763057061918413e-07,
+          "permutation_relative": 9.998247437743756e-08
+        },
+        {
+          "id": "qm9:CC[C@@H](C)c1ccco1",
+          "n_atoms": 21,
+          "rotation_endpoint_rmsd_angstrom": 2.120565477292617e-07,
+          "permutation_endpoint_rmsd_angstrom": 1.5286448729057156e-07,
+          "endpoint_scale_angstrom": 2.663191556930542,
+          "rotation_relative": 7.962496996410848e-08,
+          "permutation_relative": 5.739898314590458e-08
+        },
+        {
+          "id": "qm9:O=CCCn1nnnn1",
+          "n_atoms": 14,
+          "rotation_endpoint_rmsd_angstrom": 2.429586746161238e-07,
+          "permutation_endpoint_rmsd_angstrom": 2.2479984806977882e-07,
+          "endpoint_scale_angstrom": 2.113520860671997,
+          "rotation_relative": 1.1495447200784889e-07,
+          "permutation_relative": 1.0636272972404132e-07
+        },
+        {
+          "id": "qm9:CC[C@]12C[C@H](CCO1)C2",
+          "n_atoms": 23,
+          "rotation_endpoint_rmsd_angstrom": 2.6708129106480427e-07,
+          "permutation_endpoint_rmsd_angstrom": 1.7087675985294482e-07,
+          "endpoint_scale_angstrom": 2.441525459289551,
+          "rotation_relative": 1.0939115545513137e-07,
+          "permutation_relative": 6.998770346743283e-08
+        },
+        {
+          "id": "qm9:c1[nH]cc2c1NCCO2",
+          "n_atoms": 17,
+          "rotation_endpoint_rmsd_angstrom": 3.6478032944689547e-07,
+          "permutation_endpoint_rmsd_angstrom": 2.5189135044456634e-07,
+          "endpoint_scale_angstrom": 2.400054931640625,
+          "rotation_relative": 1.5198832519951518e-07,
+          "permutation_relative": 1.0495232718376947e-07
+        }
+      ]
+    },
+    "control": {
+      "checkpoint": "/gpfsnyu/scratch/ys6132/stifflow/runs/formal-4090d-staged/control-seed42/checkpoints/step-00250000.ckpt",
+      "equivariance": [
+        {
+          "id": "qm9:O=C1C[C@H](C2CCC2)O1",
+          "n_atoms": 19,
+          "rotation_equivariance_relative_error": [
+            2.7979825225360914e-07,
+            2.45019349023918e-07,
+            2.851633595452345e-07
+          ],
+          "translation_invariance_included": true,
+          "permutation_equivariance_relative_error": [
+            2.0190838528809836e-07,
+            2.000681151963536e-07
+          ]
+        },
+        {
+          "id": "qm9:OC[C@@H]1CC[C@H](CO)O1",
+          "n_atoms": 21,
+          "rotation_equivariance_relative_error": [
+            4.855017869725212e-07,
+            1.3386806113483566e-07,
+            2.7734279667628233e-07
+          ],
+          "translation_invariance_included": true,
+          "permutation_equivariance_relative_error": [
+            2.888466980831238e-07,
+            2.6440911058387355e-07
+          ]
+        },
+        {
+          "id": "qm9:c1n[nH]c2c1COCO2",
+          "n_atoms": 15,
+          "rotation_equivariance_relative_error": [
+            2.0274578896103607e-07,
+            2.2221355539936725e-07,
+            2.311579415025395e-07
+          ],
+          "translation_invariance_included": true,
+          "permutation_equivariance_relative_error": [
+            1.7016085861123472e-07,
+            1.6454678618132796e-07
+          ]
+        },
+        {
+          "id": "qm9:c1nc2c([nH]1)[C@H]1C[C@@H]2O1",
+          "n_atoms": 15,
+          "rotation_equivariance_relative_error": [
+            2.551868128041925e-07,
+            2.270023792852025e-07,
+            2.4366125968456913e-07
+          ],
+          "translation_invariance_included": true,
+          "permutation_equivariance_relative_error": [
+            2.391997627954037e-07,
+            1.7394564541647276e-07
+          ]
+        },
+        {
+          "id": "qm9:N#C[C@]12[C@@H]3[C@@H]4C[C@H]1[C@H]2[C@@H]43",
+          "n_atoms": 16,
+          "rotation_equivariance_relative_error": [
+            1.875194390735502e-07,
+            1.739920928506473e-07,
+            2.2994078207831903e-07
+          ],
+          "translation_invariance_included": true,
+          "permutation_equivariance_relative_error": [
+            1.936923826190824e-07,
+            1.720055897414569e-07
+          ]
+        },
+        {
+          "id": "qm9:C[C@H]1[C@@H]2[C@H]3C[C@H]([C@@H]3O)[C@H]12",
+          "n_atoms": 21,
+          "rotation_equivariance_relative_error": [
+            3.010257862730059e-07,
+            2.6593000280309254e-07,
+            2.6559332132535527e-07
+          ],
+          "translation_invariance_included": true,
+          "permutation_equivariance_relative_error": [
+            2.4799497299790976e-07,
+            3.3288574761714624e-07
+          ]
+        },
+        {
+          "id": "qm9:Nc1cc(=O)oc(N)n1",
+          "n_atoms": 14,
+          "rotation_equivariance_relative_error": [
+            2.0988629166306666e-07,
+            1.5440112165088042e-07,
+            1.6073483033067437e-07
+          ],
+          "translation_invariance_included": true,
+          "permutation_equivariance_relative_error": [
+            1.3971456523601497e-07,
+            1.3729195587808852e-07
+          ]
+        },
+        {
+          "id": "qm9:C#CCC[C@@H]1O[C@@H]1CO",
+          "n_atoms": 19,
+          "rotation_equivariance_relative_error": [
+            2.264543758147862e-07,
+            2.999385109001174e-07,
+            2.6425734158094057e-07
+          ],
+          "translation_invariance_included": true,
+          "permutation_equivariance_relative_error": [
+            2.7169546353419756e-07,
+            2.4231222560669796e-07
+          ]
+        },
+        {
+          "id": "qm9:O=C1CC=CC2(CC2)C1",
+          "n_atoms": 19,
+          "rotation_equivariance_relative_error": [
+            2.855569942341465e-07,
+            1.6731167366246364e-07,
+            2.765476576001112e-07
+          ],
+          "translation_invariance_included": true,
+          "permutation_equivariance_relative_error": [
+            2.3593171718226823e-07,
+            2.471345024855568e-07
+          ]
+        },
+        {
+          "id": "qm9:CNCc1n[nH]c(C)n1",
+          "n_atoms": 19,
+          "rotation_equivariance_relative_error": [
+            3.2778372646083834e-07,
+            3.7706248388215434e-07,
+            4.959317067936655e-07
+          ],
+          "translation_invariance_included": true,
+          "permutation_equivariance_relative_error": [
+            2.0428726309051189e-07,
+            2.903941210659277e-07
+          ]
+        },
+        {
+          "id": "qm9:C[C@H]1[C@H]2CC=CC(=O)N21",
+          "n_atoms": 18,
+          "rotation_equivariance_relative_error": [
+            1.1701613843441625e-06,
+            1.0773945293102838e-06,
+            5.816165210850789e-07
+          ],
+          "translation_invariance_included": true,
+          "permutation_equivariance_relative_error": [
+            5.416911239099147e-07,
+            9.267532554583425e-07
+          ]
+        },
+        {
+          "id": "qm9:[NH][C]1N(C=O)C[C@@H]2CN12",
+          "n_atoms": 16,
+          "rotation_equivariance_relative_error": [
+            1.8863154543450186e-07,
+            1.817709756061777e-07,
+            2.1467919697747e-07
+          ],
+          "translation_invariance_included": true,
+          "permutation_equivariance_relative_error": [
+            1.6559706151187949e-07,
+            1.723909182483304e-07
+          ]
+        },
+        {
+          "id": "qm9:CC[C@@H](C)c1ccco1",
+          "n_atoms": 21,
+          "rotation_equivariance_relative_error": [
+            2.950513160514805e-07,
+            1.9912573524131688e-07,
+            2.987786068116002e-07
+          ],
+          "translation_invariance_included": true,
+          "permutation_equivariance_relative_error": [
+            2.2056388414924495e-07,
+            1.9468556987010101e-07
+          ]
+        },
+        {
+          "id": "qm9:O=CCCn1nnnn1",
+          "n_atoms": 14,
+          "rotation_equivariance_relative_error": [
+            4.488743573190204e-07,
+            4.339191526036297e-07,
+            2.8680784400908276e-07
+          ],
+          "translation_invariance_included": true,
+          "permutation_equivariance_relative_error": [
+            2.536788917461912e-07,
+            2.001501778466624e-07
+          ]
+        },
+        {
+          "id": "qm9:CC[C@]12C[C@H](CCO1)C2",
+          "n_atoms": 23,
+          "rotation_equivariance_relative_error": [
+            3.264668841475119e-07,
+            5.963250769485895e-07,
+            5.07360517283711e-07
+          ],
+          "translation_invariance_included": true,
+          "permutation_equivariance_relative_error": [
+            2.086233253353344e-07,
+            2.600923434766571e-07
+          ]
+        },
+        {
+          "id": "qm9:c1[nH]cc2c1NCCO2",
+          "n_atoms": 17,
+          "rotation_equivariance_relative_error": [
+            2.3476160936694963e-07,
+            2.4918932286797864e-07,
+            2.493051796730478e-07
+          ],
+          "translation_invariance_included": true,
+          "permutation_equivariance_relative_error": [
+            1.9622513988132516e-07,
+            2.2265556187940676e-07
+          ]
+        },
+        {
+          "id": "qm9:C[C@H]1[C@H]2OC[C@H]3O[C@H]3[C@@H]12",
+          "n_atoms": 19,
+          "rotation_equivariance_relative_error": [
+            6.914951357556483e-07,
+            5.615999681234564e-07,
+            7.89718114570323e-07
+          ],
+          "translation_invariance_included": true,
+          "permutation_equivariance_relative_error": [
+            4.5668924381616167e-07,
+            4.0149574038767464e-07
+          ]
+        },
+        {
+          "id": "qm9:C[C@H]1[C@H]2COC(=O)CN21",
+          "n_atoms": 18,
+          "rotation_equivariance_relative_error": [
+            5.613007161745112e-07,
+            2.8767288167964124e-07,
+            6.085345046294292e-07
+          ],
+          "translation_invariance_included": true,
+          "permutation_equivariance_relative_error": [
+            2.812499532581049e-07,
+            4.4327681211775924e-07
+          ]
+        },
+        {
+          "id": "qm9:N#C[C@]1(O)C[C@@H]2C[C@H]1N2",
+          "n_atoms": 17,
+          "rotation_equivariance_relative_error": [
+            4.5583911964481846e-07,
+            5.019206463538233e-07,
+            4.42874967931974e-07
+          ],
+          "translation_invariance_included": true,
+          "permutation_equivariance_relative_error": [
+            3.4251208309107325e-07,
+            6.397684382159144e-07
+          ]
+        },
+        {
+          "id": "qm9:O=c1[nH]nc([C@H]2CO2)[nH]1",
+          "n_atoms": 14,
+          "rotation_equivariance_relative_error": [
+            1.5684622527256977e-07,
+            1.6906845837156234e-07,
+            2.056902482066829e-07
+          ],
+          "translation_invariance_included": true,
+          "permutation_equivariance_relative_error": [
+            1.3448813273233535e-07,
+            1.5121943456170173e-07
+          ]
+        },
+        {
+          "id": "qm9:Cc1nocc1CO",
+          "n_atoms": 15,
+          "rotation_equivariance_relative_error": [
+            1.6380159590664468e-07,
+            2.065781509477571e-07,
+            1.8641292284757153e-07
+          ],
+          "translation_invariance_included": true,
+          "permutation_equivariance_relative_error": [
+            1.8436328105828342e-07,
+            1.7024544298780764e-07
+          ]
+        },
+        {
+          "id": "qm9:C[C@H]1OC[C@](C)(C#N)O1",
+          "n_atoms": 18,
+          "rotation_equivariance_relative_error": [
+            2.688167841032536e-07,
+            3.640335524200476e-07,
+            2.481206354908198e-07
+          ],
+          "translation_invariance_included": true,
+          "permutation_equivariance_relative_error": [
+            5.14908386727768e-07,
+            1.9339290717959973e-07
+          ]
+        },
+        {
+          "id": "qm9:[NH][C]1O[C@H]2C=C[C@@H]1C2",
+          "n_atoms": 15,
+          "rotation_equivariance_relative_error": [
+            4.54887345197676e-07,
+            3.536105894462403e-07,
+            4.65612492300479e-07
+          ],
+          "translation_invariance_included": true,
+          "permutation_equivariance_relative_error": [
+            3.129089113592707e-07,
+            1.8105629653480458e-07
+          ]
+        },
+        {
+          "id": "qm9:CCN=C1COC(=O)N1",
+          "n_atoms": 17,
+          "rotation_equivariance_relative_error": [
+            2.4926212748794194e-07,
+            2.4170610445774954e-07,
+            2.485655498687983e-07
+          ],
+          "translation_invariance_included": true,
+          "permutation_equivariance_relative_error": [
+            1.535619540999245e-07,
+            1.7399122430152896e-07
+          ]
+        },
+        {
+          "id": "qm9:CNc1c(C)coc1C",
+          "n_atoms": 20,
+          "rotation_equivariance_relative_error": [
+            4.0036701439024576e-07,
+            5.281372850655589e-07,
+            5.492670404369866e-07
+          ],
+          "translation_invariance_included": true,
+          "permutation_equivariance_relative_error": [
+            4.551424312580984e-07,
+            3.920770646483388e-07
+          ]
+        },
+        {
+          "id": "qm9:CO[C@H]1COCC1(C)C",
+          "n_atoms": 23,
+          "rotation_equivariance_relative_error": [
+            1.9206648689856996e-07,
+            2.84145386449637e-07,
+            2.480551768327539e-07
+          ],
+          "translation_invariance_included": true,
+          "permutation_equivariance_relative_error": [
+            2.916859176568039e-07,
+            2.793798158914264e-07
+          ]
+        },
+        {
+          "id": "qm9:O=CCNc1ccn[nH]1",
+          "n_atoms": 16,
+          "rotation_equivariance_relative_error": [
+            2.5039359077833774e-07,
+            2.821702944845657e-07,
+            2.7422754656739077e-07
+          ],
+          "translation_invariance_included": true,
+          "permutation_equivariance_relative_error": [
+            2.069604672153439e-07,
+            2.6310269916782414e-07
+          ]
+        },
+        {
+          "id": "qm9:C[C@@H](O)[C@H]1CO[C]1[NH]",
+          "n_atoms": 17,
+          "rotation_equivariance_relative_error": [
+            3.4609109610749743e-07,
+            4.657459699248299e-07,
+            5.084921216601813e-07
+          ],
+          "translation_invariance_included": true,
+          "permutation_equivariance_relative_error": [
+            2.756704143050713e-07,
+            3.5549439222286783e-07
+          ]
+        },
+        {
+          "id": "qm9:C[C@]12C[C@H]1C[C@]2(O)CO",
+          "n_atoms": 21,
+          "rotation_equivariance_relative_error": [
+            5.710617712322146e-07,
+            3.8837110080160064e-07,
+            3.006895222701335e-07
+          ],
+          "translation_invariance_included": true,
+          "permutation_equivariance_relative_error": [
+            2.286956356164366e-07,
+            2.0023269044587767e-07
+          ]
+        },
+        {
+          "id": "qm9:C[C@@]12C[C@H]3C[C@]1(C=O)N32",
+          "n_atoms": 18,
+          "rotation_equivariance_relative_error": [
+            4.18678501662012e-07,
+            3.1833033606060676e-07,
+            2.9091574591074146e-07
+          ],
+          "translation_invariance_included": true,
+          "permutation_equivariance_relative_error": [
+            1.9836337328919737e-07,
+            1.8020808925667219e-07
+          ]
+        },
+        {
+          "id": "qm9:C[C@@]1(C#N)CN[C](N)[N]1",
+          "n_atoms": 17,
+          "rotation_equivariance_relative_error": [
+            2.0794589573991255e-07,
+            2.861884444671507e-07,
+            2.4861079275119065e-07
+          ],
+          "translation_invariance_included": true,
+          "permutation_equivariance_relative_error": [
+            1.8984151974081185e-07,
+            1.877528553265799e-07
+          ]
+        },
+        {
+          "id": "qm9:CN=C1C[C@@](C)(CO)O1",
+          "n_atoms": 20,
+          "rotation_equivariance_relative_error": [
+            3.3273128632156663e-07,
+            2.670551427418849e-07,
+            2.125952759295309e-07
+          ],
+          "translation_invariance_included": true,
+          "permutation_equivariance_relative_error": [
+            2.277872783691327e-07,
+            1.5980541256393464e-07
+          ]
+        }
+      ],
+      "sampling_consistency": [
+        {
+          "id": "qm9:O=C1C[C@H](C2CCC2)O1",
+          "n_atoms": 19,
+          "rotation_endpoint_rmsd_angstrom": 2.2633866162563575e-07,
+          "permutation_endpoint_rmsd_angstrom": 2.0185889582080563e-07,
+          "endpoint_scale_angstrom": 2.3371031284332275,
+          "rotation_relative": 9.684581688843621e-08,
+          "permutation_relative": 8.637141141312406e-08
+        },
+        {
+          "id": "qm9:OC[C@@H]1CC[C@H](CO)O1",
+          "n_atoms": 21,
+          "rotation_endpoint_rmsd_angstrom": 3.6463838251954356e-07,
+          "permutation_endpoint_rmsd_angstrom": 2.0598837124907732e-07,
+          "endpoint_scale_angstrom": 2.360018014907837,
+          "rotation_relative": 1.5450660978695256e-07,
+          "permutation_relative": 8.728254189073278e-08
+        },
+        {
+          "id": "qm9:c1n[nH]c2c1COCO2",
+          "n_atoms": 15,
+          "rotation_endpoint_rmsd_angstrom": 2.1044610828283552e-07,
+          "permutation_endpoint_rmsd_angstrom": 1.131572915369361e-07,
+          "endpoint_scale_angstrom": 2.2171034812927246,
+          "rotation_relative": 9.491938922044852e-08,
+          "permutation_relative": 5.103834462023287e-08
+        },
+        {
+          "id": "qm9:c1nc2c([nH]1)[C@H]1C[C@@H]2O1",
+          "n_atoms": 15,
+          "rotation_endpoint_rmsd_angstrom": 3.146482379864862e-07,
+          "permutation_endpoint_rmsd_angstrom": 2.70831407078731e-07,
+          "endpoint_scale_angstrom": 2.1950504779815674,
+          "rotation_relative": 1.4334442015921988e-07,
+          "permutation_relative": 1.2338276946039565e-07
+        },
+        {
+          "id": "qm9:N#C[C@]12[C@@H]3[C@@H]4C[C@H]1[C@H]2[C@@H]43",
+          "n_atoms": 16,
+          "rotation_endpoint_rmsd_angstrom": 1.7508208878000036e-07,
+          "permutation_endpoint_rmsd_angstrom": 1.9264376760474988e-07,
+          "endpoint_scale_angstrom": 2.1210553646087646,
+          "rotation_relative": 8.254479901909341e-08,
+          "permutation_relative": 9.08244880445559e-08
+        },
+        {
+          "id": "qm9:C[C@H]1[C@@H]2[C@H]3C[C@H]([C@@H]3O)[C@H]12",
+          "n_atoms": 21,
+          "rotation_endpoint_rmsd_angstrom": 3.7643643541127297e-07,
+          "permutation_endpoint_rmsd_angstrom": 1.4862582986552297e-07,
+          "endpoint_scale_angstrom": 2.3101158142089844,
+          "rotation_relative": 1.6295132611789423e-07,
+          "permutation_relative": 6.433696048975558e-08
+        },
+        {
+          "id": "qm9:Nc1cc(=O)oc(N)n1",
+          "n_atoms": 14,
+          "rotation_endpoint_rmsd_angstrom": 1.949838221980931e-07,
+          "permutation_endpoint_rmsd_angstrom": 1.1787236786631183e-07,
+          "endpoint_scale_angstrom": 2.374066114425659,
+          "rotation_relative": 8.213074649155849e-08,
+          "permutation_relative": 4.9649993801806085e-08
+        },
+        {
+          "id": "qm9:C#CCC[C@@H]1O[C@@H]1CO",
+          "n_atoms": 19,
+          "rotation_endpoint_rmsd_angstrom": 3.8233993104085524e-07,
+          "permutation_endpoint_rmsd_angstrom": 2.482829017935728e-07,
+          "endpoint_scale_angstrom": 2.6698594093322754,
+          "rotation_relative": 1.4320601665556517e-07,
+          "permutation_relative": 9.299474756075928e-08
+        },
+        {
+          "id": "qm9:O=C1CC=CC2(CC2)C1",
+          "n_atoms": 19,
+          "rotation_endpoint_rmsd_angstrom": 2.785752639234208e-07,
+          "permutation_endpoint_rmsd_angstrom": 1.673218719133729e-07,
+          "endpoint_scale_angstrom": 2.3347532749176025,
+          "rotation_relative": 1.1931678902270828e-07,
+          "permutation_relative": 7.166576173633505e-08
+        },
+        {
+          "id": "qm9:CNCc1n[nH]c(C)n1",
+          "n_atoms": 19,
+          "rotation_endpoint_rmsd_angstrom": 2.3764590841699315e-07,
+          "permutation_endpoint_rmsd_angstrom": 2.2265561483436613e-07,
+          "endpoint_scale_angstrom": 2.961756467819214,
+          "rotation_relative": 8.023816643911153e-08,
+          "permutation_relative": 7.517688143965153e-08
+        },
+        {
+          "id": "qm9:C[C@H]1[C@H]2CC=CC(=O)N21",
+          "n_atoms": 18,
+          "rotation_endpoint_rmsd_angstrom": 2.72435945781615e-07,
+          "permutation_endpoint_rmsd_angstrom": 2.2483334305434255e-07,
+          "endpoint_scale_angstrom": 2.2601001262664795,
+          "rotation_relative": 1.2054153823337874e-07,
+          "permutation_relative": 9.947937281245624e-08
+        },
+        {
+          "id": "qm9:[NH][C]1N(C=O)C[C@@H]2CN12",
+          "n_atoms": 16,
+          "rotation_endpoint_rmsd_angstrom": 2.4023398443241416e-07,
+          "permutation_endpoint_rmsd_angstrom": 1.8250121058827062e-07,
+          "endpoint_scale_angstrom": 2.2165603637695312,
+          "rotation_relative": 1.0838143113949171e-07,
+          "permutation_relative": 8.233532168639209e-08
+        },
+        {
+          "id": "qm9:CC[C@@H](C)c1ccco1",
+          "n_atoms": 21,
+          "rotation_endpoint_rmsd_angstrom": 2.643303881194055e-07,
+          "permutation_endpoint_rmsd_angstrom": 1.5936647912440094e-07,
+          "endpoint_scale_angstrom": 2.659930467605591,
+          "rotation_relative": 9.93749240209838e-08,
+          "permutation_relative": 5.991377634313089e-08
+        },
+        {
+          "id": "qm9:O=CCCn1nnnn1",
+          "n_atoms": 14,
+          "rotation_endpoint_rmsd_angstrom": 4.1509741367804245e-07,
+          "permutation_endpoint_rmsd_angstrom": 1.4299625661351456e-07,
+          "endpoint_scale_angstrom": 2.109623432159424,
+          "rotation_relative": 1.9676374814112968e-07,
+          "permutation_relative": 6.778283481006973e-08
+        },
+        {
+          "id": "qm9:CC[C@]12C[C@H](CCO1)C2",
+          "n_atoms": 23,
+          "rotation_endpoint_rmsd_angstrom": 2.639338565418023e-07,
+          "permutation_endpoint_rmsd_angstrom": 1.5340111758632702e-07,
+          "endpoint_scale_angstrom": 2.440086841583252,
+          "rotation_relative": 1.0816576362935864e-07,
+          "permutation_relative": 6.28670729959728e-08
+        },
+        {
+          "id": "qm9:c1[nH]cc2c1NCCO2",
+          "n_atoms": 17,
+          "rotation_endpoint_rmsd_angstrom": 3.1225178560927474e-07,
+          "permutation_endpoint_rmsd_angstrom": 2.11407211736514e-07,
+          "endpoint_scale_angstrom": 2.395287036895752,
+          "rotation_relative": 1.3036090489344748e-07,
+          "permutation_relative": 8.825965676768905e-08
+        }
+      ]
+    }
+  }
+}

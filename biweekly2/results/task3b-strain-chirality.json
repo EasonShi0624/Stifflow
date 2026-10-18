@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "seed": 42,
+  "paired_strain_delta_A_minus_control": {
+    "molecules": 512,
+    "mean": 0.03348303569350841,
+    "ci95_molecule_bootstrap": [
+      -0.23332632570918643,
+      0.3501098471973496
+    ]
+  },
+  "strain_delta_by_A_chirality": {
+    "all_correct_molecules": {
+      "molecules": 217,
+      "mean_strain_delta": -0.11872039440620857
+    },
+    "some_wrong_molecules": {
+      "molecules": 163,
+      "mean_strain_delta": 0.187433699755986
+    }
+  },
+  "method_summaries": {
+    "precision": {
+      "strain_mean": 10.809222327925092,
+      "strain_median": 7.897172473953934
+    },
+    "alternative_a": {
+      "strain_mean": 7.768927627277113,
+      "strain_median": 5.472117942528923
+    },
+    "control": {
+      "strain_mean": 7.821002746904912,
+      "strain_median": 5.524330783907491
+    },
+    "references": {
+      "strain_mean": 7.506157819869313,
+      "strain_median": 5.275601776628875
+    }
+  }
+}

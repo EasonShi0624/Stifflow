@@ -1,0 +1,7 @@
+# Large per-conformer JSONs and figure inputs stay out of Git; they remain on
+# GPFS under runs/biweekly2-20261019/results/.
+results/task3-physical-quality.json
+results/figure-data.json
+results/task2a-conditional-gaussian.json
+learning-curves/
+logs/

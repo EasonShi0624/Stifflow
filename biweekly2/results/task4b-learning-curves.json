@@ -1,0 +1,177 @@
+{
+  "schema_version": 1,
+  "seed": 42,
+  "methods": {
+    "precision": [
+      {
+        "step": 25000,
+        "source": "/gpfsnyu/scratch/ys6132/stifflow/runs/formal-eval-20261018/monitor-snapshots/precision-seed42-step025000/evaluation.json",
+        "attempted": 512,
+        "succeeded": 512,
+        "failed": 0,
+        "mat_r_mean": 0.34058296920014397,
+        "cov_r_at_0.5": 0.7874736435863677,
+        "mat_p_mean": 0.5640735902408525,
+        "chirality": 0.33658969804618116
+      },
+      {
+        "step": 50000,
+        "source": "/gpfsnyu/scratch/ys6132/stifflow/runs/formal-eval-20261018/monitor-snapshots/precision-seed42-step050000/evaluation.json",
+        "attempted": 512,
+        "succeeded": 512,
+        "failed": 0,
+        "mat_r_mean": 0.3127266541438325,
+        "cov_r_at_0.5": 0.7838970189131074,
+        "mat_p_mean": 0.5468138382260368,
+        "chirality": 0.35079928952042627
+      },
+      {
+        "step": 100000,
+        "source": "/gpfsnyu/scratch/ys6132/stifflow/runs/formal-eval-20261018/monitor-snapshots/precision-seed42-step100000/evaluation.json",
+        "attempted": 512,
+        "succeeded": 512,
+        "failed": 0,
+        "mat_r_mean": 0.2779437133037868,
+        "cov_r_at_0.5": 0.8132857031865935,
+        "mat_p_mean": 0.5237073938574786,
+        "chirality": 0.369449378330373
+      },
+      {
+        "step": 175000,
+        "source": "/gpfsnyu/scratch/ys6132/stifflow/runs/formal-eval-20261018/monitor-snapshots/precision-seed42-step175000/evaluation.json",
+        "attempted": 512,
+        "succeeded": 512,
+        "failed": 0,
+        "mat_r_mean": 0.2622083165255744,
+        "cov_r_at_0.5": 0.8025484535937097,
+        "mat_p_mean": 0.5054865937825801,
+        "chirality": 0.3956483126110124
+      },
+      {
+        "step": 250000,
+        "source": "/gpfsnyu/scratch/ys6132/stifflow/runs/formal-eval-20261018/monitor/precision-seed42/evaluation.json",
+        "attempted": 512,
+        "succeeded": 512,
+        "failed": 0,
+        "mat_r_mean": 0.24248214553717717,
+        "cov_r_at_0.5": 0.8266573633074942,
+        "mat_p_mean": 0.4840028891801744,
+        "chirality": 0.427841918294849
+      }
+    ],
+    "control": [
+      {
+        "step": 25000,
+        "source": "/gpfsnyu/scratch/ys6132/stifflow/runs/formal-eval-20261018/monitor-snapshots/control-seed42-step025000/evaluation.json",
+        "attempted": 512,
+        "succeeded": 512,
+        "failed": 0,
+        "mat_r_mean": 0.27913282550188,
+        "cov_r_at_0.5": 0.8204894933139008,
+        "mat_p_mean": 0.5263412365034873,
+        "chirality": 0.3821047957371226
+      },
+      {
+        "step": 50000,
+        "source": "/gpfsnyu/scratch/ys6132/stifflow/runs/biweekly2-20261019/learning-curves/control-seed42-step050000/evaluation.json",
+        "attempted": 512,
+        "succeeded": 512,
+        "failed": 0,
+        "mat_r_mean": 0.2186251078645457,
+        "cov_r_at_0.5": 0.8615252361725265,
+        "mat_p_mean": 0.4431805125233409,
+        "chirality": 0.6121225577264654
+      },
+      {
+        "step": 100000,
+        "source": "/gpfsnyu/scratch/ys6132/stifflow/runs/biweekly2-20261019/learning-curves/control-seed42-step100000/evaluation.json",
+        "attempted": 512,
+        "succeeded": 512,
+        "failed": 0,
+        "mat_r_mean": 0.17258813492594738,
+        "cov_r_at_0.5": 0.9048460839880832,
+        "mat_p_mean": 0.35087426145171097,
+        "chirality": 0.7710923623445826
+      },
+      {
+        "step": 175000,
+        "source": "/gpfsnyu/scratch/ys6132/stifflow/runs/biweekly2-20261019/learning-curves/control-seed42-step175000/evaluation.json",
+        "attempted": 512,
+        "succeeded": 512,
+        "failed": 0,
+        "mat_r_mean": 0.12804579549851342,
+        "cov_r_at_0.5": 0.9356132159230123,
+        "mat_p_mean": 0.25369050682031896,
+        "chirality": 0.8736678507992895
+      },
+      {
+        "step": 250000,
+        "source": "/gpfsnyu/scratch/ys6132/stifflow/runs/formal-eval-20261018/monitor/control-seed42/evaluation.json",
+        "attempted": 512,
+        "succeeded": 512,
+        "failed": 0,
+        "mat_r_mean": 0.11877104023005561,
+        "cov_r_at_0.5": 0.9409813903424691,
+        "mat_p_mean": 0.23299362768700194,
+        "chirality": 0.8938721136767318
+      }
+    ],
+    "alternative_a": [
+      {
+        "step": 25000,
+        "source": "/gpfsnyu/scratch/ys6132/stifflow/runs/biweekly2-20261019/learning-curves/alternative_a-seed42-step025000/evaluation.json",
+        "attempted": 512,
+        "succeeded": 512,
+        "failed": 0,
+        "mat_r_mean": 0.2695544930033128,
+        "cov_r_at_0.5": 0.8235789064933435,
+        "mat_p_mean": 0.5189962463773806,
+        "chirality": 0.391651865008881
+      },
+      {
+        "step": 50000,
+        "source": "/gpfsnyu/scratch/ys6132/stifflow/runs/biweekly2-20261019/learning-curves/alternative_a-seed42-step050000/evaluation.json",
+        "attempted": 512,
+        "succeeded": 512,
+        "failed": 0,
+        "mat_r_mean": 0.22735584430131506,
+        "cov_r_at_0.5": 0.8525292102443189,
+        "mat_p_mean": 0.4533195525934028,
+        "chirality": 0.5814831261101243
+      },
+      {
+        "step": 100000,
+        "source": "/gpfsnyu/scratch/ys6132/stifflow/runs/biweekly2-20261019/learning-curves/alternative_a-seed42-step100000/evaluation.json",
+        "attempted": 512,
+        "succeeded": 512,
+        "failed": 0,
+        "mat_r_mean": 0.16680598454736928,
+        "cov_r_at_0.5": 0.9108223656032861,
+        "mat_p_mean": 0.3474976138898785,
+        "chirality": 0.7608792184724689
+      },
+      {
+        "step": 175000,
+        "source": "/gpfsnyu/scratch/ys6132/stifflow/runs/biweekly2-20261019/learning-curves/alternative_a-seed42-step175000/evaluation.json",
+        "attempted": 512,
+        "succeeded": 512,
+        "failed": 0,
+        "mat_r_mean": 0.12403179722193866,
+        "cov_r_at_0.5": 0.9375802506103803,
+        "mat_p_mean": 0.24778259664300392,
+        "chirality": 0.8869893428063943
+      },
+      {
+        "step": 250000,
+        "source": "/gpfsnyu/scratch/ys6132/stifflow/runs/formal-eval-20261018/monitor/alternative_a-seed42/evaluation.json",
+        "attempted": 512,
+        "succeeded": 512,
+        "failed": 0,
+        "mat_r_mean": 0.11791696752420071,
+        "cov_r_at_0.5": 0.9434303040047617,
+        "mat_p_mean": 0.23256582305510656,
+        "chirality": 0.9011989342806395
+      }
+    ]
+  }
+}

@@ -1,0 +1,510 @@
+{
+  "schema_version": 1,
+  "reference_mapping_audit": {
+    "val": {
+      "molecules": 9654,
+      "molecules_with_atom_mappings": 0,
+      "ids_with_atom_mappings": [],
+      "molecules_with_topology_variation": 5,
+      "molecules_with_stereo_variation": 55
+    },
+    "test": {
+      "molecules": 993,
+      "molecules_with_atom_mappings": 0,
+      "ids_with_atom_mappings": [],
+      "molecules_with_topology_variation": 0,
+      "molecules_with_stereo_variation": 15
+    },
+    "monitor": {
+      "molecules": 512,
+      "molecules_with_atom_mappings": 0,
+      "molecules_with_topology_variation": 0,
+      "molecules_with_stereo_variation": 5
+    },
+    "p0_raw_data_recheck": {
+      "precision": {
+        "source": "/gpfsnyu/scratch/ys6132/stifflow/runs/research-20261018/p0/ensembles-precision.json",
+        "molecules": 64,
+        "ok_records": 64,
+        "matches_current_canonical_coordinates": {
+          "n": 64,
+          "all_true": true
+        },
+        "conditioning_topology_matches": {
+          "n": 64,
+          "all_true": true
+        },
+        "conditioning_stereochemistry_matches": {
+          "n": 64,
+          "all_true": true
+        },
+        "different_rows": {
+          "total_nonempty_entries": 0
+        },
+        "reference_atom_mappings": {
+          "total_nonempty_entries": 0
+        }
+      },
+      "alternative_a": {
+        "source": "/gpfsnyu/scratch/ys6132/stifflow/runs/research-20261018/p0/ensembles-alternative_a.json",
+        "molecules": 64,
+        "ok_records": 64,
+        "matches_current_canonical_coordinates": {
+          "n": 64,
+          "all_true": true
+        },
+        "conditioning_topology_matches": {
+          "n": 64,
+          "all_true": true
+        },
+        "conditioning_stereochemistry_matches": {
+          "n": 64,
+          "all_true": true
+        },
+        "different_rows": {
+          "total_nonempty_entries": 0
+        },
+        "reference_atom_mappings": {
+          "total_nonempty_entries": 0
+        }
+      },
+      "control": {
+        "source": "/gpfsnyu/scratch/ys6132/stifflow/runs/research-20261018/p0/ensembles-control.json",
+        "molecules": 64,
+        "ok_records": 64,
+        "matches_current_canonical_coordinates": {
+          "n": 64,
+          "all_true": true
+        },
+        "conditioning_topology_matches": {
+          "n": 64,
+          "all_true": true
+        },
+        "conditioning_stereochemistry_matches": {
+          "n": 64,
+          "all_true": true
+        },
+        "different_rows": {
+          "total_nonempty_entries": 0
+        },
+        "reference_atom_mappings": {
+          "total_nonempty_entries": 0
+        }
+      }
+    }
+  },
+  "pooled_paired_comparisons": {
+    "test": {
+      "alternative_a-control": {
+        "mat_r": {
+          "molecules": 993,
+          "seeds": [
+            42,
+            43,
+            44
+          ],
+          "mean": -0.0021576167074707185,
+          "ci95_molecule_bootstrap": [
+            -0.008094531692023408,
+            0.0037567727072095615
+          ],
+          "per_seed_mean": [
+            -0.0003689291850234629,
+            -0.0072920044876373345,
+            0.001188083550248643
+          ],
+          "seed_std_of_paired_mean": 0.004514147269672655,
+          "fraction_molecules_better": 0.47633434038267874
+        },
+        "mat_p": {
+          "molecules": 993,
+          "seeds": [
+            42,
+            43,
+            44
+          ],
+          "mean": 0.003368736337267436,
+          "ci95_molecule_bootstrap": [
+            -0.0014003368725831642,
+            0.008094177149364987
+          ],
+          "per_seed_mean": [
+            -0.001629039941982824,
+            0.0004428509591852037,
+            0.011292397994599928
+          ],
+          "seed_std_of_paired_mean": 0.006939848234759643,
+          "fraction_molecules_better": 0.4874118831822759
+        },
+        "cov_r": {
+          "molecules": 993,
+          "seeds": [
+            42,
+            43,
+            44
+          ],
+          "mean": 0.0028826679543597455,
+          "ci95_molecule_bootstrap": [
+            -0.003589372402716882,
+            0.009414371424395194
+          ],
+          "per_seed_mean": [
+            -0.0006331993190557985,
+            0.004753682811297352,
+            0.0045275203708376845
+          ],
+          "seed_std_of_paired_mean": 0.0030469294996068597,
+          "fraction_molecules_better": 0.08157099697885196
+        },
+        "cov_p": {
+          "molecules": 993,
+          "seeds": [
+            42,
+            43,
+            44
+          ],
+          "mean": -0.0023626597372876403,
+          "ci95_molecule_bootstrap": [
+            -0.0073878681378273005,
+            0.0027036228318546647
+          ],
+          "per_seed_mean": [
+            0.0020939867110522144,
+            0.0003045061209818036,
+            -0.009486472043896941
+          ],
+          "seed_std_of_paired_mean": 0.006233946304742147,
+          "fraction_molecules_better": 0.23564954682779457
+        },
+        "chirality": {
+          "molecules": 722,
+          "seeds": [
+            42,
+            43,
+            44
+          ],
+          "mean": -0.006940710458219484,
+          "ci95_molecule_bootstrap": [
+            -0.013514884681457284,
+            -0.0003143277453468268
+          ],
+          "per_seed_mean": [
+            -0.002942500948911029,
+            -0.009658421943368911,
+            -0.008221208482378515
+          ],
+          "seed_std_of_paired_mean": 0.0035363335664719783,
+          "fraction_molecules_better": 0.2451523545706371
+        }
+      },
+      "precision-control": {
+        "mat_r": {
+          "molecules": 993,
+          "seeds": [
+            42,
+            43,
+            44
+          ],
+          "mean": 0.0992538624430026,
+          "ci95_molecule_bootstrap": [
+            0.08511887669837395,
+            0.11436967596415044
+          ],
+          "per_seed_mean": [
+            0.10436970006039983,
+            0.09507820365799986,
+            0.09831368361060809
+          ],
+          "seed_std_of_paired_mean": 0.004716558970967597,
+          "fraction_molecules_better": 0.15307150050352467
+        },
+        "mat_p": {
+          "molecules": 993,
+          "seeds": [
+            42,
+            43,
+            44
+          ],
+          "mean": 0.25422862712071953,
+          "ci95_molecule_bootstrap": [
+            0.23667354967666124,
+            0.27161584518023557
+          ],
+          "per_seed_mean": [
+            0.25422233985548115,
+            0.24391233475689283,
+            0.26455120674978455
+          ],
+          "seed_std_of_paired_mean": 0.010319437432923398,
+          "fraction_molecules_better": 0.10574018126888217
+        },
+        "cov_r": {
+          "molecules": 993,
+          "seeds": [
+            42,
+            43,
+            44
+          ],
+          "mean": -0.09042894151437166,
+          "ci95_molecule_bootstrap": [
+            -0.1084907699207237,
+            -0.07311530786785281
+          ],
+          "per_seed_mean": [
+            -0.09256569134635094,
+            -0.08870057021506253,
+            -0.0900205629817015
+          ],
+          "seed_std_of_paired_mean": 0.001964655213858763,
+          "fraction_molecules_better": 0.32326283987915405
+        },
+        "cov_p": {
+          "molecules": 993,
+          "seeds": [
+            42,
+            43,
+            44
+          ],
+          "mean": -0.2852690482075807,
+          "ci95_molecule_bootstrap": [
+            -0.30345505333096573,
+            -0.2665302650706111
+          ],
+          "per_seed_mean": [
+            -0.2866726364784842,
+            -0.2699143314850499,
+            -0.2992201766592081
+          ],
+          "seed_std_of_paired_mean": 0.014703254244166356,
+          "fraction_molecules_better": 0.7099697885196374
+        },
+        "chirality": {
+          "molecules": 722,
+          "seeds": [
+            42,
+            43,
+            44
+          ],
+          "mean": -0.4180983198565123,
+          "ci95_molecule_bootstrap": [
+            -0.43923199245331335,
+            -0.3965064508186312
+          ],
+          "per_seed_mean": [
+            -0.4214216728356212,
+            -0.39506890821153295,
+            -0.43780437852238274
+          ],
+          "seed_std_of_paired_mean": 0.021560695998510692,
+          "fraction_molecules_better": 0.8698060941828255
+        }
+      }
+    },
+    "val": {
+      "alternative_a-control": {
+        "mat_r": {
+          "molecules": 9654,
+          "seeds": [
+            42,
+            43,
+            44
+          ],
+          "mean": 0.0024024014234917085,
+          "ci95_molecule_bootstrap": [
+            0.0007259871601522233,
+            0.00410107240976003
+          ],
+          "per_seed_mean": [
+            0.0012270786332789399,
+            0.00036126869168569135,
+            0.005618856945510494
+          ],
+          "seed_std_of_paired_mean": 0.002818970788707162,
+          "fraction_molecules_better": 0.42904495545887716
+        },
+        "mat_p": {
+          "molecules": 9654,
+          "seeds": [
+            42,
+            43,
+            44
+          ],
+          "mean": 0.007413500322022531,
+          "ci95_molecule_bootstrap": [
+            0.005749463256960346,
+            0.009085920139548658
+          ],
+          "per_seed_mean": [
+            0.007033612625434491,
+            -0.0018070308325043294,
+            0.017013919173137434
+          ],
+          "seed_std_of_paired_mean": 0.0094162240720594,
+          "fraction_molecules_better": 0.44220012430080796
+        },
+        "cov_r": {
+          "molecules": 9654,
+          "seeds": [
+            42,
+            43,
+            44
+          ],
+          "mean": -0.002606709805473789,
+          "ci95_molecule_bootstrap": [
+            -0.004470315846388751,
+            -0.0007787401100395154
+          ],
+          "per_seed_mean": [
+            -0.0008983275946368109,
+            -0.0023612221564588737,
+            -0.004560579665325683
+          ],
+          "seed_std_of_paired_mean": 0.0018434263469638231,
+          "fraction_molecules_better": 0.07002278848145846
+        },
+        "cov_p": {
+          "molecules": 9654,
+          "seeds": [
+            42,
+            43,
+            44
+          ],
+          "mean": -0.006395172168775802,
+          "ci95_molecule_bootstrap": [
+            -0.008112559869301693,
+            -0.004705940083981303
+          ],
+          "per_seed_mean": [
+            -0.005871343719716873,
+            0.0009459833218467883,
+            -0.014260156108457319
+          ],
+          "seed_std_of_paired_mean": 0.007616591513038818,
+          "fraction_molecules_better": 0.24093639941992956
+        },
+        "chirality": {
+          "molecules": 7167,
+          "seeds": [
+            42,
+            43,
+            44
+          ],
+          "mean": -0.011559177799992389,
+          "ci95_molecule_bootstrap": [
+            -0.013830235775832719,
+            -0.009325644684567511
+          ],
+          "per_seed_mean": [
+            -0.010491682732748753,
+            -0.0035040927430836965,
+            -0.02068175792414472
+          ],
+          "seed_std_of_paired_mean": 0.008638443410539955,
+          "fraction_molecules_better": 0.2825449979070741
+        }
+      },
+      "precision-control": {
+        "mat_r": {
+          "molecules": 9654,
+          "seeds": [
+            42,
+            43,
+            44
+          ],
+          "mean": 0.11479298451039595,
+          "ci95_molecule_bootstrap": [
+            0.11017981760160134,
+            0.11928780167595002
+          ],
+          "per_seed_mean": [
+            0.12102467064875692,
+            0.10560197227416218,
+            0.11775231060826873
+          ],
+          "seed_std_of_paired_mean": 0.008126076205869292,
+          "fraction_molecules_better": 0.11704992749119536
+        },
+        "mat_p": {
+          "molecules": 9654,
+          "seeds": [
+            42,
+            43,
+            44
+          ],
+          "mean": 0.2679093113648469,
+          "ci95_molecule_bootstrap": [
+            0.2621159993183677,
+            0.2736281508060704
+          ],
+          "per_seed_mean": [
+            0.27512313039093583,
+            0.25021264735861587,
+            0.2783921563449892
+          ],
+          "seed_std_of_paired_mean": 0.015412675640009595,
+          "fraction_molecules_better": 0.10689869484151647
+        },
+        "cov_r": {
+          "molecules": 9654,
+          "seeds": [
+            42,
+            43,
+            44
+          ],
+          "mean": -0.10656921065460817,
+          "ci95_molecule_bootstrap": [
+            -0.1120295040598532,
+            -0.10107565048097776
+          ],
+          "per_seed_mean": [
+            -0.11378959170724343,
+            -0.09392408714200089,
+            -0.11199395311458016
+          ],
+          "seed_std_of_paired_mean": 0.01098774048545402,
+          "fraction_molecules_better": 0.3155168841930806
+        },
+        "cov_p": {
+          "molecules": 9654,
+          "seeds": [
+            42,
+            43,
+            44
+          ],
+          "mean": -0.29161093190071,
+          "ci95_molecule_bootstrap": [
+            -0.29757132138801984,
+            -0.2854028032173715
+          ],
+          "per_seed_mean": [
+            -0.29936609417334137,
+            -0.269526902173225,
+            -0.30593979935556376
+          ],
+          "seed_std_of_paired_mean": 0.01940571247620212,
+          "fraction_molecules_better": 0.6850010358400663
+        },
+        "chirality": {
+          "molecules": 7167,
+          "seeds": [
+            42,
+            43,
+            44
+          ],
+          "mean": -0.4189182116382776,
+          "ci95_molecule_bootstrap": [
+            -0.42584622537468,
+            -0.4119081944402415
+          ],
+          "per_seed_mean": [
+            -0.4311698264463475,
+            -0.3827466948419285,
+            -0.4428381136265569
+          ],
+          "seed_std_of_paired_mean": 0.03186410522737747,
+          "fraction_molecules_better": 0.8592158504255616
+        }
+      }
+    }
+  }
+}
