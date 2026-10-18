@@ -1,0 +1,915 @@
+% Standalone mathematical note. Compile twice with pdflatex, or latexmk -pdf.
+% No external bibliography, figures, or generated .tex inputs are required.
+% Companion: StifFlow_Alternative_A_verification.py and its JSON results.
+\documentclass[11pt,letterpaper]{article}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern,amsmath,amssymb,amsthm,mathtools}
+\usepackage[margin=0.85in,headheight=14pt]{geometry}
+\usepackage{microtype,booktabs,array,longtable,fancyhdr,needspace}
+\usepackage[hidelinks]{hyperref}
+\hypersetup{pdftitle={StifFlow Alternative A: minimum-acceleration conditional flow},pdfauthor={},pdfsubject={Energetic calibration, Gaussian transport, Bures geometry, and falsification}}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{5pt}
+\setlength{\emergencystretch}{2em}
+\pagestyle{fancy}\fancyhf{}
+\fancyhead[L]{\small StifFlow\,: Alternative A}
+\fancyhead[R]{\small Core mathematical formulation}
+\fancyfoot[C]{\thepage}\renewcommand{\headrulewidth}{0.3pt}
+\newcommand{\E}{\mathbb E}
+\newcommand{\R}{\mathbb R}
+\newcommand{\X}{\mathcal X_G}
+\newcommand{\cN}{\mathcal N}
+\newcommand{\epsE}{\varepsilon_E}
+\newcommand{\Cov}{\operatorname{Cov}}
+\newcommand{\tr}{\operatorname{tr}}
+\newcommand{\diag}{\operatorname{diag}}
+\newcommand{\SO}{\operatorname{SO}(3)}
+\newcommand{\KL}{\operatorname{KL}}
+\newcommand{\dd}{\,\mathrm d}
+\newcommand{\norm}[1]{\left\lVert#1\right\rVert}
+\newcommand{\ip}[2]{\left\langle#1,#2\right\rangle}
+\newcommand{\bures}{d_{\mathrm B}}
+\newcommand{\AltE}{A_{\mathrm E}}
+\newcommand{\AltW}{A_{\mathrm W}}
+\newcommand{\J}{\mathcal J}
+\newtheorem{theorem}{Theorem}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{remark}[theorem]{Remark}
+\begin{document}
+\thispagestyle{plain}
+\begin{center}
+{\LARGE\bfseries StifFlow: Alternative A}\\[4pt]
+{\Large Minimum-acceleration conditional flow}\\[5pt]
+{\small Energetic calibration, Gaussian transport, and Bures geometry}\\[3pt]
+{\small Independent derivation and falsification study \quad 16 September 2026}
+\end{center}
+
+\textbf{Scope and conclusion.} This note derives a stiffness-aware conditional path from a precisely stated random-path variational problem. It does not assume Gaussian intermediate laws or an affine ansatz. With a shared Gaussian source, a prescribed source-only initial velocity, a fixed conformer endpoint, and calibrated terminal-velocity \emph{moments}, the unique minimizer is the previously proposed cubic Gaussian--Bures construction. We call its Euclidean version $\AltE$. The conclusion is conditional on those modeling constraints, not an assertion of universal optimality. Removing the initial-velocity constraint gives a different minimizer; changing the metric gives another meaningful construction, $\AltW$.
+
+The derivation preserves the physical-label and CFM conventions of StifFlow v2 \cite{baseline}, but replaces its precision bridge. It proves removal of the v2 high-curvature \emph{sample-target} amplification under a fixed soft-mode floor. It does not prove reduced neural approximation error or fewer function evaluations. Counterexamples show failure of general intermediate covariance ordering for $\AltE$, lack of action dominance in soft modes, and potentially large marginal velocity gradients. An explicitly separated source-metric variant restores covariance ordering.
+
+\textbf{Provenance.} Gaussian optimal transport and Bures factor alignment are established results \cite{bhatia}; probability-measure splines and acceleration-based transport also have substantial precedents \cite{benamou,chen}. CFM marginalization is standard \cite{lipman}. The molecular boundary conditions, their use as conditional supervision, and the comparisons and identities below are derived here for this project. Neither a new Gaussian transport theorem nor molecular performance is claimed.
+
+\section{Configuration space, energetic labels, and the joint law}
+\label{sec:physical}
+
+\subsection{Coordinates and what stiffness means}
+For a labeled molecular graph $G$ with $N\geq2$ atoms and specified stereochemistry, use
+\begin{equation}
+\X=\left\{x\in\R^{3N}:\sum_{a=1}^N x_a=0\right\},\qquad d=3N-3.
+\label{eq:space}
+\end{equation}
+Every inverse, determinant, Gaussian density and derivative acts on this linear space, implemented in an orthonormal basis. Rotation and all internal motions remain. This is \emph{not} the nonlinear shape quotient by rigid motions. Write $\mathcal R$ for the restriction of $I_N\otimes R$ to $\X$, $R\in\SO$.
+
+Choose a sufficiently smooth rigid-motion-invariant reference potential $E_{\mathrm{ref},G}$ with stated energy and length units. At a stationary, vibrationally stable reference $r_i$,
+\begin{equation}
+H_i=\nabla^2E_{\mathrm{ref},G}(r_i)\big|_{\X},\qquad
+E_{\mathrm{ref},G}(r_i+\delta)-E_{\mathrm{ref},G}(r_i)
+=\tfrac12\delta^\top H_i\delta+o(\norm{\delta}^2).
+\label{eq:hessian}
+\end{equation}
+For a unit non-rigid Cartesian displacement $e$, $e^\top H_i e$ has units energy/length$^2$. It is an energetic curvature, not a vibrational frequency. Unweighted energetic, mass-weighted, and free-energy Hessians are different quantities. Raw bond and torsion force constants cannot be compared without a coordinate/displacement convention.
+
+Ideally $r_i=x_{1,i}$, the training conformer. Otherwise keep $x_{1,i}$ unchanged, align a separately relaxed $r_i$ by a proper rotation with consistent atom correspondence, and record residual force and aligned displacement. Using $H_i$ near $x_{1,i}$ then transfers a local approximation; it does not establish equality to the target's true local Hessian. Ambiguous alignment or relaxation choices must not silently break symmetry.
+
+\subsection{Rigid modes, regularization, and local covariance}
+Construct rigid rotations geometrically:
+\begin{equation}
+\mathcal T_{\mathrm{rot}}(r_i)
+=\{(\omega\times r_{i,a})_{a=1}^N:\omega\in\R^3\}.
+\end{equation}
+Let $Q_{\mathrm{rot}}$ be an orthonormal basis and $Q_{\mathrm{vib}}$ its complement in $\X$. The rotational rank is three at a non-collinear geometry and two at a non-degenerate linear geometry. At an exact stationary reference, $H_iQ_{\mathrm{rot}}=0$; a nonstationary Hessian need not have this property. Small eigenvalues alone cannot identify rotations.
+
+After rejecting materially negative vibrational modes, define
+\begin{equation}
+\begin{split}
+H_{\mathrm{vib}}&=Q_{\mathrm{vib}}^\top H_iQ_{\mathrm{vib}},\\
+K_i&=Q_{\mathrm{vib}}\varphi(H_{\mathrm{vib}})Q_{\mathrm{vib}}^\top
++\kappa_{\mathrm{rot}}Q_{\mathrm{rot}}Q_{\mathrm{rot}}^\top\succ0,
+\qquad \varphi(\lambda)=\max(\lambda,\kappa_{\min}).
+\end{split}
+\label{eq:regularize}
+\end{equation}
+Both regularizers are finite positive numbers in stiffness units. Significant negative curvature requires a different reference or an explicitly qualified surrogate, not an undocumented absolute value. Only unchanged vibrational curvatures retain calibration. Rotational and floored-mode scales are computational choices. No upper spectral clipping or trace normalization is used in the core.
+
+With fixed $\epsE>0$, define
+\begin{equation}
+\boxed{C_K=\epsE K^{-1}.}
+\label{eq:calibrated}
+\end{equation}
+Its units are length$^2$. For a strictly quadratic stable vibrational potential, the density proportional to $\exp[-\delta^\top H\delta/(2\epsE)]$ has covariance $\epsE H^{-1}$. Taking $\epsE=k_BT$ therefore gives a \emph{local classical harmonic} scale where curvature is retained. It neither specifies basin populations nor makes a conformer-data generator a Boltzmann sampler.
+
+The operational calibration diagnostic is
+\begin{equation}
+\frac{2\{E_{\mathrm{ref},G}(r_i+ae)-E_{\mathrm{ref},G}(r_i)
+-a\nabla E_{\mathrm{ref},G}(r_i)^\top e\}}
+{a^2 e^\top K_i e}
+\longrightarrow\frac{e^\top H_i e}{e^\top K_i e}.
+\label{eq:energy-ratio}
+\end{equation}
+The limit is one only for accurately retained directions. Calibration to an approximate potential is not calibration to a more accurate physical model.
+
+\subsection{Shared source and symmetry-compatible target}
+Choose a graph-only covariance and its symmetric positive square root:
+\begin{equation}
+C_{0,G}\succ0,\quad \mathcal RC_{0,G}\mathcal R^\top=C_{0,G},\quad
+S_G=C_{0,G}^{1/2},\quad p_0(\cdot\mid G)=\cN_{\X}(0,C_{0,G}).
+\label{eq:source}
+\end{equation}
+For example, a dimensionless graph Laplacian $L_G$ gives
+\begin{equation}
+C_{0,G}=\sigma_0^2[(L_G+\rho I)|_{\mathbf1^\perp}]^{-1}\otimes I_3,\qquad\rho>0.
+\end{equation}
+This is a connectivity prior, not measured energetic stiffness. Structured harmonic priors are a relevant molecular precedent \cite{hassan}; the displayed graph formula is an explicit project choice. Disconnected graphs are algebraically permitted by the ridge, without a physical modeling claim.
+
+Starting with paired labels $\nu_{\mathrm{emp},G}=\sum_iw_i\delta_{(x_{1,i},K_i)}$, $\sum_iw_i=1$, define
+\begin{equation}
+\nu_G=\int_{\SO}(\mathcal T_R)_\#\nu_{\mathrm{emp},G}\dd\mu(R),\qquad
+\mathcal T_R(x_1,K)=(\mathcal Rx_1,\mathcal RK\mathcal R^\top),
+\label{eq:joint}
+\end{equation}
+where $\mu$ is normalized Haar measure. Here $q_{\mathrm{data}}(\cdot\mid G)$ means the conformer marginal of $\nu_G$. Internal conformations and original weights are unchanged; arbitrary stored orientations are symmetrized. A rotation-equivariant flow from an invariant source cannot instead match a non-invariant list of fixed-orientation coordinates. No weights proportional to $\det K$ are introduced.
+
+Training draws $(x_1,K)\sim\nu_G$, independently $z\sim\cN(0,I_d)$ and $t\sim\mathcal U(0,1)$, and $G$ from the chosen graph law. $K$ is \emph{not} independent of $x_1$. For atom relabelings $\Pi:G\to\Pi G$, require the pushforward consistency of the graph, source, and joint law, including stereochemical annotations. Proofs below condition on $G$ and suppress its subscript. Finite data with finite SPD labels, including their compact rotation orbits, satisfy the moment assumptions used below. For a general law assume at least
+\begin{equation}
+\E_{\nu_G}(\norm{x_1}^2+\tr C_K)<\infty.
+\label{eq:moments}
+\end{equation}
+
+\section{Which variational problem is justified?}
+\label{sec:objective}
+
+A local Hessian specifies a quadratic displacement penalty. It does not determine generative time, a global path, or a source--target coupling. Energetic stiffness should not automatically be identified with fast contraction: in $\dot\delta=-\Gamma K\delta$, choosing mobility $\Gamma\propto K^{-1}$ equalizes modal rates. This note instead seeks \emph{smooth sampled regression labels}.
+
+\subsection{Path acceleration, not covariance acceleration}
+For each fixed $(x_1,K)$, choose a random path
+\begin{equation}
+X\in L^2(\Omega;H^2([0,1];\X)),\qquad
+\J[X]=\E\int_0^1\norm{\ddot X_t}^2\dd t.
+\label{eq:objective}
+\end{equation}
+The time variable is dimensionless and artificial; this is not mechanical kinetic energy or physical dynamics. $H^2$ gives well-defined position and velocity traces. We minimize an \emph{unweighted Cartesian Euclidean} quantity because ordinary CFM regresses Cartesian velocities in that norm. The source metric is a separate option in Section~\ref{sec:metric}.
+
+If $X_t=m_t+A_tz$ with fixed standard Gaussian $z$, then
+\begin{equation}
+\J=\int_0^1\bigl(\norm{\ddot m_t}^2+\norm{\ddot A_t}_F^2\bigr)\dd t.
+\label{eq:factor-objective}
+\end{equation}
+Thus mean/factor acceleration and sample acceleration agree \emph{within this class}. We will not restrict to that class initially. In contrast, $\int\norm{\ddot\Sigma_t}_F^2\dd t$ has different units and ignores transport gauge. For $X_t=Q_tz$ with rotating orthogonal $Q_t$, $\Sigma_t=I$ is constant although sampled velocities and accelerations need not vanish. Covariance acceleration is not a substitute for \eqref{eq:objective}.
+
+The Bures metric is the quotient geometry associated with Gaussian transport, not the Frobenius geometry of covariance entries \cite{bhatia}. Intrinsic Wasserstein acceleration and path-space acceleration also require their own admissible classes \cite{benamou,chen}. We state the path-space class explicitly rather than call every cubic factor curve a Wasserstein spline.
+
+\subsection{Audit of endpoint conditions}
+For a fixed label impose
+\begin{equation}
+\boxed{\begin{gathered}
+X_0=\xi,\qquad \xi\sim\cN(0,C_0),\qquad \dot X_0=-\xi,\\
+X_1=x_1,\qquad \eta:=-\dot X_1,\qquad
+\E\eta=0,\quad\E[\eta\eta^\top]=C_K.
+\end{gathered}}
+\label{eq:boundary}
+\end{equation}
+The coupling of $\xi$ and $\eta$ is free. In particular, neither a Gaussian law for $\eta$ nor Gaussian intermediate paths is assumed. The source is the same for every hidden label.
+
+\begin{center}\small
+\begin{tabular}{p{0.30\linewidth}p{0.61\linewidth}}
+\toprule
+Condition & Status and reason\\\midrule
+Common law of $X_0$, $X_1=x_1$ & Essential for the requested conditional source and target.\\
+$\E\eta=0$, $\Cov(\eta)=C_K$ & A chosen first-order endpoint-error calibration. Not required for correct conformer weights.\\
+$\dot X_0=-X_0$ & A source-only initial contraction with zero hidden-label regression variance; also matches v2. Not forced by transport correctness.\\
+Gaussian law for $\eta$ & Not imposed; it follows for the optimizer.\\
+Cubic schedules, Bures alignment & Not imposed; they are derived below.\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+For an admissible $H^2$ path, $(X_t-x_1)/(1-t)\to\eta$ in $L^2$; hence the terminal moments in \eqref{eq:boundary} express normalized local error moments. They are stronger than weak convergence to $\delta_{x_1}$. The initial contraction has an additional neutral-case rationale: if $C_K=C_0$, we do not want to bend the noise away from $(1-t)\xi$. Its coefficient $1$ is still a time convention, not a curvature-derived constant.
+
+With only position endpoints and no velocity/calibration constraints, the zero-acceleration solution is $X_t=(1-t)\xi+tx_1$, which contains no $K$. Section~\ref{sec:boundary-variants} derives the different answer obtained by freeing the initial velocity. These observations rule out an unconditional ``most natural'' or ``unique'' interpretation of the candidate.
+
+\section{Derivation without a Gaussian-path ansatz}
+\label{sec:derive}
+
+\subsection{First minimize over paths for fixed random boundary values}
+Fix realizations of $\xi$ and $\eta$. Varying \eqref{eq:objective} with all four position/velocity traces fixed gives $X^{(4)}=0$. Solving its four boundary equations yields the Hermite cubic
+\begin{equation}
+\Gamma_t(\xi,\eta)=\alpha(t)x_1+f(t)\xi+g(t)\eta,
+\label{eq:hermite}
+\end{equation}
+where
+\begin{equation}
+\boxed{\begin{aligned}
+\alpha(t)&=3t^2-2t^3,&\dot\alpha&=6t(1-t),&\ddot\alpha&=6-12t,\\
+f(t)&=(1-t)^2(1+t),&\dot f&=-1-\dot g,&\ddot f&=-\ddot g,\\
+g(t)&=t^2(1-t),&\dot g&=2t-3t^2,&\ddot g&=2-6t.
+\end{aligned}}
+\label{eq:schedules}
+\end{equation}
+In particular $f+g=1-t$. The schedules are consequences of \eqref{eq:boundary}, not an independently selected interpolation.
+
+For any other admissible path with the same random traces, set $R_t=X_t-\Gamma_t$. Both $R$ and $\dot R$ vanish at $0,1$. Twice integrating by parts gives
+\begin{equation}
+\int_0^1\ip{\ddot\Gamma_t}{\ddot R_t}\dd t=0,\qquad
+\J[X]=\J[\Gamma]+\E\int_0^1\norm{\ddot R_t}^2\dd t.
+\label{eq:orthogonality}
+\end{equation}
+Since $\E\xi=\E\eta=0$,
+\begin{equation}
+\J[\Gamma]=12\norm{x_1}^2+4\E\norm{\eta-\xi}^2.
+\label{eq:reduced}
+\end{equation}
+Only a coupling/moment problem remains.
+
+\subsection{Then optimize the terminal-velocity coupling}
+Let $C=C_K$ temporarily. Define the SPD matrix
+\begin{equation}
+T=C_0^{-1/2}\bigl(C_0^{1/2}CC_0^{1/2}\bigr)^{1/2}C_0^{-1/2}.
+\label{eq:T}
+\end{equation}
+It is the unique SPD solution of $TC_0T=C$: multiplying by $S=C_0^{1/2}$ reduces this to $(STS)^2=SCS$. No commutation of $C_0$ and $K$ is assumed.
+
+For \emph{any} coupling satisfying the moment constraints in \eqref{eq:boundary}, expand the following nonnegative expression:
+\begin{equation}
+\begin{split}
+\E\norm{\eta-\xi}^2
+&=\bures^2(C_0,C)+\E[(\eta-T\xi)^\top T^{-1}(\eta-T\xi)],\\
+\bures^2(C_0,C)
+&=\tr C_0+\tr C-2\tr\bigl(SCS\bigr)^{1/2}.
+\end{split}
+\label{eq:coupling-gap}
+\end{equation}
+Indeed $\tr(T^{-1}C)=\tr(TC_0)$ and $\tr(TC_0)=\tr(SCS)^{1/2}$, which proves the identity by expansion. Equality holds precisely when $\eta=T\xi$ almost surely. This coupling is feasible and produces $\eta\sim\cN(0,C)$.
+
+When both marginals are specified as Gaussians, \eqref{eq:T} is the established quadratic-cost Gaussian OT map, and $\bures$ is their Bures--Wasserstein distance \cite{bhatia}. Here the same solution is obtained even when only the terminal moments are constrained. The minimization pairs source noise with \emph{terminal residual velocity}, not different training conformers with different source distributions.
+
+\begin{theorem}[Unique clamped minimum-acceleration path]
+\label{thm:main}
+For a fixed $(x_1,K)$, $C_0\succ0$, and $C_K\succ0$, the problem \eqref{eq:objective}--\eqref{eq:boundary} has the unique minimizing path law
+\begin{equation}
+\boxed{X_t=\alpha(t)x_1+F_t\xi,\qquad F_t=f(t)I+g(t)T_K,
+\qquad \xi\sim\cN(0,C_0),}
+\label{eq:mainpath}
+\end{equation}
+where $T_K$ is \eqref{eq:T} with $C=C_K$. Its minimum is
+\begin{equation}
+\boxed{\J_{\min}=12\norm{x_1}^2+4\bures^2(C_0,C_K).}
+\label{eq:Jmin}
+\end{equation}
+More precisely, every feasible path satisfies the exact gap identity
+\begin{equation}
+\begin{split}
+\J[X]-\J_{\min}
+={}&4\E\norm{T_K^{-1/2}(\eta-T_K\xi)}^2
++\E\int_0^1\norm{\ddot R_t}^2\dd t\ \geq0,
+\end{split}
+\label{eq:fullgap}
+\end{equation}
+with $R=X-\Gamma(\xi,\eta)$. No affine or Gaussian intermediate ansatz is needed.
+\end{theorem}
+\begin{proof}
+Combine \eqref{eq:orthogonality}, \eqref{eq:reduced}, and \eqref{eq:coupling-gap}. Equality forces $\eta=T_K\xi$ and $\ddot R=0$. The zero traces imply $R=0$. Conversely \eqref{eq:mainpath} attains equality and lies in the admissible class. Since the law of $\xi$ is fixed, the minimizing path law is unique.
+\end{proof}
+
+\subsection{Factor alignment and what ``Bures'' means here}
+Writing $\xi=Sz$ and $L_K=T_KS$, the optimizer is
+\begin{equation}
+X_t=\alpha(t)x_1+A_tz,\qquad A_t=f(t)S+g(t)L_K,\qquad L_KL_K^\top=C_K.
+\label{eq:factor}
+\end{equation}
+Equation~\eqref{eq:coupling-gap} implies the familiar Procrustes characterization
+\begin{equation}
+L_K=\arg\min_{LL^\top=C_K}\norm{L-S}_F^2,\qquad
+\min\norm{L-S}_F^2=\bures^2(C_0,C_K).
+\label{eq:procrustes}
+\end{equation}
+This is existing Gaussian/Bures mathematics \cite{bhatia}, here arising from the residual-velocity coupling. $L_K$ is generally \emph{not} $C_K^{1/2}$. Replacing it by an arbitrary covariance factor preserves the terminal covariance but changes the intermediate law and generally loses optimality.
+
+Since
+\begin{equation}
+\frac{A_t}{1-t}=\bigl[(1-t^2)I+t^2T_K\bigr]S,
+\label{eq:residual-bures}
+\end{equation}
+the normalized residual covariance follows Gaussian displacement interpolation from $C_0$ to $C_K$, with displacement parameter $t^2$. The full path also has a shrinking scale and a moving mean; it is \emph{not} the Wasserstein geodesic from $p_0$ to $\delta_{x_1}$, which would be a straight sample path. Its exact optimality is the clamped path-space theorem above, not a geodesic claim with only marginal endpoints.
+
+\section{Conditional density, velocities, and continuity}
+\label{sec:conditional}
+
+For $0\leq t<1$, $f(t)>0$ and $g(t)\geq0$, so $F_t\succ0$. Thus every finite-curvature direction remains accessible. The conditional law and the directly sampled target are
+\begin{equation}
+\boxed{\begin{aligned}
+p_t(\cdot\mid x_1,K,G)&=\cN_{\X}(m_t,\Sigma_t),&m_t&=\alpha(t)x_1,\\
+\Sigma_t&=F_tC_0F_t=A_tA_t^\top,\\
+U_t&=\dot\alpha(t)x_1+\dot F_t\xi
+=\dot\alpha(t)x_1+\dot f(t)Sz+\dot g(t)L_Kz.
+\end{aligned}}
+\label{eq:law-target}
+\end{equation}
+The Eulerian conditional field is
+\begin{equation}
+\boxed{u_t(x\mid x_1,K,G)=\dot\alpha(t)x_1+M_t(x-m_t),\qquad
+M_t=\dot F_tF_t^{-1}.}
+\label{eq:conditional-velocity}
+\end{equation}
+All matrices $F_t,\dot F_t,\ddot F_t$ are functions of the same fixed symmetric $T_K$. Hence $M_t$ is symmetric, even if $C_0K\ne KC_0$. This argument does \emph{not} commute $C_0$ through $T_K$.
+
+\begin{proposition}[Conditional transport and minimum instantaneous speed]
+The law in \eqref{eq:law-target} and field in \eqref{eq:conditional-velocity} satisfy
+\begin{equation}
+\dot m_t=\dot\alpha x_1,\qquad
+\dot\Sigma_t=M_t\Sigma_t+\Sigma_tM_t^\top,\qquad
+\partial_tp_t+\nabla_{\X}\cdot(p_tu_t)=0.
+\label{eq:conditional-continuity}
+\end{equation}
+For this \emph{fixed} differentiable Gaussian density path, $u_t$ has minimum instantaneous Euclidean squared speed among sufficiently integrable fields transporting it.
+\end{proposition}
+\begin{proof}
+Differentiate $\Sigma=FC_0F$ to obtain its evolution equation. An affine field with the stated mean and covariance equations transports the Gaussian; alternatively differentiate the pushforward in \eqref{eq:mainpath}. Since $M$ is symmetric, $u$ is a gradient. Any other transporting field is $u+w$ with $\nabla\cdot(pw)=0$. Gaussian integration by parts, or an integrable cutoff argument, gives $\int u\cdot w\,p=0$. Thus its squared speed is $\int\norm{u}^2p+\int\norm{w}^2p$. In the affine subclass, the minimum symmetric matrix solves $M\Sigma+\Sigma M=\dot\Sigma$ uniquely.
+\end{proof}
+
+The material acceleration of this \emph{conditional} field is
+\begin{equation}
+\partial_tu+(Du)u
+=\ddot\alpha x_1+N_t(x-m_t),\qquad
+N_t=\ddot F_tF_t^{-1}=\dot M_t+M_t^2,
+\label{eq:material}
+\end{equation}
+which is also symmetric in its linear part. It equals $\ddot X_t$ on sampled paths. On truncated smooth intervals this is a gradient realization of the usual Wasserstein material-acceleration expression \cite{benamou}. The singular terminal law and the terminal velocity moments still make \eqref{eq:boundary} a stronger, phase-space condition than specifying density endpoints alone.
+
+\section{Endpoints, ordinary CFM, and exact symmetry statements}
+\label{sec:cfm}
+
+\subsection{Shared source and local endpoint calibration}
+At $t=0$, $\alpha=0$, $F=I$, $\dot\alpha=0$, and $\dot F=-I$. Therefore
+\begin{equation}
+p_0(\cdot\mid x_1,K,G)=p_0(\cdot\mid G),\qquad X_0=Sz,\qquad U_0=-Sz.
+\label{eq:source-check}
+\end{equation}
+No target label is needed either to draw the source or to specify its initial target velocity. In particular $\Cov(U_0\mid X_0,G)=0$.
+This is not only an isolated endpoint property. Since $\alpha+\dot\alpha$, $f+\dot f$ and $g+\dot g$ all vanish linearly at zero, the finite-moment condition gives
+\begin{equation}
+\E\,\tr\Cov(U_t\mid X_t,t,G)
+\leq\E\norm{U_t+X_t}^2=O(t^2),\qquad t\to0.
+\label{eq:early-regression}
+\end{equation}
+The inequality uses $-X_t$ as an admissible regressor. Thus the clamped condition suppresses hidden-label target variance near the source, although it does not order the full-time regression difficulty.
+
+
+For $s=1-t$, use $1-\alpha=s^2(1+2t)$ to obtain the exact identity
+\begin{equation}
+\frac{X_t-x_1}{s}
+=-s(1+2t)x_1+\bigl[(1-t^2)I+t^2T_K\bigr]\xi.
+\label{eq:full-error}
+\end{equation}
+Consequently, for every fixed finite SPD label,
+\begin{equation}
+\boxed{\begin{gathered}
+X_t\longrightarrow x_1\text{ in }L^2,\qquad
+\frac{X_t-x_1}{1-t}\longrightarrow T_K\xi\text{ in }L^2,\\
+\mathcal L\!\left(\frac{X_t-x_1}{1-t}\middle|x_1,K,G\right)
+\Rightarrow\cN(0,C_K),\qquad
+\frac{\E[(X_t-x_1)(X_t-x_1)^\top\mid x_1,K,G]}{(1-t)^2}\longrightarrow C_K.
+\end{gathered}}
+\label{eq:endpoint}
+\end{equation}
+The Gaussian normalized-error limit is \emph{derived}, not an additional boundary-law assumption. If $q$ is a smooth local internal-coordinate map at $x_1$ with Jacobian $J_q$, the delta method gives
+\begin{equation}
+\frac{q(X_t)-q(x_1)}{1-t}\Rightarrow\cN(0,J_qC_KJ_q^\top).
+\label{eq:internal}
+\end{equation}
+Convergence of covariances additionally requires moment control, e.g. a smooth extension with polynomially bounded derivatives. For a nonzero scalar row $J_q$, $J_qC_KJ_q^\top>0$. Redundant internal-coordinate vectors can have singular joint covariance. Torsional branches, collinear singularities and ring constraints are outside this local smooth statement.
+
+At the same calibrated reference, the relaxed quadratic stiffness of a scalar $q$ is $(J_qK^{-1}J_q^\top)^{-1}$ because
+\begin{equation}
+\min_{J_q\delta=\Delta q}\tfrac12\delta^\top K\delta
+=\frac{(\Delta q)^2}{2J_qK^{-1}J_q^\top}.
+\end{equation}
+This identifies the energetic meaning of the local covariance without freezing bond or angle degrees of freedom. It remains a conditional limiting scale, not final thermal variance.
+
+\subsection{Marginal continuity and population regression}
+The network sees only $(X_t,t,G)$. Use
+\begin{equation}
+\mathcal L(\theta)=\E_{G,(x_1,K),z,t}\norm{v_\theta(X_t,t;G)-U_t}^2.
+\label{eq:loss}
+\end{equation}
+The unrestricted optimum and prescribed marginal law are
+\begin{equation}
+\boxed{v^*(x,t;G)=\E[U_t\mid X_t=x,t,G],\qquad
+p_t(x\mid G)=\int p_t(x\mid x_1,K,G)\dd\nu_G.}
+\label{eq:marginal}
+\end{equation}
+For a compactly supported smooth test function $\phi$, differentiation under the expectation gives
+\begin{equation}
+\frac\dd{\dd t}\E\phi(X_t)
+=\E[\nabla\phi(X_t)\cdot U_t]
+=\int\nabla\phi(x)\cdot v^*(x,t;G)p_t(x\mid G)\dd x.
+\label{eq:weak}
+\end{equation}
+Thus $\partial_tp_t+\nabla\cdot(p_tv^*)=0$. This is the ordinary CFM marginalization argument \cite{lipman}; the endpoint Hessian is a hidden training-path label, not a required model input.
+
+The explicit coupling with $x_1$ also gives
+\begin{equation}
+W_2^2(p_t,q_{\mathrm{data}})
+\leq\E_{\nu_G}\!\left[(1-\alpha)^2\norm{x_1}^2+\tr\Sigma_t\right]\longrightarrow0.
+\label{eq:terminal-marginal}
+\end{equation}
+Moment condition \eqref{eq:moments} suffices by dominated convergence. The prescribed conformer weights are preserved, not inferred from curvature. For a finite label set and its rotation orbits, $p_t$ is smooth and positive on each $[0,T]$, $T<1$; the conditional spectra are bounded there. The marginal field is locally Lipschitz with at most linear growth, yielding an ODE realization on such truncated intervals. More general data laws require the corresponding integrability and ODE assumptions.
+
+At inference draw $X_0=Sz$ and integrate
+\begin{equation}
+\dot X_t=v_\theta(X_t,t;G).
+\label{eq:inference}
+\end{equation}
+No target Hessian, target factor, or reference conformer is used. An exact empirical target, or a finite union of its rotation orbits, is singular in Cartesian space: the endpoint is an ideal limit, not a diffeomorphism guarantee for a smooth finite neural ODE. Stopping at $1-\delta$ leaves $p_{1-\delta}$ rather than exactly $q_{\mathrm{data}}$.
+
+\subsection{Rotations, translations, and atom permutations}
+For any orthogonal relabeling/rotation map $O:\mathcal X_G\to\mathcal X_{G'}$ applied consistently,
+\begin{equation}
+\begin{gathered}
+x_1'=Ox_1,\quad K'=OKO^\top,\quad C_0'=OC_0O^\top,\\
+S'=OSO^\top,\quad T_{K'}=OT_KO^\top,\quad L_{K'}=OL_KO^\top.
+\end{gathered}
+\label{eq:symmetry-matrices}
+\end{equation}
+These identities follow from uniqueness of SPD roots and \eqref{eq:T}. With $z'=Oz$, equations~\eqref{eq:factor} and \eqref{eq:law-target} give $X_t'=OX_t$ and $U_t'=OU_t$. Densities and conditional fields therefore transform covariantly. Joint-law consistency in \eqref{eq:joint} yields $v^*(Ox,t;G')=Ov^*(x,t;G)$, and the network should enforce the same covariance. Apply atom permutations to all matrix indices, graph features and stereochemistry, not just coordinates. Degenerate eigenspaces cause no mathematical ambiguity for matrix functions, although inconsistent numerical alignment can cause implementation errors.
+
+For translations, write a full configuration as $y=x+\mathbf1\otimes c$ and define $\widetilde v(y,t;G)=v(y-\mathbf1\otimes\bar y,t;G)$ with zero center velocity. Then $\widetilde v((I_N\otimes R)y+\mathbf1\otimes a)= (I_N\otimes R)\widetilde v(y)$. This is an $SE(3)$-equivariant extension. There is no normalizable uniform translation prior on $\R^3$; a fixed or separately specified center is required. Proper rotations do not require reflection invariance. These equations do not themselves prevent chirality errors, collisions, or invalid geometries.
+
+\section{Action, acceleration, and spectral limits}
+\label{sec:bounds}
+
+\subsection{Exact integrals and a maximum-curvature-independent target bound}
+Let $D=L_K-S$. Because $A_t=(1-t)S+g(t)D$, $\int_0^1\dot g\dd t=0$, $\int_0^1\dot g^2\dd t=2/15$ and $\int_0^1\ddot g^2\dd t=4$. Therefore
+\begin{equation}
+\boxed{\begin{aligned}
+\mathcal A_E&:=\int_0^1\E\norm{U_t}^2\dd t
+=\tfrac65\norm{x_1}^2+\tr C_0+\tfrac{2}{15}\bures^2(C_0,C_K),\\
+\J_E&=12\norm{x_1}^2+4\bures^2(C_0,C_K).
+\end{aligned}}
+\label{eq:integrals}
+\end{equation}
+The mean-action factor $6/5$ is retained from v2. Straight interpolation with the same source--endpoint pairing has action $\norm{x_1}^2+\tr C_0$, which is smaller except for degenerate cases. Minimum acceleration is \emph{not} minimum action.
+
+Since $\dot g\in[-1,1/3]$, $|\dot f|\leq4/3$ and $|\ddot g|\leq4$,
+\begin{equation}
+\begin{split}
+\norm{\dot A_t}_F&\leq\tfrac43\sqrt{\tr C_0}+\sqrt{\tr C_K},\\
+\norm{\ddot A_t}_F&\leq4\bures(C_0,C_K),\qquad
+\E[\norm{U_t}^2\mid x_1,K]=\dot\alpha^2\norm{x_1}^2+\norm{\dot A_t}_F^2.
+\end{split}
+\label{eq:target-bound}
+\end{equation}
+If $K\succeq\kappa_*I$ for a fixed $\kappa_*>0$, then $\tr C_K\leq\epsE d/\kappa_*$. With fixed source and bounded target second moments, sampled velocity and acceleration \emph{second moments} have bounds independent of $\lambda_{\max}(K)$. Gaussian samples are unbounded, so this is not a deterministic bound for every draw. It also does not remove ordinary dimension scaling or the cost of arbitrarily soft modes.
+
+The variational objective does imply temporal regularity of labels:
+\begin{equation}
+\E\norm{U_t-U_s}^2\leq |t-s|\int_s^t\E\norm{\ddot X_r}^2\dd r.
+\label{eq:time-regularity}
+\end{equation}
+This is a meaningful property of conditional supervision, not a neural convergence theorem.
+
+\subsection{Conditional Jacobian and material acceleration}
+If $r_j>0$ are the eigenvalues of $T_K$, the eigenvalues of $M_t$ are
+\begin{equation}
+\mu_j(t)=\frac{\dot f+\dot g\,r_j}{f+g\,r_j}.
+\end{equation}
+They are convex combinations of $\dot f/f$ and $\dot g/g$. Consequently, for $0<t<1$,
+\begin{equation}
+\boxed{-\frac2{1-t}+\frac1{1+t}\ \leq\ \mu_j(t)\ \leq\ \frac2t-\frac1{1-t}.}
+\label{eq:jac-bound}
+\end{equation}
+The spectrum is bounded independently of $\lambda_{\max}(K)$ on every compact interior time interval. Near $t=0$, $M_0=-I$ for every finite label. Uniform bounds including $t=0$ require control of soft modes, since $\norm{T_K}_2^2\leq\norm{C_K}_2/\lambda_{\min}(C_0)$. For $t\leq1-\delta$, $F_t\succeq\delta^2I$ gives, for example,
+\begin{equation}
+\norm{M_t}_2\leq\delta^{-2}(4/3+\norm{T_K}_2).
+\end{equation}
+There is no additional upper-curvature-induced nonnormality: $M_t$ is symmetric. Nevertheless it diverges when the conditional law collapses. For fixed SPD $T_K$,
+\begin{equation}
+F_t=(1-t)T_K+2(1-t)^2(I-T_K)+O((1-t)^3),\quad
+M_t=-\frac I{1-t}-2(T_K^{-1}-I)+O(1-t).
+\label{eq:terminal-jac}
+\end{equation}
+The remainder is not uniform as $\lambda_{\min}(T_K)\to0$.
+
+\subsection{Stiff and soft scalar modes; non-uniform terminal calibration}
+If $C_0$ and $K$ commute, let their corresponding eigenvalues be $c_{0,j}$ and $\kappa_j$. Define
+\begin{equation}
+b_j=\frac{c_{0,j}\kappa_j}{\epsE},\qquad r_j=b_j^{-1/2},\qquad
+a_j(t)=\sqrt{c_{0,j}}\,[f(t)+g(t)r_j].
+\label{eq:scalar}
+\end{equation}
+Larger stiffness gives smaller modal variance in this fixed common basis. For $b\geq1$,
+\begin{equation}
+\max_t|\dot a(t)|=\sqrt{c_0}\,\frac{4-b^{-1/2}}3,\qquad
+\int_0^1\dot a^2\dd t=c_0\left[1+\tfrac{2}{15}(1-b^{-1/2})^2\right].
+\label{eq:stiff-scalar}
+\end{equation}
+Thus even $b\to\infty$ does not create a large sampled target. At fixed $t<1$, however, $a(t)\to\sqrt{c_0}f(t)>0$: the strongest curvature is fully resolved only close to the endpoint.
+
+For $r=b^{-1/2}\ll1$ and $s=1-t$, $a/\sqrt{c_0}\simeq rs+2s^2$. The exact normalized variance ratio is
+\begin{equation}
+\frac{a(t)^2/s^2}{c_0r^2}
+=\left[t^2+\frac{1-t^2}{r}\right]^2.
+\label{eq:layer}
+\end{equation}
+Relative harmonic calibration needs $s\ll r$, or $1-t\ll b^{-1/2}$. The limits $t\to1$ and $b\to\infty$ do not commute. Away from that layer, the stiff-mode Jacobian resembles $-2/s$; inside it, it resembles $-1/s$. Difficulties have not simply been converted into a large terminal \emph{target}, but relative endpoint accuracy and conditional contraction remain demanding. A bound on a sampled target is not a bound on all ODE errors.
+
+For very soft modes, $r\to\infty$ implies $C_K\to\infty$, $|\dot a(1)|=\sqrt{c_0}r$ and $\mathcal A_{\mathrm{noise}}\sim(2/15)c_0r^2$. The divergent terminal velocity second moment cannot be avoided while retaining that covariance; the $O(r^2)$ action growth is specific to this cubic path, not a general lower bound. Moreover $\dot a(1/3)>0$ if $r>4$: a sufficiently soft mode first contracts, then expands, then collapses. Gaussian samples may then leave the basin where the Hessian was calibrated. A soft-mode floor or a local model change is necessary; an upper curvature cap is not necessary for the high-stiffness bound.
+
+For noncommuting $C_0,K$, the eigenvectors of $T_K$ are generally neither Cartesian Hessian modes nor source eigenvectors. The operator formulas, rather than an independent physical-mode interpretation, are authoritative. Increasing selected curvatures without simultaneous diagonalization need not reduce every intermediate directional variance.
+
+\section{Comparison to v2 and explicit falsifications}
+\label{sec:comparison}
+
+\subsection{What is rigorously improved}
+With $B=SKS/\epsE$, v2 uses
+\begin{equation}
+A_t^{(2)}=(1-t)S[I+h(t)(B-I)]^{-1/2},\qquad
+h(t)=\alpha(t)=3t^2-2t^3.
+\label{eq:v2}
+\end{equation}
+It has the same source, mean, initial velocity and terminal residual moments as \eqref{eq:boundary}; its terminal factor is $L_2=SB^{-1/2}$. Thus Theorem~\ref{thm:main} gives a genuine variational comparison. More explicitly,
+\begin{equation}
+\begin{split}
+\J_{v2}-\J_E
+={}&4\{\norm{L_2-S}_F^2-\bures^2(C_0,C_K)\}\\
+&+\int_0^1\norm{\ddot A_t^{(2)}-\ddot g(t)(L_2-S)}_F^2\dd t\ \geq0.
+\end{split}
+\label{eq:v2-gap}
+\end{equation}
+The first term is Euclidean endpoint-factor misalignment; the second is excess temporal bending with that factor fixed. Both can be measured independently. Equality holds in the calibration-neutral case $C_K=C_0$; no universal strict improvement is claimed.
+
+In a scalar mode, the v2 amplitude is
+\begin{equation}
+a_{v2}(t)=\frac{\sqrt{c_0}(1-t)}{\sqrt{1+h(t)(b-1)}}.
+\end{equation}
+For $b\gg1$, its early boundary layer $t=c/\sqrt b$ gives
+\begin{equation}
+\dot a_{v2}(c/\sqrt b)
+=-\sqrt{c_0b}\,\frac{3c}{(1+3c^2)^{3/2}}+O(\sqrt{c_0}),\qquad
+\max_t|\dot a_{v2}|\sim\tfrac23\sqrt{c_0b}.
+\label{eq:v2-amplification}
+\end{equation}
+Its noise action is asymptotic to $(\pi\sqrt3/16)c_0\sqrt b$: under $t=c/\sqrt b$, the leading coefficient is $\int_0^\infty9c^2(1+3c^2)^{-3}\dd c=\pi\sqrt3/16$. The new bound \eqref{eq:stiff-scalar} removes this amplification without clipping large curvatures or losing fixed-label endpoint calibration. This is stronger than merely delaying $h(t)$.
+
+For a fixed v2 covariance path, its velocity matrix is generally nonsymmetric,
+$M_2=-I/(1-t)-\tfrac12P_t^{-1}\dot P_t$. The minimum Euclidean-speed affine representative is the symmetric solution $B_*\Sigma+\Sigma B_*=\dot\Sigma$. With $D=M_2-B_*$,
+\begin{equation}
+\tr(M_2\Sigma M_2^\top)=\tr(B_*\Sigma B_*)+\tr(D\Sigma D^\top).
+\end{equation}
+This is a gauge observation, not a probability-path comparison. In source-whitened coordinates v2's chosen field is symmetric; different metrics select different minimum-speed representatives.
+
+\subsection{What is not improved: action dominance and Loewner order}
+A smaller $\J$ does not imply smaller $\mathcal A$. With $c_0=\epsE=1$ and $b=10^{-4}$, numerical quadrature gives
+\begin{equation}
+\mathcal A_{v2,\mathrm{noise}}\simeq34.3448,\qquad
+\mathcal A_{E,\mathrm{noise}}=1307.8.
+\label{eq:soft-counter}
+\end{equation}
+This soft-mode counterexample is fully compatible with \eqref{eq:v2-gap}. Cubic smoothing spreads the large soft-scale excursion over more of the time interval.
+
+V2 obeys, for fixed $C_0,t$,
+\begin{equation}
+K_1\succeq K_0\quad\Longrightarrow\quad
+\Sigma_{v2,K_1}(t)\preceq\Sigma_{v2,K_0}(t),
+\label{eq:v2-order}
+\end{equation}
+because inversion reverses SPD order. $\AltE$ does \emph{not} have this property for arbitrary anisotropic $C_0$. An independently constructed two-dimensional example is
+\begin{equation}
+C_0=\begin{pmatrix}4&0\\0&1\end{pmatrix},\quad
+K_0=\begin{pmatrix}1/4&0\\0&1/2\end{pmatrix},\quad
+K_1=K_0+\begin{pmatrix}1&1\\1&1\end{pmatrix},\quad \epsE=1.
+\label{eq:order-example}
+\end{equation}
+Although $K_1-K_0\succeq0$, at $t=1/2$,
+\begin{equation}
+\lambda\bigl(\Sigma_{E,K_0}-\Sigma_{E,K_1}\bigr)
+\simeq(-0.00260433,\ 0.22255381).
+\label{eq:order-failure}
+\end{equation}
+Thus even if $C_0$ commutes with one endpoint label, a noncommuting stiffness update can break order. This matrix-block counterexample can be embedded in a centered molecular space with an atom-space covariance tensored with $I_3$; source rotation invariance does not restore the order. It is an algebraic counterexample, not an observed molecular label.
+
+For $C_0=\sigma_0^2I$, full order \emph{is} preserved, even when $K_0$ and $K_1$ do not commute with each other:
+\begin{equation}
+\Sigma_E=f^2\sigma_0^2I+2fg\sigma_0\sqrt{\epsE}\,K^{-1/2}+g^2\epsE K^{-1}.
+\label{eq:isotropic-order}
+\end{equation}
+Both $K^{-1/2}$ and $K^{-1}$ reverse order, and coefficients are nonnegative. For a general $C_0$, the source-metric variant in Section~\ref{sec:metric} restores this property.
+
+\subsection{Not a scalar time or fixed-coordinate reparameterization of v2}
+The mean schedule is the same and strictly increasing on $(0,1)$; a common time reparameterization preserving it must be the identity. Even disregarding the mean, for commuting modes the value of precision parameter needed to match the normalized $\AltE$ amplitude is
+\begin{equation}
+h_j(t)=\frac{\{(1-t^2)+t^2/\sqrt{b_j}\}^{-2}-1}{b_j-1}.
+\end{equation}
+At $t=1/2$, $b=4$ requires $h\simeq0.10204$, whereas $b=100$ requires $h\simeq0.0067165$. There is generally no common scalar schedule that makes the paths equal. A fixed invertible coordinate change applied consistently to two laws cannot make two unequal laws equal; recomputing a Euclidean variational principle \emph{after} whitening changes the metric and is a different choice, not just notation.
+
+\section{What acceleration control does and does not say about CFM}
+\label{sec:learning}
+
+Ordinary square loss decomposes as
+\begin{equation}
+\mathcal L(\theta)=\E\norm{v_\theta(X_t,t;G)-v^*(X_t,t;G)}^2
++\E\tr\Cov(U_t\mid X_t,t,G).
+\label{eq:loss-decomposition}
+\end{equation}
+Different paths change both terms' underlying input law and the irreducible term. Lower raw loss is not automatically better approximation of the marginal transporting field. Similarly,
+$\E\norm{v^*}^2\leq\E\norm{U}^2$ holds for each construction, but does not order two constructions' marginal actions.
+
+Write $u_i,p_i,M_i$ for conditional quantities, with posterior expectation over the hidden label. Differentiating \eqref{eq:marginal} gives
+\begin{equation}
+Dv^*(x,t)=\E[M_i\mid x,t]
++\E[(u_i-v^*)\{\nabla\log p_i(x,t)\}^\top\mid x,t].
+\label{eq:marginal-jac}
+\end{equation}
+The posterior-separation term can be large despite controlled conditional targets. For example, two equally weighted scalar targets $x_1=\pm a$ with $C_0=C_K=1$ have $A_t=(1-t)$ and every conditional Jacobian $-1/(1-t)$. At $x=0$ their marginal Jacobian is
+\begin{equation}
+\partial_xv^*(0,t)
+=-\frac1{1-t}+\left(\dot\alpha+\frac\alpha{1-t}\right)
+\frac{\alpha a^2}{(1-t)^2},
+\label{eq:mixture-counter}
+\end{equation}
+which grows as $a^2/(1-t)^3$. This occurs in a low-density region and is not itself a prediction of average sampling cost; it falsifies a global Lipschitz guarantee from the conditional bounds.
+
+There is also an exact reason that minimum conditional acceleration need not minimize marginal acceleration. Let
+$\mathsf S(x,t)=\Cov(U_t\mid X_t=x,t)$ and $a_i=\partial_tu_i+(Du_i)u_i$. A first-velocity-moment calculation gives
+\begin{equation}
+\boxed{\partial_tv^*+(Dv^*)v^*
+=\E[a_i\mid x,t]-p_t^{-1}\nabla\cdot(p_t\mathsf S).}
+\label{eq:stress}
+\end{equation}
+Here $(\nabla\cdot(p\mathsf S))_a=\sum_b\partial_b(p\mathsf S_{ab})$. To prove it, differentiate $p_tv^*=\int p_iu_i\dd\nu$, use each conditional continuity equation, and split $\E[u_iu_i^\top\mid x]=v^*v^{*\top}+\mathsf S$. The stress-divergence term is not bounded by Jensen's inequality applied to $\J$. Thus the present path-space minimum is \emph{not} a minimum-acceleration theorem for the learned first-order marginal ODE. No acceleration network or phase-space inference is required or claimed.
+
+\section{Metric and boundary variants, kept separate from the core}
+\label{sec:variants}
+
+\subsection{A source-metric minimum: an ordering-preserving alternative}
+\label{sec:metric}
+Choose a fixed graph-only SPD metric $W$ and replace \eqref{eq:objective} by
+$\J_W=\E\int\ddot X_t^\top W\ddot X_t\dd t$, leaving \eqref{eq:boundary} unchanged. With $B_W=W^{1/2}$ and $Y=B_WX$, this is exactly the Euclidean theorem with transformed covariances $\widetilde C_0=B_WC_0B_W$ and $\widetilde C=B_WC_KB_W$. The same cubic schedules result; the physical map is $B_W^{-1}\widetilde T B_W$ and need not be symmetric in the original Euclidean norm.
+
+For the source metric $W=C_0^{-1}$, let
+\begin{equation}
+B=SKS/\epsE,\qquad T_W=SB^{-1/2}S^{-1},\qquad L_W=SB^{-1/2}.
+\end{equation}
+Then the alternative, denoted $\AltW$, is
+\begin{equation}
+\boxed{X_t=\alpha(t)x_1+S[f(t)I+g(t)B^{-1/2}]z.}
+\label{eq:AW}
+\end{equation}
+It shares source, endpoint, full local calibration, CFM correctness and symmetry with $\AltE$. Its minimum objective is
+\begin{equation}
+\J_{W,\min}=12x_1^\top C_0^{-1}x_1+4\norm{B^{-1/2}-I}_F^2.
+\end{equation}
+The Euclidean $\J$ for $\AltW$ is generally higher than for $\AltE$; comparing the two differently normalized objective values directly is meaningless. The velocity bound in \eqref{eq:target-bound} still holds with $L_W$, since $L_WL_W^\top=C_K$; the corresponding acceleration bound is $\norm{\ddot A_t}_F\leq4\norm{L_W-S}_F$, not generally $4\bures$. Its Eulerian matrix is similar to a symmetric whitened matrix, with additional Euclidean conditioning through $S$.
+
+A useful structural advantage is
+\begin{equation}
+\Sigma_W=S[f^2I+2fgB^{-1/2}+g^2B^{-1}]S.
+\label{eq:AW-cov}
+\end{equation}
+If $K_1\succeq K_0$, then $B_1\succeq B_0$, hence $B_1^{-1}\preceq B_0^{-1}$ and $B_1^{-1/2}\preceq B_0^{-1/2}$. The latter follows, for instance, by applying inverse-order reversal inside
+\begin{equation}
+B^{-1/2}=\frac1\pi\int_0^\infty u^{-1/2}(B+uI)^{-1}\dd u.
+\end{equation}
+Since $f,g\geq0$, \eqref{eq:AW-cov} proves full Loewner monotonicity. This restores a property lost by the Euclidean Bures candidate without restoring v2's precision schedule or high-stiffness target amplification.
+
+$\AltW$ can reuse v2's offline whitened eigendecomposition and even its terminal factor. Its \emph{time-dependent amplitude path} is nevertheless different. For isotropic $C_0$, $\AltE=\AltW$; for generally anisotropic priors they differ. If Euclidean label smoothing is the design objective, $\AltE$ is the exact solution. If prior-normalized geometry and covariance ordering are priorities, $\AltW$ is a defensible alternative. Energetic calibration alone does not choose between these metrics.
+
+\subsection{Free initial velocity: a different genuine minimum}
+\label{sec:boundary-variants}
+Retain $X_0\sim\cN(0,C_0)$, $X_1=x_1$ and the terminal moment conditions, but do not prescribe $\dot X_0$. The natural boundary condition is now $\ddot X_0=0$. Solving the cubic and coupling problems gives the same $T_K$ but
+\begin{equation}
+\begin{aligned}
+\alpha_N(t)&=\tfrac32t-\tfrac12t^3,\\
+f_N(t)&=1-\tfrac32t+\tfrac12t^3=(1-t)^2(1+t/2),\\
+g_N(t)&=\tfrac12t(1-t^2),\qquad X_t=\alpha_Nx_1+f_N\xi+g_NT_K\xi.
+\end{aligned}
+\label{eq:natural}
+\end{equation}
+Its objective and action are
+\begin{equation}
+\J_N=3\norm{x_1}^2+3\bures^2(C_0,C_K),\qquad
+\mathcal A_N=\tfrac65\norm{x_1}^2+\tr C_0+\tfrac15\bures^2(C_0,C_K).
+\label{eq:natural-values}
+\end{equation}
+These follow from $\ddot X_t=3t(\xi-x_1-T_K\xi)$ and direct integration. It has strictly less acceleration for nontrivial labels because the admissible class is larger, but
+\begin{equation}
+U_0=\tfrac32x_1-\tfrac32\xi+\tfrac12T_K\xi
+\end{equation}
+depends on the hidden endpoint. For equal scalar targets $\pm1$ with $C_0=C_K=1$, $\Cov(U_0\mid X_0)=9/4$ instead of zero. The same extra posterior variance persists near the start. This does not invalidate the variant; it shows why lower acceleration alone does not select the best CFM supervision. We retain the clamped version as the declared core, not as an unconditional optimum.
+
+Freeing only the mean's initial derivative similarly gives $\alpha_N$ while keeping the clamped factor, with $\J=3\norm{x_1}^2+4\bures^2$. Giving up both the zero-mean normalized endpoint error and the source-only initial mean velocity permits $\alpha=t$, reducing the mean action coefficient to $1$ and mean acceleration to zero, but the normalized error mean becomes $-x_1$. Such changes preserve the conformer endpoint and must be described as relaxed calibration variants rather than algebraic corrections.
+
+\subsection{Shared whitening and loss preconditioning}
+For a fixed invertible graph-only linear map $W_G$, transforming both source and target and then using a straight interpolation gives
+\begin{equation}
+W_G^{-1}[(1-t)W_Gx_0+tW_Gx_1]=(1-t)x_0+tx_1.
+\end{equation}
+Thus fixed whitening does not by itself change that physical path. Choosing an isotropic source \emph{after} whitening changes the original prior; changing the norm changes the variational problem, as in $\AltW$. Both may be useful simpler comparators, but are not identical claims.
+
+A fixed SPD loss weight measurable from $(X_t,t,G)$ preserves the unrestricted CFM conditional-mean optimum, although it changes finite-model optimization. Hidden-endpoint weighting by $K$ instead yields
+\begin{equation}
+v_W^*=(\E[W_i\mid x,t,G])^{-1}\E[W_iU_t\mid x,t,G],
+\end{equation}
+which need not transport $p_t$. Multiplying a trained field by an inverse stiffness also changes its continuity equation. The metric in \eqref{eq:AW} specifies the \emph{path-design objective}; it does not require a hidden-label-weighted training loss. Ordinary CFM is valid for both variants.
+
+\section{Physical limitations and coordinate choices}
+\label{sec:limitations}
+
+\textbf{Local curvature is not global geometry.} Two potentials can coincide near every labeled minimum but differ by a smooth perturbation supported between basins, with different barriers and additional minima. Their labels $K_i$ are identical. No endpoint-Hessian construction can infer those global changes. In $\AltE$, the Hessian influences interior paths through $T_K$ and $g(t)$ even when samples are far from the reference. The smoothstep mean $\alpha x_1$ still uniformly scales bond lengths, and every interior Gaussian has unbounded support. Local calibration is justified only near the endpoint and only where the reference approximation holds.
+
+\textbf{Geometry is not guaranteed by accessibility.} SPD covariance avoids exact freezing, but does not enforce bond-length ranges, angular domains, ring closure, steric exclusion or chirality. Cartesian Gaussian noise is not a global model of torsional flexibility. Equation~\eqref{eq:internal} is a local tangent statement, not an equivalence to internal-coordinate sampling.
+
+\textbf{Alternative coordinates have costs.} Normal-mode coordinates diagonalize a \emph{local} Hessian, but a target-dependent normal-mode prior is unavailable at inference unless marginalized by an explicit construction. A mass-weighted linear change does not add static energetic information: transforming its harmonic covariance back gives $\epsE H^{-1}$ on the retained vibrational space. A global internal-coordinate chart may encounter singularities, redundancies, periodicity and ring-closure constraints. A nonlinear map also transforms Hessians with gradient-dependent second-derivative terms away from stationary points. There is no assumption that all local stiffness metrics can be globally whitened.
+
+Centered Cartesian coordinates therefore remain the core because they support a shared linear Gaussian source and exact equivariance without solving geometric constraints. Local internal coordinates or retractions could improve physical locality, but would require a new path derivative, chart handling and cost analysis. They are not hidden inside the present Gaussian proof.
+
+\textbf{Exact finite-time collapse has an unavoidable price.} For a scalar width shrinking from $a(0)>0$ to $a(\tau)$,
+\begin{equation}
+\sup_{0\leq t\leq\tau}|\dot a(t)/a(t)|
+\geq\frac1\tau\left|\log\frac{a(\tau)}{a(0)}\right|.
+\end{equation}
+Arbitrarily narrow calibrated widths at a fixed interior time cannot coexist with uniformly bounded relative contraction. $\AltE$ avoids v2's avoidable large sampled velocities by delaying the relative resolution of extreme curvatures; it does not evade this lower bound or the terminal singularity.
+
+\section{Coding form and computational complexity}
+\label{sec:coding}
+
+\subsection{Offline preprocessing}
+For each graph compute $S=C_0^{1/2}$ once. For each reference label, construct and audit $K$, compute $C_K=\epsE K^{-1}$ using SPD solves, and form
+\begin{equation}
+L_K=C_0^{-1/2}(S C_K S)^{1/2},\qquad\text{equivalently }L_K=T_KS.
+\label{eq:offlineL}
+\end{equation}
+All square roots here are symmetric positive matrix functions, while $L_K$ need not be symmetric. Use float64 for the decomposition and record covariance residual $\norm{L_KL_K^\top-C_K}_F/\norm{C_K}_F$, positive definiteness, conditioning, and reference-calibration metadata. Exact identities do not guarantee reliable arithmetic at arbitrarily large condition numbers. Do not silently clip spectra to hide numerical failures.
+
+Only $L_K$ is needed per label during training; $K$ may remain in a separate audit archive. For $\AltW$, use $L_W=SB^{-1/2}$ instead. A generally dense exact label contains $O(d^2)$ information. Reducing to diagonal, block or low-rank structure requires an explicit approximation and renewed calibration checks.
+
+\Needspace{19\baselineskip}
+\subsection{Online target construction}
+Given $x_1,z,t,S,L_K$, perform two matrix--vector products once:
+\begin{equation}
+\xi=Sz,\qquad\eta=L_Kz,
+\end{equation}
+then scalar/vector combinations only:
+\begin{equation}
+\boxed{\begin{aligned}
+s&=1-t,&\alpha&=t^2(3-2t),& f&=s^2(1+t),&g&=t^2s,\\
+\dot\alpha&=6ts,&\dot g&=t(2-3t),&\dot f&=-1-\dot g,\\
+X_t&=\alpha x_1+f\xi+g\eta,&&
+U_t=\dot\alpha x_1+\dot f\xi+\dot g\eta.
+\end{aligned}}
+\label{eq:coding}
+\end{equation}
+Do not compute $\Sigma_t^{-1}$ or divide by $1-t$ during label construction. In float arithmetic the factored expressions for $f,g$ avoid cancellation near the endpoint. Draw training times in $(0,1)$; exact boundary values are for algebra tests.
+
+For rotation augmentation, compute $(x_1,\xi,\eta)$ in the stored orientation and rotate all three vectors before forming $X_t,U_t$. Source invariance makes this equivalent in law to rotating the entire label, and it avoids materializing a rotated dense factor per draw. Rotating vectors costs $O(d)$; conjugating a stored factor by the molecular block rotation would cost $O(d^2)$, not require a new matrix decomposition. The \emph{same} noise vector must be used in both products. Independent draws would destroy the optimized coupling and alter the covariance path. Relabel vectors and the graph consistently for atom-permutation augmentation.
+
+\begin{center}\small
+\begin{tabular}{p{0.36\linewidth}p{0.54\linewidth}}
+\toprule
+Stage & Dense operation/storage cost\\\midrule
+Reference potential / Hessian & Model-specific; separate from matrix algebra.\\
+Shared source decomposition & $O(d^3)$ per graph, $O(d^2)$ storage; graph structure can reduce this.\\
+Per-label calibration and factor & $O(d^3)$ preprocessing, $O(d^2)$ stored factor.\\
+Training label draw & $O(d^2)$ for two matvecs, $O(d)$ scalar combinations; no time-dependent decomposition.\\
+Training network & Unchanged architecture-dependent cost; label I/O can still be significant.\\
+Inference & Source draw plus neural ODE evaluations; no target curvature or factor.\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+V2 has the same dense asymptotic orders after whitening/decomposition. The new form simplifies per-time arithmetic but does not prove a wall-time speedup. For large molecules, Hessian construction and dense storage can dominate both methods. The companion script exposes \texttt{prepare\_label} and \texttt{sample\_target} as a runnable NumPy implementation, in addition to verification routines.
+
+\section{Independent verification and final assessment}
+\label{sec:verification}
+
+The companion \texttt{StifFlow\_Alternative\_A\_verification.py} uses seed $20260916$, float64 NumPy/SciPy, 12 independently generated noncommuting SPD pairs in dimensions $3,5,9$, and six interior time points per pair. Fourth-order central first differences use step $10^{-5}$. It also tests actual centered molecular block rotations, atom permutations, translation extension, a synthetic stationary spring Hessian, a non-Gaussian residual coupling, free-start failure modes, and the source-metric ordering theorem.
+
+Except where marked absolute, errors are $\norm{a-b}/(1+\norm a+\norm b)$; continuity residuals are normalized by one plus the sum of term magnitudes. The JSON records the random seed and test settings, scalar diagnostics, counterexample matrices, environment versions, the script hash and all assertions. Endpoint-limit convergence is recorded separately; it is not treated as a roundoff-level identity.
+
+\begin{center}\small
+\begin{tabular}{p{0.67\linewidth}r}
+\toprule
+Independent check & Maximum error\\\midrule
+Gaussian OT identity $T_KC_0T_K=C_K$ & $1.01\times10^{-14}$\\
+Sample velocity, fourth-order finite difference (absolute) & $7.10\times10^{-11}$\\
+Sample acceleration, finite difference (normalized) & $4.39\times10^{-11}$\\
+Gaussian continuity, finite difference & $1.91\times10^{-11}$\\
+Full variational gap identity & $9.60\times10^{-16}$\\
+Exact action / acceleration identities & $7.41\times10^{-16}$\\
+V2 acceleration-gap decomposition & $2.73\times10^{-16}$\\
+Molecular rotations / permutations, sample and matrix checks & $1.82\times10^{-15}$\\
+Source-metric acceleration objective identity & $2.41\times10^{-16}$\\
+Marginal continuity, finite difference & $6.37\times10^{-12}$\\
+Marginal Jacobian / momentum-stress identities & $6.80\times10^{-12}$\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+For $c_0=\epsE=1$, independent scalar quadrature gives:
+\begin{center}\small
+\begin{tabular}{rrrrr}
+\toprule
+$b$ & $\max|\dot a_{v2}|$ & $\max|\dot a_E|$ & $\mathcal A_{v2,\mathrm{noise}}$ & $\mathcal A_{E,\mathrm{noise}}$\\\midrule
+$10^{-4}$ & $100.000$ & $100.000$ & $34.3448$ & $1307.8000$\\
+$1$ & $1.000$ & $1.000$ & $1.0000$ & $1.0000$\\
+$10^2$ & $7.025$ & $1.300$ & $3.7630$ & $1.1080$\\
+$10^4$ & $67.029$ & $1.330$ & $34.3448$ & $1.1307$\\
+$10^6$ & $667.030$ & $1.333$ & $340.4210$ & $1.1331$\\
+\bottomrule
+\end{tabular}
+\end{center}
+All assertions passed. These tests support the displayed algebra and reproduce failures of stronger claims. They are not measurements of molecular calibration accuracy, conformer coverage, optimization quality, or inference speed.
+
+\textbf{Decision.} The original candidate does not need a corrected cubic schedule or a different Euclidean factor. Its exact formula follows from a broader moment-constrained random-path problem than the original affine derivation assumed. What must be corrected is the interpretation: it is a \emph{clamped Euclidean minimum-acceleration conditional design}, not a globally optimal molecular flow, not a v2 reparameterization, and not automatically a minimum-complexity marginal velocity.
+
+Use $\AltE$ as the explicit Euclidean core. Retain $\AltW$ as a clearly named, ordering-preserving metric variant, especially for anisotropic graph priors. Retain v2 as a baseline, and do not discard simpler prior/whitening controls. Free-start or weaker-calibration paths are genuine alternatives, not mistakes, but sacrifice the source-only initial target or the chosen full endpoint interpretation.
+
+\textbf{Relation to existing work.} Hessian-informed conditional paths already exist \cite{sprague}; Gaussian/Bures geometry and measure-valued acceleration transport are established \cite{bhatia,benamou,chen}. BWFlow also uses Bures--Wasserstein flow matching for graph generation \cite{jiang}. The recent TracingFlow preprint uses minimum-acceleration particle paths and learns acceleration in phase space \cite{sun}; the present proposal instead uses an offline curvature-calibrated path and ordinary first-order CFM velocity regression. These references preclude a novelty claim based only on combining ``Bures,'' ``cubic,'' and ``flow matching.'' The scientifically unresolved issue is whether calibrated molecular curvature adds value beyond simpler anisotropic geometry at feasible cost.
+
+\appendix
+\section{Boundary and variational identities in explicit form}
+\label{app:identities}
+
+The coefficients in \eqref{eq:schedules} follow by writing a cubic $X_t=a_0+a_1t+a_2t^2+a_3t^3$. The four constraints give $a_0=\xi$, $a_1=-\xi$, $a_2=3x_1+\eta-\xi$, and $a_3=\xi-\eta-2x_1$. Hence
+\begin{equation}
+\ddot\Gamma_t=(6-12t)x_1+(2-6t)(\eta-\xi).
+\end{equation}
+The scalar integrals used throughout are
+\begin{equation}
+\begin{gathered}
+\int_0^1\dot\alpha^2\dd t=\frac65,\quad
+\int_0^1\ddot\alpha^2\dd t=12,\quad
+\int_0^1\dot g\dd t=0,\quad
+\int_0^1\dot g^2\dd t=\frac{2}{15},\\
+\int_0^1\ddot g^2\dd t=4,\qquad
+\int_0^1\ddot\alpha\,\ddot g\dd t=6.
+\end{gathered}
+\end{equation}
+The mixed acceleration term averages to zero because $\E(\eta-\xi)=0$. For fixed factors, any variation $A_t\mapsto A_t+R_t$ with $R,\dot R$ zero at the boundaries has exact excess $\int\norm{\ddot R}_F^2$. For a changed terminal factor $L$, the additional optimum gap is $4(\norm{L-S}_F^2-\bures^2)$, as in \eqref{eq:fullgap}. This separates temporal bending from factor alignment.
+
+To justify the normalized endpoint trace for a general admissible path, write
+\begin{equation}
+\frac{X_{1-s}-X_1}{s}+\dot X_1
+=\frac1s\int_{1-s}^1(\dot X_1-\dot X_r)\dd r.
+\end{equation}
+Cauchy--Schwarz and the $L^2H^2$ bound make this converge to zero in $L^2$. For the optimizing cubic the convergence rate is explicit in \eqref{eq:full-error}. There is no need to assume the terminal factor's orientation in advance.
+
+For the natural free-start problem, fix $\xi,\eta$ and allow $\delta\dot X_0$. The boundary term in the first variation imposes $\ddot X_0=0$, and $X^{(4)}=0$ gives
+\begin{equation}
+X_t=\xi+\left[\tfrac32(x_1-\xi)+\tfrac12\eta\right]t
++\tfrac12(\xi-x_1-\eta)t^3.
+\end{equation}
+Then $\J=3\norm{x_1}^2+3\E\norm{\eta-\xi}^2$; the same coupling-gap identity proves \eqref{eq:natural-values}. This is an explicit falsification of claiming that the clamped candidate minimizes acceleration with only positional and terminal-calibration constraints.
+
+\section{Additional implementation and reproducibility notes}
+
+A principal square root is used for $S$ to simplify covariance under relabeling. Another source factor $S_0$ with $S_0S_0^\top=C_0$ is valid if its terminal factor is \emph{also} $T_KS_0$ and the latent-noise transformations are handled consistently. Arbitrarily changing only the terminal factor is not a harmless gauge change. Independent endpoint noise likewise changes $\Cov(X_t)$ to $f^2C_0+g^2C_K$ by removing the optimized cross covariance.
+
+The script also constructs a non-Gaussian joint coupling with Gaussian marginals: in one dimension take $\xi=\sqrt{c_0}z$ and $\eta=\sqrt{c_1}Jz$ with independent $J=\pm1$ equally likely. Its cross moment vanishes. Equation~\eqref{eq:coupling-gap} correctly assigns it a strictly positive excess over the deterministic OT coupling. The theorem does not assume the joint source--residual law is Gaussian.
+
+The local spring-potential test uses six rest-length pair springs on a non-collinear tetrahedron. At rest, $H=J^\top\diag(k_a)J$ has the correct geometric rotational nullspace. This tests projector construction and the small-displacement energy ratio, not the reliability of any chemical force field. Exact endpoint checks, convergence tests at finite $1-t$, and high-condition-number asymptotics are distinct checks and are reported separately.
+
+\begin{samepage}
+To rerun the algebra and compile the note:
+\begin{verbatim}
+python StifFlow_Alternative_A_verification.py \
+  --output StifFlow_Alternative_A_verification_results.json
+pdflatex StifFlow_Alternative_A_core_formulation.tex
+pdflatex StifFlow_Alternative_A_core_formulation.tex
+\end{verbatim}
+\end{samepage}
+The \LaTeX{} source contains its own bibliography and numerical summary; no external figure or bibliography file is needed. The verification script requires NumPy and SciPy and records the versions actually used. The source-metric option changes offline factor preparation only; the online sampler is identical.
+
+\begin{thebibliography}{10}\small\raggedright
+\bibitem{baseline}
+StifFlow project note. \emph{Revised core mathematical formulation}, version 2 (2026).
+Supplied files \texttt{StifFlow\_core\_formulation\_v2.pdf/.tex}. Internal baseline, not an external publication.
+\bibitem{bhatia}
+R. Bhatia, T. Jain, and Y. Lim. On the Bures--Wasserstein distance between positive definite matrices.
+\emph{Expositiones Mathematicae} \textbf{37}(2), 165--191 (2019).
+\href{https://arxiv.org/abs/1712.01504}{arXiv:1712.01504}.
+\bibitem{benamou}
+J.-D. Benamou, T. Gallou\"et, and F.-X. Vialard. Second order models for optimal transport and cubic splines on the Wasserstein space.
+\href{https://arxiv.org/abs/1801.04144}{arXiv:1801.04144} (2018).
+\bibitem{chen}
+Y. Chen, G. Conforti, and T. T. Georgiou. Measure-valued spline curves: an optimal transport viewpoint.
+\href{https://arxiv.org/abs/1801.03186}{arXiv:1801.03186} (2018).
+\bibitem{lipman}
+Y. Lipman, R. T. Q. Chen, H. Ben-Hamu, M. Nickel, and M. Le. Flow Matching for Generative Modeling.
+\emph{ICLR} (2023). Mathematical reference: \href{https://arxiv.org/abs/2210.02747v2}{arXiv:2210.02747v2}.
+\bibitem{hassan}
+M. Hassan, N. Shenoy, J. Lee, H. Stark, S. Thaler, and D. Beaini. ET-Flow: Equivariant Flow-Matching for Molecular Conformer Generation.
+\emph{NeurIPS} (2024). \href{https://arxiv.org/abs/2410.22388}{arXiv:2410.22388}.
+\bibitem{sprague}
+C. I. Sprague, A. Elofsson, and H. Azizpour. Hessian-Informed Flow Matching.
+\href{https://arxiv.org/abs/2410.11433v1}{arXiv:2410.11433v1} (2024).
+\bibitem{jiang}
+K. Jiang, J. Cui, X. Dong, and L. Toni. Bures-Wasserstein Flow Matching for Graph Generation.
+\href{https://arxiv.org/abs/2506.14020}{arXiv:2506.14020} (2025).
+\bibitem{sun}
+Y. Sun, Z. Wu, Z. Huang, and P. Zhou. TracingFlow: A Simulation-Free Trajectory Inference Framework Based on Second-Order Dynamics.
+\href{https://arxiv.org/abs/2608.21070}{arXiv:2608.21070} (2026). Preprint.
+\end{thebibliography}
+\end{document}

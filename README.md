@@ -5,6 +5,9 @@ Euclidean `A_E`，依据 `eq:T`、`eq:factor`、`eq:offlineL`、`eq:coding`。
 原文件（含双点文件名）保持不变；PDF 尚未逐页核对。代码导入公共 `stifflow`，
 不复制 backbone、训练器或 source，不安装 editable 包。
 
+2026-10-18 已将现有 PDF/LaTeX 纳入本分支的版本控制，正文版本与 SHA256 见
+[formulation 归档](formulation/README.md)。本次仅归档文档，算法实现未改动。
+
 ```python
 from stifflow_alt_a import prepare_label, sample_target
 
