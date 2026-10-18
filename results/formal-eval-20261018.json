@@ -10,7 +10,8 @@
   "evaluation_code": {
     "stifflow-v1": "b8989dd",
     "stifflow-v1-benchmark": "1fd8a85",
-    "note": "local commits on shhpc-formal-eval / shhpc-formal-eval-benchmark; not pushed at report time"
+    "note": "pushed to origin on 2026-10-18; shhpc-formal-eval @ 76b92e3 (eval patch b8989dd + results) and shhpc-formal-eval-benchmark @ 1fd8a85; verified on remote",
+    "results_commit": "76b92e3"
   },
   "config": {
     "path": "stifflow-v1/configs/qm9-formal-4090d.yaml",
