@@ -1,6 +1,7 @@
 """Bounded CPU float64 reads; no full dense label array is copied into RAM."""
 
 from collections import OrderedDict
+from copy import deepcopy
 from functools import lru_cache
 from pathlib import Path
 
@@ -11,16 +12,46 @@ from .preflight import fingerprint
 from .source import Source
 
 
+def relocate_manifest(manifest, manifest_path, cache_root):
+    """Relocate only packed arrays in memory; canonical manifest bytes stay frozen."""
+    if manifest.get("schema_version") != 3 or manifest.get("split") not in (
+        "train",
+        "val",
+        "test",
+    ):
+        raise ValueError("Relocation requires a version-3 packed split")
+    source = Path(manifest_path).resolve().parent
+    root = Path(cache_root).resolve()
+    destination = (root / manifest["split"]).resolve()
+    if not destination.is_relative_to(root):
+        raise ValueError("Packed split escapes staging root")
+    relocated = deepcopy(manifest)
+    files = [relocated["row_index"]]
+    for kind in ("graph_shards", "factor_shards"):
+        for shard in relocated[kind]:
+            files.extend(shard["files"].values())
+    for item in files:
+        path = Path(item["path"]).resolve()
+        if not path.is_relative_to(source):
+            raise ValueError("Packed array escapes canonical split")
+        target = (destination / path.relative_to(source)).resolve()
+        if not target.is_relative_to(destination):
+            raise ValueError("Packed array escapes staging split")
+        item["path"] = str(target)
+    return relocated
+
+
 @lru_cache(maxsize=64)
 def basis(atoms):
     return centered_basis(atoms)
 
 
 class PackedRecords:
-    def __init__(self, manifest, method, max_open_parts=16, graph_cache_size=64):
+    def __init__(self, manifest, method, max_open_parts=None, graph_cache_size=64):
         if (
             method not in ("precision", "alternative_a", "control")
-            or min(max_open_parts, graph_cache_size) < 1
+            or (max_open_parts is not None and max_open_parts < 1)
+            or graph_cache_size < 1
         ):
             raise ValueError("Invalid method or cache bounds")
         self.manifest = manifest
@@ -41,6 +72,19 @@ class PackedRecords:
             or not np.array_equal(self.index[:, 2], expected)
         ):
             raise ValueError("Packed row/label pairing differs")
+        # Uniform sampling draws from every molecule, so each batch touches many
+        # shard indices. Opening a packed shard costs a stat plus an np.load(mmap)
+        # per field, which is ~1 ms on GPFS, so the previous fixed LRU of 16 parts
+        # thrashed and re-opened shards on almost every sample once a cache held
+        # hundreds of shards (e.g. 123 graph + 388 factor for the frozen train
+        # split). Keep every shard open by default: mmaps are lazy and the
+        # descriptor cost is negligible against the 65536 default limit (a
+        # 511-shard cache uses ~2555 descriptors). Pass an explicit bound to cap
+        # descriptors for unusually large caches.
+        if max_open_parts is None:
+            max_open_parts = max(
+                1, len(manifest["graph_shards"]) + len(manifest["factor_shards"])
+            )
         self.max_open_parts = max_open_parts
         self.graph_cache_size = graph_cache_size
         self.parts = OrderedDict()

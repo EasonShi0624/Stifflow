@@ -1,6 +1,34 @@
-# StifFlow：官方 memmap 接入与受控 pilot
+# StifFlow：官方 memmap 接入与正式训练
 
-当前路线锁定：保留 main@80f82d7 的现有 SO(3) backbone，数据使用
+## 2026-10-18：正式实验后研究交接
+
+P0 诊断、stiffness 负对照、线性耦合及可选 clock 的实现、25k 配置和 SHHPC 命令见
+[研究交接](docs/research-next-stage.md)。相关轻量回归为 **69 passed**；新实验待 SHHPC 验收和执行。
+本次将 core 与 Alternative A 的既有 PDF/LaTeX 分别纳入对应分支，版本和 SHA256 见
+[core formulation 归档](formulation/README.md) 与 Alternative A 分支的 `formulation/README.md`。
+以下各日期段落保留此前交接记录；固定提交版本见 [本次发布记录](docs/shhpc-research-release-20261018.md)。
+
+## 2026-10-15：SHHPC 正式训练修复交接
+
+修复分支 `torch/shhpc-training-safety` 基于 SHHPC
+`867e75649ac66f50f05c2831d0d7e50bd8e43301`，保留已开始的训练进度：
+
+- 原 GPU receipt 不变，新增精确绑定代码哈希与 CPU 检查的 I/O 兼容记录。
+- canonical manifest 不再改写；本地 staging、job ID 和代码提交记录与训练身份分开。
+- 私有 staging、复制空间锁及 checkpoint 单写入锁保护源数据和其他作业。
+- references 同步映射原子与坐标，真实拓扑变化报错；完整 checkpoint 可向新目录受控迁移。
+
+入口、配置、环境变量和迁移命令见 [SHHPC 交接说明](scripts/shhpc/README.md)。
+CPU 回归 **64 passed / 106.89 s**，覆盖旧/新 reader、旧 staging 哈希重建、
+`32×4` 标量训练连续/迁移恢复、目录与并发保护、reference 排列及 stereo。
+兼容记录为 [shhpc-io-compatibility-20261015.json](results/shhpc-io-compatibility-20261015.json)。
+未新增 GPU 验证、处理真实 checkpoint 或重导出全量 references；这些运行产物尚未提供。
+SHHPC 先交接旧作业完整版本与运行记录，在有效 checkpoint 后切换代码并迁移，
+不能将修复版直接接到旧 owner 目录或在运行过程中替换代码。
+
+## 先前 pilot 路线记录
+
+pilot 路线保留 main@80f82d7 的现有 SO(3) backbone，数据使用
 clean-sde@2f20cadeb047b7dc7cd3a363c729373f288c2d08 对应的 **v3 QM9 scaffold**
 memmap；三方法共用 128 个 train / 32 个 val 分子的全部官方构象。
 Torch 实现接口与轻量检查，真实标签计算、官方生成、Lightning 验收和 pilot 由 SHHPC 执行。
@@ -905,12 +933,17 @@ export PYTHONDONTWRITEBYTECODE=1
 account `wjg3`、GPU partition `rooster,chem`、CPU partition `parallel,debug,chem,rooster`，
 `ETFLOW_ENV` 默认 `$HOME/anaconda3/envs/etflow`；其它站点必须替换这些资源参数，并按当地规则提交。
 
-数据、checkpoint、缓存、运行结果和原先未跟踪的 formulation PDF/LaTeX **不随本次代码推送**。
+此前接口迁移的推送不包含数据、checkpoint、缓存、运行结果或当时未跟踪的 formulation PDF/LaTeX。
+本次 2026-10-18 交接已将两份 formulation 的 PDF/LaTeX 纳入对应分支，数据与运行产物仍不提交。
 它们需由用户在目标集群提供；README 中 `cache/`、`runs/` 的既有验证记录只在当前工作区，
 不是 GitHub 中的文件。可选官方 checkpoint 缺失时 provenance 记录 `exists=false`；真正使用
 某项数据/权重的任务仍会在读取它时明确失败，不会使用随机权重代替。
 
-全文数学依据的目录与文件名见本 README 顶部；复现实验时另外提供原文件并记录哈希。
+全文数学依据的目录与文件名见本 README 顶部；复现实验时核对 formulation 归档中的正文版本和哈希。
 先运行共享测试，再解决 MMFF94 未达到 stationarity 的样本及完整共同训练清单，最后开展
 Lightning smoke、恢复验收和受控 pilot。过去的 16 项 CPU 测试结果是本次迁移之前的记录，
 不能代替目标集群上的验证。
+
+正式实验后的 P0 诊断、stiffness 负对照、线性耦合与可选 clock 变体见
+[研究工具与 SHHPC 交接](docs/research-next-stage.md)。新方法使用独立 research profile；
+本地轻量检查不代表已完成新一轮训练或生成验证。

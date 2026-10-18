@@ -7,8 +7,10 @@ from pathlib import Path
 
 import numpy as np
 
+from .cache_io import atomic_json
 from .official_data import KIND, SAMPLING, validate_label_manifest, validate_label_pair
 from .preflight import WORKSPACE, fingerprint, provenance
+from .research_paths import BASE_METHODS, METHODS, label_method
 from .smoke import external_directory
 
 
@@ -53,7 +55,10 @@ def advance_cursor(consumed, supervision, rank=0, world_size=1):
     return consumed + len(supervision) * world_size
 
 
-def load_records(manifest_path, split, count, method, source_config):
+def load_records(
+    manifest_path, split, count, method, source_config, packed_cache_root=None
+):
+    method = label_method(method)
     from rdkit import Chem
 
     from .features import graph_from_mol
@@ -63,6 +68,8 @@ def load_records(manifest_path, split, count, method, source_config):
 
     manifest_path = Path(manifest_path).resolve()
     manifest = json.loads(manifest_path.read_text())
+    if packed_cache_root is not None and manifest.get("schema_version") != 3:
+        raise ValueError("Packed relocation requires version-3 labels")
     if manifest.get("speed_only"):
         raise ValueError(
             "Speed-only caches cannot be used for model training/evaluation"
@@ -88,7 +95,7 @@ def load_records(manifest_path, split, count, method, source_config):
         )
     if manifest.get("schema_version") == 3:
         from .formal_cache import signature
-        from .packed_data import PackedRecords
+        from .packed_data import PackedRecords, relocate_manifest
 
         current = signature(
             manifest["data_manifest"]["path"],
@@ -103,7 +110,14 @@ def load_records(manifest_path, split, count, method, source_config):
 
         if count not in (None, "all", len(manifest["records"])):
             raise ValueError("Formal training uses the complete shared accepted cohort")
-        return PackedRecords(manifest, method)
+        return PackedRecords(
+            (
+                relocate_manifest(manifest, manifest_path, packed_cache_root)
+                if packed_cache_root is not None
+                else manifest
+            ),
+            method,
+        )
     eligible = [r for r in manifest["records"] if r["split"] == split]
     if count in (None, "all"):
         count = len(eligible)
@@ -293,18 +307,21 @@ def main():
     parser.add_argument("--val-labels", type=Path, required=True)
     parser.add_argument(
         "--method",
-        choices=["precision", "alternative_a", "control"],
+        choices=METHODS,
         default="precision",
     )
     parser.add_argument(
-        "--profile", choices=["smoke", "pilot", "formal"], default="smoke"
+        "--profile", choices=["smoke", "pilot", "formal", "research"], default="smoke"
     )
     parser.add_argument("--seed", type=int)
     parser.add_argument("--checkpoint-dir", type=external_directory)
     parser.add_argument("--acceptance", type=Path)
+    parser.add_argument("--io-compatibility", type=Path)
+    parser.add_argument("--packed-cache-root", type=Path)
     parser.add_argument("--output", type=external_directory, required=True)
     parser.add_argument("--resume", type=Path)
     parser.add_argument("--stop-after", type=int)
+    parser.add_argument("--clock", type=Path)
     args = parser.parse_args()
     if not os.getenv("SLURM_JOB_ID"):
         parser.error("Training belongs in an allocated Slurm job")
@@ -321,9 +338,36 @@ def main():
     cfg = yaml.safe_load(args.config.read_text())
     profile = cfg["profiles"][args.profile]
     formal = args.profile == "formal"
+    research = args.profile == "research"
+    scheduled = formal or research
+    if not research and args.method not in BASE_METHODS:
+        parser.error("New paths require the separate research profile")
     seed = cfg["seed"] if args.seed is None else args.seed
     accumulation = profile.get("accumulate_grad_batches", 1)
     effective_batch = cfg["batch_size"] * accumulation
+    if research and (
+        effective_batch != 128
+        or profile["steps"] != 25000
+        or cfg["model_args"]["first_cycle_steps"] != 250000
+    ):
+        parser.error(
+            "Research budget is 25000 updates, effective batch 128, original 250000-step LR schedule"
+        )
+    if research and (
+        seed not in cfg["training_seeds"]
+        or cfg["dataset_seed"] != 42
+        or cfg["row_rng_domain"] != 2
+    ):
+        parser.error("Research comparisons retain the formal seeds and row sampling")
+    path_clock = json.loads(args.clock.read_text()) if args.clock else None
+    if (args.method == "precision_clock") != (path_clock is not None):
+        parser.error("Only precision_clock requires --clock")
+    if path_clock is not None and (
+        path_clock.get("train_manifest", {}).get("sha256")
+        != fingerprint(args.train_labels)["sha256"]
+        or path_clock.get("source_config") != cfg["source"]
+    ):
+        parser.error("Clock belongs to different training labels/source")
     if formal and (effective_batch != 128 or profile["steps"] != 250000):
         parser.error(
             "Formal budget is 250000 optimizer updates with effective batch 128"
@@ -348,7 +392,7 @@ def main():
             raise ValueError(
                 "Official molecule selection seed differs from dataset seed"
             )
-    if formal and (
+    if scheduled and (
         train_manifest.get("schema_version") != 3
         or val_manifest.get("schema_version") != 3
     ):
@@ -361,12 +405,18 @@ def main():
         profile["train_molecules"],
         args.method,
         cfg["source"],
+        args.packed_cache_root,
     )
     val = load_records(
-        args.val_labels, "val", profile["val_molecules"], args.method, cfg["source"]
+        args.val_labels,
+        "val",
+        profile["val_molecules"],
+        args.method,
+        cfg["source"],
+        args.packed_cache_root,
     )
-    train_metadata = train.records if formal else train
-    val_metadata = val.records if formal else val
+    train_metadata = train.records if scheduled else train
+    val_metadata = val.records if scheduled else val
     if {r["id"] for r in train_metadata} & {r["id"] for r in val_metadata}:
         raise ValueError("Train/validation overlap")
     start_step = 0
@@ -374,7 +424,7 @@ def main():
         # Only trusted local checkpoints produced by this entry point.
         saved = torch.load(args.resume, map_location="cpu", weights_only=False)
         start_step = int(saved["global_step"])
-        if formal and "optimizer_states" not in saved:
+        if scheduled and "optimizer_states" not in saved:
             raise ValueError("Inference snapshots cannot resume training")
         if saved["hyper_parameters"]["method"] != args.method:
             raise ValueError("Resume method differs")
@@ -384,6 +434,7 @@ def main():
         method=args.method,
         seed=seed,
         source_config=cfg["source"],
+        path_clock=path_clock,
         **cfg["model_args"],
     )
     model.gpu_memory = cfg.get("gpu_memory")
@@ -393,18 +444,40 @@ def main():
         "config": cfg,
         "profile": args.profile,
     }
+    if research:
+        model.training_signature.update(
+            training_seed=seed,
+            dataset_seed=cfg["dataset_seed"],
+            effective_batch_size=effective_batch,
+            row_rng_domain=cfg["row_rng_domain"],
+            path_clock=path_clock,
+            research_implementation={
+                name: fingerprint(Path(__file__).with_name(name))["sha256"]
+                for name in (
+                    "training.py",
+                    "model.py",
+                    "targets.py",
+                    "research_paths.py",
+                    "research_clock.py",
+                )
+            },
+        )
     run_provenance = provenance()
+    accepted = None
+    compatibility = (
+        json.loads(args.io_compatibility.read_text()) if args.io_compatibility else None
+    )
     if formal:
         from .formal import acceptance_signature, require_torch_runtime
 
-        if max_steps > 40:
+        if max_steps > 40 or cfg.get("runtime_acceptance") == "torch_runtime":
             if args.acceptance is None:
                 parser.error(
                     "Formal training requires --acceptance from the new 40-update/resume checks"
                 )
             accepted = json.loads(args.acceptance.read_text())
             if cfg.get("runtime_acceptance") == "torch_runtime":
-                require_torch_runtime(accepted, cfg)
+                require_torch_runtime(accepted, cfg, compatibility)
             elif (
                 accepted.get("status") != "completed"
                 or accepted.get("methods") != ["precision", "alternative_a", "control"]
@@ -433,6 +506,24 @@ def main():
         model.training_signature.update(
             sampling=sampling, official_data=train_manifest["data_manifest"]["sha256"]
         )
+    if formal and cfg.get("runtime_acceptance") == "torch_runtime":
+        from .formal import formal_training_signature
+
+        model.training_signature = formal_training_signature(
+            args.train_labels, args.val_labels, cfg, seed, accepted
+        )
+    model.execution_provenance = {
+        "provenance": run_provenance,
+        "packed_cache_root": (
+            str(args.packed_cache_root.resolve()) if args.packed_cache_root else None
+        ),
+        "acceptance": fingerprint(args.acceptance) if args.acceptance else None,
+        "io_compatibility": (
+            fingerprint(args.io_compatibility) if args.io_compatibility else None
+        ),
+    }
+    if args.resume and "checkpoint_migration" in saved:
+        model.checkpoint_migration = saved["checkpoint_migration"]
     if args.resume and saved.get("training_signature") != model.training_signature:
         raise ValueError("Resume dataset, seed or configuration differs")
     consumed = (
@@ -452,11 +543,11 @@ def main():
         "sampling": sampling,
         "train_rows": (
             int(train.offsets[-1])
-            if formal
+            if scheduled
             else sum(len(r["positions"]) for r in train)
         ),
         "val_rows": (
-            int(val.offsets[-1]) if formal else sum(len(r["positions"]) for r in val)
+            int(val.offsets[-1]) if scheduled else sum(len(r["positions"]) for r in val)
         ),
         "train_manifest": fingerprint(args.train_labels),
         "val_manifest": fingerprint(args.val_labels),
@@ -480,7 +571,11 @@ def main():
             )
         },
         "status": "started",
+        "training_signature": model.training_signature,
+        "checkpoint_migration": getattr(model, "checkpoint_migration", None),
+        "execution_provenance": model.execution_provenance,
     }
+    atomic_json(args.output / "manifest.json", report)
     callbacks = [
         ModelCheckpoint(
             dirpath=args.output / "checkpoints",
@@ -490,7 +585,7 @@ def main():
         )
     ]
     trainer_options = {}
-    if formal:
+    if scheduled:
         from .formal_checkpoints import FormalCheckpoints
 
         recovery = args.checkpoint_dir or (
@@ -531,7 +626,7 @@ def main():
             train_dataloaders=make_loader(
                 train,
                 cfg["batch_size"],
-                profile["steps"] if formal else max_steps - start_step,
+                profile["steps"] if scheduled else max_steps - start_step,
                 seed,
                 start_step,
                 sampling,
@@ -556,7 +651,7 @@ def main():
         report.update(
             status=(
                 "completed"
-                if not formal or trainer.global_step == profile["steps"]
+                if not scheduled or trainer.global_step == profile["steps"]
                 else "stopped"
             ),
             budget_completed=trainer.global_step == profile["steps"],
@@ -569,10 +664,10 @@ def main():
         report.update(status="failed", error=f"{type(exc).__name__}: {exc}")
         raise
     finally:
-        if formal:
+        if scheduled:
             train.close()
             val.close()
-        (args.output / "manifest.json").write_text(json.dumps(report, indent=2))
+        atomic_json(args.output / "manifest.json", report)
 
 
 if __name__ == "__main__":

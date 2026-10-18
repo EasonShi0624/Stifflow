@@ -1,5 +1,6 @@
 """Bounded full recovery checkpoints and sparse inference snapshots."""
 
+import fcntl
 import os
 import time
 import uuid
@@ -21,6 +22,24 @@ class FormalCheckpoints(Callback):
         self.snapshot_every = snapshot_every
         self.last_step = None
         self.started = None
+        self.writer = None
+
+    def setup(self, trainer, module, stage):
+        self.directory.parent.mkdir(parents=True, exist_ok=True)
+        self.writer = (
+            self.directory.parent / f".{self.directory.name}.writer.lock"
+        ).open("a")
+        try:
+            fcntl.flock(self.writer, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            self.writer.close()
+            self.writer = None
+            raise RuntimeError("Another process owns this checkpoint writer") from None
+
+    def teardown(self, trainer, module, stage):
+        if self.writer is not None:
+            self.writer.close()
+            self.writer = None
 
     def on_train_start(self, trainer, module):
         self.directory.mkdir(parents=True, exist_ok=True)
@@ -45,6 +64,11 @@ class FormalCheckpoints(Callback):
         if module.consumed_samples != trainer.global_step * self.effective_batch:
             raise ValueError("Checkpoint is not at a complete accumulation boundary")
         checkpoint["recovery_directory"] = str(self.directory)
+        checkpoint["execution_provenance"] = getattr(
+            module, "execution_provenance", None
+        )
+        if hasattr(module, "checkpoint_migration"):
+            checkpoint["checkpoint_migration"] = module.checkpoint_migration
 
     def on_train_batch_end(self, trainer, module, outputs, batch, batch_idx):
         step = trainer.global_step
@@ -82,6 +106,12 @@ class FormalCheckpoints(Callback):
                     "global_step": step,
                     "training_signature": module.training_signature,
                     "snapshot_kind": "weights_only",
+                    "checkpoint_migration": getattr(
+                        module, "checkpoint_migration", None
+                    ),
+                    "execution_provenance": getattr(
+                        module, "execution_provenance", None
+                    ),
                 },
                 temporary,
             )

@@ -5,9 +5,11 @@ from scipy.spatial.transform import Rotation
 
 from . import precision
 from .geometry import centered
+from .research_paths import RESEARCH_METHODS, label_method
 
 
 def path_module(method):
+    method = label_method(method)
     if method == "precision":
         return precision
     if method == "alternative_a":
@@ -52,13 +54,36 @@ def precision_target(x1, t, z, source, label):
     return x, u
 
 
-def draw_target(x1, source, label, method, rng):
-    """Core eq:joint/samplinglaw: independent z and one Haar proper rotation."""
+def draw_target(x1, source, label, method, rng, clock=None):
+    """Draw shared z/Haar noise; research methods explicitly change the coupling."""
+    if clock is not None and method != "precision_clock":
+        raise ValueError("Only precision_clock can use a frozen clock")
     # Reject machine endpoints after float32 rounding; no fixed epsilon truncation.
     t = float(np.float32(rng.random()))
     while t == 0.0 or t == 1.0:
         t = float(np.float32(rng.random()))
     z = rng.standard_normal(source.S.shape[0])
+    if method in RESEARCH_METHODS:
+        from .research_paths import relative_rotation, sample_target
+
+        R = Rotation.random(random_state=rng).as_matrix()
+        if method == "precision_clock":
+            if clock is None:
+                raise ValueError("precision_clock requires a frozen training clock")
+            original_t, q = clock.inverse(t)
+            xt, ut = precision_target(x1, original_t, z, source, label)
+            ut = ut / q
+        else:
+            xt, ut = sample_target(
+                x1,
+                t,
+                z,
+                source,
+                label,
+                method,
+                relative_rotation(rng) if method == "a_rot_null" else None,
+            )
+        return xt @ R.T, ut @ R.T, t
     module = path_module(method)
     target = (
         precision_target

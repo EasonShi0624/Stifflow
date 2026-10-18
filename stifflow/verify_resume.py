@@ -9,25 +9,34 @@ from .preflight import fingerprint
 from .smoke import external_directory
 
 
-def compare_states(left, right, path="checkpoint"):
+def compare_states(left, right, path="checkpoint", exact=False):
+    import numpy as np
     import torch
 
+    if exact and type(left) is not type(right):
+        raise TypeError(f"Resume type differs: {path}")
     if isinstance(left, torch.Tensor):
         if not isinstance(right, torch.Tensor):
             raise TypeError(f"Resume type differs: {path}")
         torch.testing.assert_close(
-            left, right, rtol=1e-6, atol=1e-7, msg=lambda detail: f"{path}: {detail}"
+            left,
+            right,
+            rtol=0 if exact else 1e-6,
+            atol=0 if exact else 1e-7,
+            msg=lambda detail: f"{path}: {detail}",
         )
+    elif isinstance(left, np.ndarray):
+        np.testing.assert_array_equal(left, right, err_msg=path, strict=exact)
     elif isinstance(left, dict):
         if not isinstance(right, dict) or left.keys() != right.keys():
             raise ValueError(f"Resume keys differ: {path}")
         for key in left:
-            compare_states(left[key], right[key], f"{path}.{key}")
+            compare_states(left[key], right[key], f"{path}.{key}", exact)
     elif isinstance(left, (list, tuple)):
         if not isinstance(right, type(left)) or len(left) != len(right):
             raise ValueError(f"Resume sequence differs: {path}")
         for index, (a, b) in enumerate(zip(left, right)):
-            compare_states(a, b, f"{path}[{index}]")
+            compare_states(a, b, f"{path}[{index}]", exact)
     elif left != right:
         raise ValueError(f"Resume value differs: {path}: {left!r} vs {right!r}")
 
