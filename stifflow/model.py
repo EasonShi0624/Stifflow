@@ -48,9 +48,15 @@ class StifFlow(BaseFlow):
         seed=42,
         source_config=None,
         target_rng_mode="stream",
+        path_clock=None,
         **kwargs,
     ):
         path_module(method)
+        from .research_clock import PathClock
+
+        if (method == "precision_clock") != (path_clock is not None):
+            raise ValueError("Only precision_clock requires a frozen path_clock")
+        self.path_clock = PathClock(path_clock) if path_clock is not None else None
         if target_rng_mode not in ("stream", "global_draw"):
             raise ValueError("Unknown target RNG mode")
         fixed = {
@@ -82,6 +88,8 @@ class StifFlow(BaseFlow):
                 **kwargs,
             }
         )
+        if path_clock is not None:
+            self.save_hyperparameters({"path_clock": path_clock})
 
     def forward(self, z, t, pos, bond_index, edge_attr, node_attr, batch):
         pos = pos - scatter(pos, batch, dim=0, reduce="mean")[batch]
@@ -127,7 +135,12 @@ class StifFlow(BaseFlow):
                         [self.seed, record["draw_id"], 3 if stage == "train" else 4]
                     )
                 xt, ut, t = draw_target(
-                    record["x1"], record["source"], record["label"], self.method, rng
+                    record["x1"],
+                    record["source"],
+                    record["label"],
+                    self.method,
+                    rng,
+                    clock=self.path_clock,
                 )
                 positions.append(xt)
                 targets.append(ut)

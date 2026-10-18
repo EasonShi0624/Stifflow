@@ -1,0 +1,460 @@
+% Standalone technical note. Compile twice with pdfLaTeX, or with latexmk -pdf.
+% Revised from the user-supplied StifFlow core formulation.
+% Candidate mathematical design: no training, performance, or novelty claim.
+\documentclass[11pt,letterpaper]{article}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath,amssymb,amsthm,mathtools}
+\usepackage[margin=0.83in,headheight=14pt]{geometry}
+\usepackage{microtype}
+\usepackage{booktabs,array}
+\usepackage{fancyhdr}
+\usepackage[hidelinks]{hyperref}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{5pt}
+\setlength{\emergencystretch}{2em}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small StifFlow: core mathematical formulation}
+\fancyhead[R]{\small Version 2}
+\fancyfoot[C]{\small\thepage}
+\renewcommand{\headrulewidth}{0.3pt}
+\newcommand{\E}{\mathbb E}
+\newcommand{\R}{\mathbb R}
+\newcommand{\X}{\mathcal X_G}
+\newcommand{\epsE}{\varepsilon_E}
+\newcommand{\SO}{\mathrm{SO}(3)}
+\newcommand{\Cov}{\operatorname{Cov}}
+\newcommand{\KL}{\operatorname{KL}}
+\newcommand{\tr}{\operatorname{tr}}
+\newcommand{\diag}{\operatorname{diag}}
+\newcommand{\rot}{\mathrm{rot}}
+\newcommand{\vib}{\mathrm{vib}}
+\newcommand{\given}{\,\big|\,}
+\newtheorem{proposition}{Proposition}
+\hypersetup{pdftitle={StifFlow: revised core mathematical formulation},pdfauthor={},pdfsubject={Stiffness-dependent conditional paths with a shared prior and ordinary conditional flow matching}}
+
+\begin{document}
+\thispagestyle{plain}
+\begin{center}
+{\LARGE\bfseries StifFlow: revised core mathematical formulation}\par
+\vspace{5pt}
+{\large Stiffness-dependent conditional paths with a shared prior}\par
+\vspace{4pt}
+{\small Version 2 \quad | \quad 15 September 2026}
+\end{center}
+
+\textbf{Scope.} StifFlow is a candidate conformer-generation method in which a quantitatively specified local stiffness matrix shapes conditional fluctuations, while an ordinary conditional flow matching (CFM) objective learns a graph-conditioned marginal velocity. Its theoretical basis is CFM \cite{lipman}; Hessian-conditioned flows are already studied by HI-FM \cite{sprague}. The equations below define a particular precision bridge, not a formula attributed to those papers or a claim of novelty.
+
+\textbf{Revision relative to the supplied note.} The shared prior, linear precision interpolation, and unweighted CFM objective are retained. Rotational symmetrization and the construction of rigid-rotation subspaces are made explicit. The mean path is deliberately changed from $t x_1$ to $\alpha(t)x_1$, so that the \emph{full endpoint error}, rather than only the fluctuation about the conditional mean, has a centered inverse-stiffness limit. This change and the optional delayed gate are proposed design choices; the transport identities and their qualifications are derived below. No dataset selection or experimental plan is specified here.
+
+\section{Specify coordinates, the target, and the physical quantity}
+
+For a labeled molecular graph $G$ with $N$ atoms, use centered, unweighted Cartesian coordinates,
+\begin{equation}\label{eq:space}
+\X=\left\{x\in\R^{3N}:\sum_{a=1}^{N}x_a=0\right\},
+\qquad d=3N-3.
+\end{equation}
+All identities, inverses, determinants, densities, and Gaussian random variables below are defined on $\X$, implemented in an orthonormal basis. Translation is removed; rotation, bond stretching, angle bending, and torsional motion are not constrained out. This is a linear Cartesian space, not a nonlinear quotient by rotations. The target is an empirical conformer distribution with its specified sample weights, symmetrized over overall rotations in Section~\ref{sec:source}; it is not assumed to be an equilibrium distribution.
+
+Choose an explicit, rotation-invariant reference potential $E_{\mathrm{ref},G}$ and fixed energy and length units. At a stationary reference $r_i\in\X$ that is stable in the vibrational subspace, define
+\begin{equation}\label{eq:hessian}
+\begin{gathered}
+\nabla_{\X} E_{\mathrm{ref},G}(r_i)=0,\qquad
+H_i=\left.\nabla^2 E_{\mathrm{ref},G}(r_i)\right|_{\X},\\
+E_{\mathrm{ref},G}(r_i+\delta x)-E_{\mathrm{ref},G}(r_i)
+=\tfrac12\delta x^\top H_i\delta x+o(\|\delta x\|^2).
+\end{gathered}
+\end{equation}
+The most direct case is $r_i=x_i$, where $x_i$ is the stored target. If $x_i$ is not stationary under the chosen potential, use a separately relaxed reference, aligned to $x_i$ with the same atom correspondence and a proper rotation. Keep $x_i$ as the target and record the displacement: applying curvature from $r_i$ near $x_i$ is an additional approximation, not a silent replacement of the target distribution.
+
+The Hessian here has energy-per-length-squared units. Force-field, electronic-energy, and free-energy Hessians encode different reference models. A mass-weighted Hessian must be converted to the stated coordinates before use; Cartesian curvature eigenvalues are not themselves vibrational frequencies.
+
+\section{Regularize stiffness while retaining local motion}
+
+At $r_i$, construct the rigid-rotation tangent space from the geometry,
+\begin{equation}\label{eq:rotspace}
+\mathcal T_{\rot}(r_i)=
+\left\{(\omega\times r_{i,a})_{a=1}^{N}:\omega\in\R^3\right\}\subset\X.
+\end{equation}
+Let $Q_{i,\rot}$ be an orthonormal basis of this space, and $Q_{i,\vib}$ a basis of its orthogonal complement in $\X$. The rotational rank is three for a non-collinear molecule and two for a nondegenerate linear molecule; it is determined from the geometry, not a fixed eigenvalue cutoff. At an exactly stationary reference, rotational invariance implies $H_iQ_{i,\rot}=0$.
+
+Diagonalize only the projected vibrational Hessian and construct
+\begin{equation}\label{eq:stiffness}
+\begin{aligned}
+H_{i,\vib}&=Q_{i,\vib}^{\top}H_iQ_{i,\vib}
+=V_i^{\vib}\diag(\lambda_{ij})(V_i^{\vib})^\top,\\
+K_i&=Q_{i,\vib}V_i^{\vib}\diag\!\big(\max(\lambda_{ij},\kappa_{\min})\big)
+(V_i^{\vib})^\top Q_{i,\vib}^{\top}
++\kappa_{\rot}Q_{i,\rot}Q_{i,\rot}^{\top}\succ0,
+\end{aligned}
+\end{equation}
+where $\kappa_{\min},\kappa_{\rot}>0$ are finite and have stiffness units. Significant negative vibrational eigenvalues invalidate the stable-reference assumption and must not be hidden by flooring; they require a different reference or an explicitly qualified surrogate. With imperfect stationarity, discarding rotational--vibrational cross terms is also an approximation to report. The projector construction avoids assigning individual eigenvectors in a near-degenerate soft/rotational subspace to physical categories.
+
+Only unchanged positive vibrational eigenvalues preserve the curvature of the chosen reference. Rotational and floored-mode scales are computational regularizers; trace normalization, eigenvalue clipping, or condition-number compression would further change quantitative calibration. Introduce
+\begin{equation}\label{eq:cstiff}
+\epsE>0,\qquad C_i^{\mathrm{stiff}}=\epsE K_i^{-1}.
+\end{equation}
+This covariance has squared-length units. Taking $\epsE=k_BT$ reproduces the classical Gaussian scale of the quadratic energy model on calibrated vibrational modes. It does not supply conformer populations or make a minima-trained model a Boltzmann sampler. In particular, $\kappa_{\rot}$ does not represent a physical restoring force for a rigid rotation.
+
+For a stiffness estimator, check its quadratic prediction using sufficiently small non-rigid displacements:
+\begin{equation}\label{eq:calibration}
+\mathcal C_i(\delta x)=
+\frac{2\left[E_{\mathrm{ref},G}(r_i+\delta x)-E_{\mathrm{ref},G}(r_i)
+-\nabla E_{\mathrm{ref},G}(r_i)^\top\delta x\right]}{\delta x^\top K_i\delta x}.
+\end{equation}
+For $\delta x=a v$ with $a\to0$, this ratio tends to $v^\top H_iv/(v^\top K_iv)$. It therefore tends to one in retained, accurately estimated vibrational directions, not in artificially regularized directions. Agreement with an approximate potential establishes calibration to that potential, not to a more accurate physical model.
+
+\section{Use a common source and a symmetry-consistent target}\label{sec:source}
+
+Let $\mathcal R=(I_N\otimes R)|_{\X}$ denote an overall proper rotation, $R\in\SO$. Choose
+\begin{equation}\label{eq:source}
+p_0(x\mid G)=\mathcal N_{\X}(0,C_{0,G}),\qquad
+C_{0,G}\succ0,\qquad
+\mathcal R C_{0,G}\mathcal R^\top=C_{0,G},\qquad
+S_G=C_{0,G}^{1/2},
+\end{equation}
+using the symmetric positive square root. Consequently $S_G$ commutes with $\mathcal R$. An explicit graph-spring example is
+\begin{equation}\label{eq:graphsource}
+C_{0,G}=\sigma_0^2
+\left[(L_G+\rho I_N)|_{\mathbf1^\perp}\right]^{-1}\otimes I_3,
+\qquad \rho>0,
+\end{equation}
+where $L_G$ is a dimensionless graph Laplacian and $\sigma_0$ has length units. This is a sampleable geometric prior, not calibrated energetic stiffness. Structured harmonic priors are part of the motivation supplied by ET-Flow \cite{hassan}; Equation~\eqref{eq:graphsource} is the specific choice in this note. A positive ridge handles disconnected graphs algebraically without defining the physical task for separate fragments.
+
+For stored pairs $(x_i,K_i)$ with the intended weights $w_i>0$, $\sum_iw_i=1$, define the joint training measure and its coordinate marginal by
+\begin{equation}\label{eq:joint}
+\nu_G(dx_1,dK)=\sum_i w_i\int_{\SO}
+\delta_{(\mathcal R x_i,\,\mathcal R K_i\mathcal R^\top)}(dx_1,dK)\,d\mu(R),
+\qquad
+q_{\mathrm{data}}(dx\mid G)=\int\nu_G(dx,dK),
+\end{equation}
+where $\mu$ is normalized Haar measure. Thus $x_1$ and $K$ are a \emph{joint} draw. Rotation augmentation changes neither internal geometry nor the stored conformer weights. It makes the target compatible with an invariant prior and an equivariant velocity; a finite collection of fixed orientations would generally not be compatible.
+
+Throughout a conditional path, its sampled $K$ is held fixed. To keep notation light, it is denoted $K_i$ below, including its sampled orientation. For a fixed graph, bounded stored endpoints and uniformly positive, bounded stiffness spectra are sufficient for the finite-time regularity and moment arguments below; a finite set of regularized pairs and their rotations satisfies these conditions.
+
+\section{Interpolate precision and specify the mean separately}\label{sec:path}
+
+Use continuously differentiable functions for the conditional mean, the vanishing scale, and the stiffness gate. They satisfy
+\begin{equation}\label{eq:scheduleconditions}
+\begin{gathered}
+\alpha(0)=0,\quad \alpha(1)=1,\qquad
+s(0)=1,\quad s(1)=0,\quad s(t)>0\ (t<1),\\
+h(0)=0,\quad h(1)=1,\quad 0\le h(t)\le1,
+\qquad \frac{1-\alpha(t)}{s(t)}\longrightarrow0\quad(t\to1).
+\end{gathered}
+\end{equation}
+The proposed default in this revision is
+\begin{equation}\label{eq:defaults}
+\boxed{\ s(t)=1-t,\qquad \alpha(t)=3t^2-2t^3,\qquad h(t)=3t^2-2t^3.\ }
+\end{equation}
+The equality of $\alpha$ and $h$ is a default choice, not a required coupling. Their endpoint derivatives vanish. Unlike the original $\alpha(t)=t$, this mean satisfies $1-\alpha(t)=(1-t)^2(1+2t)=o(s(t))$. It is not merely a time reparameterization of the original construction, because the scale $s$ is unchanged.
+
+Define the conditional Gaussian path by
+\begin{equation}\label{eq:path}
+\boxed{\begin{aligned}
+P_{t,i}&=(1-h(t))C_{0,G}^{-1}+h(t)K_i/\epsE,\\
+m_{t,i}&=\alpha(t)x_1,\qquad \Sigma_{t,i}=s(t)^2P_{t,i}^{-1},\\
+p_t(x\mid x_1,K_i,G)&=\mathcal N_{\X}(m_{t,i},\Sigma_{t,i}),\qquad 0<t<1.
+\end{aligned}}
+\end{equation}
+Both precision terms have inverse-squared-length units. The common source and the endpoint limit are
+\begin{equation}\label{eq:endpoints}
+p_0(\cdot\mid x_1,K_i,G)=p_0(\cdot\mid G),\qquad
+p_t(\cdot\mid x_1,K_i,G)\Rightarrow\delta_{x_1},\qquad
+\frac{\Sigma_{t,i}}{s(t)^2}\longrightarrow\epsE K_i^{-1}.
+\end{equation}
+More strongly, the full endpoint error satisfies
+\begin{equation}\label{eq:fullerror}
+\begin{aligned}
+\frac{x_t-x_1}{s(t)}\given x_1,K_i,G
+&\sim\mathcal N_{\X}\!\left(\frac{\alpha(t)-1}{s(t)}x_1,\ P_{t,i}^{-1}\right)
+\ \Rightarrow\ \mathcal N_{\X}(0,\epsE K_i^{-1}),\\
+\frac{\E[(x_t-x_1)(x_t-x_1)^\top\mid x_1,K_i,G]}{s(t)^2}
+&=\frac{(1-\alpha(t))^2}{s(t)^2}x_1x_1^\top+P_{t,i}^{-1}
+\ \longrightarrow\ \epsE K_i^{-1}.
+\end{aligned}
+\end{equation}
+These are properties of an artificial conditional generative path, not of physical dynamics. The mean still scales the entire target geometry at intermediate times; the modification removes its leading-order endpoint bias, not all bond compression along the path. The interpretation as reference curvature near $x_1$ is strongest when $r_i=x_1$.
+
+\textbf{Why interpolate precision?} For the normalized residual $y=(x-m_{t,i})/s(t)$, let $g_0=\mathcal N_{\X}(0,C_{0,G})$ and $g_i=\mathcal N_{\X}(0,\epsE K_i^{-1})$. Its density is exactly
+\begin{equation}\label{eq:logbridge}
+r_{t,i}(y)=Z_{t,i}^{-1}g_0(y)^{1-h(t)}g_i(y)^{h(t)}
+=\mathcal N_{\X}(0,P_{t,i}^{-1}).
+\end{equation}
+Thus the bridge interpolates log densities, or equivalently two quadratic penalties. It also minimizes $(1-h)\KL(r\|g_0)+h\KL(r\|g_i)$ over densities $r$ (Appendix~\ref{app:kl}). This is an exact characterization of the proposed interpolation, not a proof of training optimality.
+
+For $C_0=\sigma_0^2I$, a stiffness mode $\kappa_j$ has variance
+\begin{equation}\label{eq:modevariance}
+\sigma_{t,j}^2=
+\frac{s(t)^2}{(1-h(t))/\sigma_0^2+h(t)\kappa_j/\epsE}.
+\end{equation}
+For $h(t)>0$, larger stiffness gives smaller conditional variance, while every direction has positive variance for $t<1$. Setting $h\equiv0$ gives a stiffness-free bridge with the same mean schedule; it does \emph{not} give straight trajectories under the revised $\alpha$. The original straight baseline requires both $h\equiv0$ and $\alpha(t)=t$.
+
+\section{Derive a valid conditional velocity without assuming commutation}\label{sec:velocity}
+
+Suppress $G$ and $i$ temporarily. Whiten using the source square root and define
+\begin{equation}\label{eq:factor}
+B=S^\top KS/\epsE,\qquad D_t=(1-h)I+hB,\qquad A_t=sSD_t^{-1/2}.
+\end{equation}
+Since $P_t=S^{-\top}D_tS^{-1}$,
+\begin{equation}\label{eq:factorproof}
+P_t^{-1}=SD_t^{-1}S^\top,\qquad A_tA_t^\top=s^2P_t^{-1}=\Sigma_t.
+\end{equation}
+No commutation between $C_0$ and $K$ is assumed. Let $B=V\diag(b_j)V^\top$ and $d_j(t)=1+h(t)(b_j-1)$. The sampled trajectory and supervision target are
+\begin{equation}\label{eq:trajectory}
+\boxed{\ x_t=\alpha(t)x_1+A_tz,\qquad
+U_t=\dot x_t=\dot\alpha(t)x_1+\dot A_tz,\qquad z\sim\mathcal N(0,I_d).\ }
+\end{equation}
+The matrix derivative is explicit:
+\begin{equation}\label{eq:adot}
+\dot A_t=SV\diag\!\left[
+\dot s\,d_j^{-1/2}-\tfrac12s\dot h\,(b_j-1)d_j^{-3/2}
+\right]V^\top.
+\end{equation}
+For the default schedules, $\dot s=-1$ and $\dot\alpha=\dot h=6t(1-t)$. Here $D_t$ and $\dot D_t$ commute because they are functions of the same fixed $B$. This fact, rather than a commutation assumption about physical matrices, justifies differentiating the inverse square root in this way. A time- or state-dependent replacement for the stored $K$ would require a new derivative and is not part of this formula.
+
+For $0<t<1$, $A_t$ is invertible and the corresponding Eulerian field is
+\begin{equation}\label{eq:u}
+\boxed{\begin{aligned}
+u_t(x\mid x_1,K_i,G)&=\dot\alpha(t)x_1+M_{t,i}(x-\alpha(t)x_1),\\
+M_t=\dot A_tA_t^{-1}
+&=\frac{\dot s}{s}I-\frac{\dot h}{2}SD_t^{-1}(B-I)S^{-1}
+=\frac{\dot s}{s}I-\frac12P_t^{-1}\dot P_t,\\
+\dot P_t&=\dot h(t)(K/\epsE-C_0^{-1}).
+\end{aligned}}
+\end{equation}
+The order $P_t^{-1}\dot P_t$ is essential. The last equality is valid for this factor and this fixed-matrix precision interpolation, not a generic rule for an arbitrary time-dependent covariance square root. In particular, $M_t$ need not be symmetric or define Euclidean optimal transport.
+
+The mean and covariance obey the Gaussian continuity conditions,
+\begin{equation}\label{eq:covcontinuity}
+\dot m_t=\dot\alpha(t)x_1,\qquad
+\dot\Sigma_t=M_t\Sigma_t+\Sigma_tM_t^\top
+=2\frac{\dot s}{s}\Sigma_t-s^2P_t^{-1}\dot P_tP_t^{-1}.
+\end{equation}
+Therefore $\partial_t p_t+\nabla_{\X}\!\cdot(p_tu_t)=0$ for each conditional density. The covariance path alone does not uniquely specify a velocity; Equation~\eqref{eq:factor} selects the transport being used.
+
+For training, evaluate $U_t$ through Equation~\eqref{eq:adot} rather than explicitly dividing by $s$. With the default schedules and bounded positive spectra,
+\begin{equation}\label{eq:uterminal}
+\lim_{t\to1}U_t=-SB^{-1/2}z,
+\end{equation}
+which is finite for each sampled $z$. The Eulerian matrix $M_t$, by contrast, contains $-I/(1-t)$. A finite sampled target is not a guarantee of a bounded conditional velocity gradient or an easy ODE.
+
+\section{Train and sample the marginal flow}\label{sec:train}
+
+Specify the complete sampling law:
+\begin{equation}\label{eq:samplinglaw}
+G\sim p_{\mathrm{train}},\qquad (x_1,K_i)\sim\nu_G,\qquad
+z\sim\mathcal N(0,I_d),\qquad t\sim\mathcal U(0,1),
+\end{equation}
+where $z$ and $t$ are independent of the endpoint pair and of each other, conditional on $G$. The network sees only $(x_t,t,G)$. Train with ordinary Euclidean CFM,
+\begin{equation}\label{eq:loss}
+\boxed{\ \mathcal L_{\mathrm{StifFlow}}(\theta)=
+\E\left\|v_\theta(\alpha(t)x_1+A_{t,i}z,t;G)
+-\big(\dot\alpha(t)x_1+\dot A_{t,i}z\big)\right\|^2.\ }
+\end{equation}
+Reference-to-target alignment in Section~1 is preprocessing. In contrast, aligning or rematching the independently drawn noise to its endpoint would change the conditional sampling law above and require a corresponding derivation.
+
+\begin{proposition}[Marginal transport and regression optimum]\label{prop:transport}
+Under the stated regularity and finite-second-moment assumptions, define
+\begin{equation}\label{eq:marginal}
+\begin{aligned}
+p_t(x\mid G)&=\int p_t(x\mid x_1,K,G)\,\nu_G(dx_1,dK),\\
+v^*(x,t;G)&=\E[U_t\mid x_t=x,t,G]
+=\E[u_t(x\mid x_1,K,G)\mid x_t=x,t,G].
+\end{aligned}
+\end{equation}
+Then $v^*$ is the unrestricted squared-loss optimum, and
+\begin{equation}\label{eq:marginalcontinuity}
+\partial_t p_t+\nabla_{\X}\!\cdot(p_t v^*)=0,\qquad
+p_{t=0}(\cdot\mid G)=p_0(\cdot\mid G),\qquad
+p_t(\cdot\mid G)\Rightarrow q_{\mathrm{data}}(\cdot\mid G)\quad(t\to1).
+\end{equation}
+\end{proposition}
+\begin{proof}
+The regression claim follows from the conditional-mean identity
+\begin{equation}\label{eq:lossdecomp}
+\mathcal L_{\mathrm{StifFlow}}(\theta)=
+\E\|v_\theta(x_t,t;G)-v^*(x_t,t;G)\|^2
++\E\|U_t-v^*(x_t,t;G)\|^2.
+\end{equation}
+For fixed $(x_1,K,t)$, invertibility of $A_t$ implies $U_t=u_t(x_t\mid x_1,K,G)$. Integrating the conditional continuity equations gives
+$\int p_tu_t\,d\nu_G=p_t v^*$, hence the marginal equation. The common-source and terminal-limit statements follow by mixing Equation~\eqref{eq:endpoints}. This is the usual CFM marginalization principle \cite{lipman}, applied to the present anisotropic path.
+\end{proof}
+
+At inference, sample and integrate
+\begin{equation}\label{eq:inference}
+z_0\sim\mathcal N(0,I_d),\qquad x(0)=S_Gz_0,\qquad
+\frac{dx}{dt}=v_\theta(x,t;G).
+\end{equation}
+No endpoint Hessian is required at inference. On every compact time interval $[0,T]$ with $T<1$, the ideal field transports the source to $p_T$ under the usual ODE regularity conditions. Stopping at $T<1$ returns an approximation to the desired endpoint law, not exactly $q_{\mathrm{data}}$. A finite empirical target, even after rotation symmetrization, is generally singular in $\X$; exact collapse is an idealized terminal limit, not a guarantee for a uniformly regular finite neural ODE. A positive terminal noise scale would instead define an explicitly smoothed target.
+
+\textbf{Symmetry.} Require $v_\theta(x,t;G)\in\X$ and
+\begin{equation}\label{eq:equivariance}
+v_\theta(\mathcal R x,t;G)=\mathcal R v_\theta(x,t;G),\qquad R\in\SO.
+\end{equation}
+The source, joint measure, path, and ideal marginal field are compatible with this requirement; Appendix~\ref{app:symmetry} gives the transformation identities. Atom relabeling must act consistently on the graph, coordinates, and stiffness. Do not impose reflection equivariance with $G$ held fixed when the target specifies one enantiomer. These requirements do not themselves guarantee chirality preservation, chemical validity, or collision-free generated trajectories.
+
+\textbf{Local internal coordinates.} For a locally smooth, possibly redundant internal-coordinate map $q$ near $x_1$, write $J_i=Dq(x_1)$. Under the moment regularity needed for its Taylor remainder,
+\begin{equation}\label{eq:internal}
+\begin{aligned}
+\frac{q(x_t)-q(x_1)}{s(t)}\given x_1,K_i,G
+&\Rightarrow\mathcal N\!\left(0,\epsE J_iK_i^{-1}J_i^\top\right),\\
+\Cov(q(x_t)\mid x_1,K_i,G)
+&=J_i\Sigma_{t,i}J_i^\top+o(s(t)^2),\qquad t\to1.
+\end{aligned}
+\end{equation}
+A scalar bond or angle coordinate with nonzero derivative $j_i$ has strictly positive leading variance $s^2\epsE j_iK_i^{-1}j_i^\top$: it is not frozen. Redundancy can make the joint covariance singular, and torsions require a local smooth angular chart. This is an endpoint-local result, not a statement about global torsional transitions or final thermal fluctuations.
+
+\section{Keep optional priors and metric modifications separate}
+
+A seed-based alternative prior remains possible:
+\begin{equation}\label{eq:seed}
+p_0^{\mathrm{seed}}(x\mid G)=
+\int \mathcal N_{\X}(x;r,\epsE K(r)^{-1})\,\pi(dr\mid G).
+\end{equation}
+It requires a sampleable, symmetry-consistent seed distribution and inference-time curvature estimation; a single seed can bias exploration. It is not the Gaussian common-prior core above, so its conditional transport must be derived separately. A tractable marginal density is not guaranteed merely because the mixture is sampleable.
+
+A fixed positive-definite observed-input metric $W=W(x_t,t,G)$ can define
+\begin{equation}\label{eq:metric}
+\mathcal L_W=\E[(v_\theta-U_t)^\top W(x_t,t,G)(v_\theta-U_t)].
+\end{equation}
+Provided the required moments exist and $W$ is independent of the optimized parameters, it has the same unrestricted optimum $\E[U_t\mid x_t,t,G]$: after conditioning on the inputs, $W$ is fixed. It can still change the best solution in a restricted network class or affect optimization. Physics-informed molecular metrics, such as those studied for Riemannian denoising \cite{woo}, are a distinct motivation, not a theorem that this loss creates geodesic paths.
+
+If the weight depends instead on the hidden endpoint, its optimum is
+\begin{equation}\label{eq:hiddenmetric}
+v_W^*(x,t;G)=
+\big(\E[W_i\mid x,t,G]\big)^{-1}\E[W_iU_t\mid x,t,G],
+\end{equation}
+which generally differs from the transporting marginal field. Consequently, endpoint-Hessian loss weighting and post hoc multiplication of a trained velocity by inverse stiffness are not free additions to the core transport proof.
+
+\section{Interpretation, numerical limitations, and verification status}
+
+\textbf{What is established.} The construction gives a common sampleable source, a valid anisotropic conditional path, a noncommutation-safe analytic target, a centered inverse-stiffness endpoint-error limit, and the ordinary CFM marginal-transport identity. Subject to the regularity assumptions, any admissible positive-definite $K_i$ yields the same ideal endpoint distribution. Quantitative curvature calibration is therefore an \emph{inductive bias for finite-resource learning}, not a requirement for endpoint consistency and not a way to infer missing conformer populations.
+
+\textbf{What remains a hypothesis.} A calibrated stiffness-dependent path may improve approximation of the marginal conformer-generating velocity with finite model capacity and data. It may instead be less useful than geometric heuristics, incur excessive curvature costs, or make regression and integration harder. Equation~\eqref{eq:lossdecomp} separates approximation error from irreducible conditional-target variation; raw CFM losses from different paths are not automatically comparable measures of generative quality.
+
+\textbf{Physical curvature is not numerical stiffness.} For the default gate, a large dimensionless eigenvalue $b$ of $S_G^\top K_iS_G/\epsE$ changes the noise scale as early as $t=O(b^{-1/2})$. Its scalar target derivative can grow like $\sqrt b$, despite zero endpoint derivatives of the gate. Very soft modes can also enlarge terminal targets. Moreover, the revised mean increases its conditional Euclidean squared-speed integral by a factor $6/5$ relative to the linear mean; the covariance deformation adds a nonnegative excess over the straight path with the same endpoint pairing. These exact diagnostics are derived in Appendix~\ref{app:schedule}. They neither prove failure nor permit a claim of reduced ODE stiffness or fewer function evaluations. A delayed gate is only an optional timing control, not a proven remedy.
+
+The potential contribution is the demonstrated value of quantitative molecular curvature calibration while allowing flexible local geometry, not merely the use of a Hessian in flow matching. Reference relaxation/alignment and curvature estimation remain preprocessing costs; a dense spectral implementation also requires matrix factorizations and matrix--vector operations. No molecular training or performance evidence is supplied by this formulation.
+
+\textbf{Independent checks for this revision.} The companion Python audit tests noncommuting SPD matrix pairs, both the default gate and a delayed gate, and the algebraic identities underlying the construction. These are synthetic algebra checks, not evidence of accurate molecular curvature, successful neural training, or improved conformer generation.
+
+\appendix
+\section{Additional derivations}
+
+\subsection{The log-density bridge is a weighted-KL minimizer}\label{app:kl}
+For a normalized density $r$ with finite objective, Equation~\eqref{eq:logbridge} gives
+\begin{equation}\label{eq:klproof}
+(1-h)\KL(r\|g_0)+h\KL(r\|g_i)
+=\KL(r\|r_{t,i})-\log Z_{t,i}.
+\end{equation}
+The minimum is attained at $r=r_{t,i}$. Completing the Gaussian quadratic form yields the precision in Equation~\eqref{eq:path}, with normalization
+\begin{equation}\label{eq:logz}
+\log Z_{t,i}=-\tfrac12\left[(1-h)\log\det C_{0,G}
++h\log\det(\epsE K_i^{-1})+\log\det P_{t,i}\right].
+\end{equation}
+Determinants use the fixed coordinate units. The weighted expression as a whole is dimensionless. This variational identity concerns residual densities at each time; it is not an optimal-transport or minimum-action statement for the complete path.
+
+\subsection{Covariance evolution and local-coordinate limit}
+Using $\dot P^{-1}=-P^{-1}\dot PP^{-1}$ and $\Sigma=s^2P^{-1}$,
+\begin{equation}\label{eq:covproof}
+\dot\Sigma=2\frac{\dot s}{s}\Sigma-s^2P^{-1}\dot PP^{-1}
+=\left(\frac{\dot s}{s}I-\frac12P^{-1}\dot P\right)\Sigma
++\Sigma\left(\frac{\dot s}{s}I-\frac12\dot PP^{-1}\right).
+\end{equation}
+This directly verifies the covariance equation even when $P$ and $\dot P$ do not commute.
+
+Equation~\eqref{eq:fullerror} implies $x_t-x_1=O_{L^2}(s)$ under the stated bounds. For a $C^2$ local internal-coordinate map, Taylor expansion gives
+$q(x_t)-q(x_1)=J_i(x_t-x_1)+O(\|x_t-x_1\|^2)$ within its smooth chart. With a square-integrable Taylor remainder, division by $s$ and the Gaussian endpoint limit give Equation~\eqref{eq:internal}. This assumption matters for coordinate singularities and angular branch cuts; no global internal-coordinate chart is required or asserted.
+
+\subsection{Rotation covariance and the ideal equivariant field}\label{app:symmetry}
+Under $x_1\mapsto\mathcal Rx_1$ and $K\mapsto\mathcal R K\mathcal R^\top$, the geometry-defined projectors and their spectral regularization transform covariantly. For the invariant source and symmetric $S$,
+\begin{equation}\label{eq:rotidentities}
+P_t\mapsto\mathcal RP_t\mathcal R^\top,\qquad
+B\mapsto\mathcal RB\mathcal R^\top,\qquad
+A_t\mapsto\mathcal RA_t\mathcal R^\top,\qquad
+M_t\mapsto\mathcal RM_t\mathcal R^\top.
+\end{equation}
+Rotating $z$ as well rotates the sampled pair $(x_t,U_t)$; the standard Gaussian law is unchanged. Hence
+\begin{equation}\label{eq:condsymmetry}
+u_t(\mathcal Rx\mid\mathcal Rx_1,\mathcal RK\mathcal R^\top,G)
+=\mathcal Ru_t(x\mid x_1,K,G).
+\end{equation}
+Marginalizing against the invariant joint measure $\nu_G$ gives
+$p_t(\mathcal Rx\mid G)=p_t(x\mid G)$ and
+$v^*(\mathcal Rx,t;G)=\mathcal Rv^*(x,t;G)$.
+Conversely, an equivariant ODE with unique solutions and an invariant source preserves distributional rotation invariance. This is why the target symmetrization in Equation~\eqref{eq:joint} is a mathematical requirement of this version, not merely an augmentation convenience.
+
+\section{Schedule diagnostics and an optional timing extension}\label{app:schedule}
+
+\subsection{Large eigenvalues can act early}
+For an isotropic source and a stiffness mode, let
+$b=\sigma_0^2\kappa/\epsE$. The scalar noise amplitude and its derivative are
+\begin{equation}\label{eq:scalar}
+\begin{aligned}
+a_b(t)&=\frac{\sigma_0(1-t)}{\sqrt{1+h(t)(b-1)}},\\
+\dot a_b(t)&=-\frac{\sigma_0}{\sqrt{1+h(t)(b-1)}}
+-\frac{\sigma_0(1-t)\dot h(t)(b-1)}{2[1+h(t)(b-1)]^{3/2}}.
+\end{aligned}
+\end{equation}
+For the default $h=3t^2-2t^3$, taking $t=c/\sqrt b$ with fixed $c>0$ gives
+\begin{equation}\label{eq:largemode}
+\dot a_b(c/\sqrt b)
+=-\sigma_0\frac{3c\sqrt b}{(1+3c^2)^{3/2}}+O(\sigma_0),\qquad b\to\infty.
+\end{equation}
+The leading coefficient is maximized at $c=1/\sqrt6$, where it equals $2/3$. Thus a peak of order $\sigma_0\sqrt b$ appears at an early time of order $b^{-1/2}$. Neither extreme is controlled merely by imposing $\dot h(0)=\dot h(1)=0$.
+
+\subsection{Conditional Euclidean action increases relative to the straight pairing}
+For a fixed endpoint and the same independent source draw, define the artificial-time squared-speed integral
+\begin{equation}\label{eq:action}
+\mathcal A_i=\int_0^1\E_z\|\dot x_t\|^2\,dt
+=\|x_1\|^2\int_0^1\dot\alpha(t)^2\,dt
++\int_0^1\|\dot A_t\|_F^2\,dt.
+\end{equation}
+Because $\int_0^1\dot\alpha\,dt=1$ and $\int_0^1\dot A\,dt=-S$, expansion of the squares yields
+\begin{equation}\label{eq:actionidentity}
+\boxed{\begin{aligned}
+\mathcal A_i
+={}&\underbrace{\|x_1\|^2+\|S\|_F^2}_{\text{straight path with the same pairing}}\\
+&+\underbrace{\|x_1\|^2\int_0^1(\dot\alpha-1)^2\,dt
++\int_0^1\|\dot A_t+S\|_F^2\,dt}_{\text{nonnegative excess}}.
+\end{aligned}}
+\end{equation}
+For the revised mean, $\int_0^1\dot\alpha^2dt=6/5$, so its excess is $\|x_1\|^2/5$. Thus the improved endpoint-error limit has a demonstrable mean-path cost. This is a statement about \emph{conditional} Euclidean action, not physical kinetic energy or marginal-flow action. Posterior averaging changes the marginal field, so no conclusion about actual training quality or numerical solver cost follows from this identity alone.
+
+\subsection{A delayed gate changes timing, not the endpoint theorem}
+To prevent any stiffness-specific deformation before a chosen $\tau\in[0,1)$, one may replace only $h$ by
+\begin{equation}\label{eq:delay}
+h_\tau(t)=
+\begin{cases}
+0,&0\le t\le\tau,\\
+3\xi^2-2\xi^3,\quad \xi=(t-\tau)/(1-\tau),&\tau<t\le1.
+\end{cases}
+\end{equation}
+This $C^1$ gate preserves the common source, the inverse-stiffness terminal covariance, the centered endpoint-error limit, and the conditional-velocity derivation; $\dot h_\tau$ must be used in the target. The default is $\tau=0$. A positive $\tau$ delays activation but compresses deformation into a shorter interval, potentially increasing intermediate derivatives. A fixed time gate does not establish that samples are inside the reference basin, and it does not remove the spectrum-dependent cost. This is an optional mathematical extension, not a validated stability improvement.
+
+\begin{thebibliography}{4}
+\bibitem{lipman}
+Y.~Lipman, R.~T.~Q.~Chen, H.~Ben-Hamu, M.~Nickel, and M.~Le.
+\emph{Flow Matching for Generative Modeling}.
+International Conference on Learning Representations, 2023.
+\href{https://arxiv.org/abs/2210.02747}{arXiv:2210.02747}.
+
+\bibitem{sprague}
+C.~I.~Sprague, A.~Elofsson, and H.~Azizpour.
+\emph{Hessian-Informed Flow Matching}.
+\href{https://arxiv.org/abs/2410.11433}{arXiv:2410.11433}, 2024.
+
+\bibitem{hassan}
+M.~Hassan, N.~Shenoy, J.~Lee, H.~St\"ark, S.~Thaler, and D.~Beaini.
+\emph{ET-Flow: Equivariant Flow-Matching for Molecular Conformer Generation}.
+Advances in Neural Information Processing Systems 37, 2024.
+
+\bibitem{woo}
+J.~Woo, S.~Kim, J.~H.~Kim, and W.~Y.~Kim.
+\emph{Riemannian denoising model for molecular structure optimization with chemical accuracy}.
+Nature Computational Science \textbf{6}, 134--144, 2026.
+\end{thebibliography}
+
+\end{document}

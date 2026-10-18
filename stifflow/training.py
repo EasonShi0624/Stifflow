@@ -10,6 +10,7 @@ import numpy as np
 from .cache_io import atomic_json
 from .official_data import KIND, SAMPLING, validate_label_manifest, validate_label_pair
 from .preflight import WORKSPACE, fingerprint, provenance
+from .research_paths import BASE_METHODS, METHODS, label_method
 from .smoke import external_directory
 
 
@@ -57,6 +58,7 @@ def advance_cursor(consumed, supervision, rank=0, world_size=1):
 def load_records(
     manifest_path, split, count, method, source_config, packed_cache_root=None
 ):
+    method = label_method(method)
     from rdkit import Chem
 
     from .features import graph_from_mol
@@ -305,11 +307,11 @@ def main():
     parser.add_argument("--val-labels", type=Path, required=True)
     parser.add_argument(
         "--method",
-        choices=["precision", "alternative_a", "control"],
+        choices=METHODS,
         default="precision",
     )
     parser.add_argument(
-        "--profile", choices=["smoke", "pilot", "formal"], default="smoke"
+        "--profile", choices=["smoke", "pilot", "formal", "research"], default="smoke"
     )
     parser.add_argument("--seed", type=int)
     parser.add_argument("--checkpoint-dir", type=external_directory)
@@ -319,6 +321,7 @@ def main():
     parser.add_argument("--output", type=external_directory, required=True)
     parser.add_argument("--resume", type=Path)
     parser.add_argument("--stop-after", type=int)
+    parser.add_argument("--clock", type=Path)
     args = parser.parse_args()
     if not os.getenv("SLURM_JOB_ID"):
         parser.error("Training belongs in an allocated Slurm job")
@@ -335,9 +338,36 @@ def main():
     cfg = yaml.safe_load(args.config.read_text())
     profile = cfg["profiles"][args.profile]
     formal = args.profile == "formal"
+    research = args.profile == "research"
+    scheduled = formal or research
+    if not research and args.method not in BASE_METHODS:
+        parser.error("New paths require the separate research profile")
     seed = cfg["seed"] if args.seed is None else args.seed
     accumulation = profile.get("accumulate_grad_batches", 1)
     effective_batch = cfg["batch_size"] * accumulation
+    if research and (
+        effective_batch != 128
+        or profile["steps"] != 25000
+        or cfg["model_args"]["first_cycle_steps"] != 250000
+    ):
+        parser.error(
+            "Research budget is 25000 updates, effective batch 128, original 250000-step LR schedule"
+        )
+    if research and (
+        seed not in cfg["training_seeds"]
+        or cfg["dataset_seed"] != 42
+        or cfg["row_rng_domain"] != 2
+    ):
+        parser.error("Research comparisons retain the formal seeds and row sampling")
+    path_clock = json.loads(args.clock.read_text()) if args.clock else None
+    if (args.method == "precision_clock") != (path_clock is not None):
+        parser.error("Only precision_clock requires --clock")
+    if path_clock is not None and (
+        path_clock.get("train_manifest", {}).get("sha256")
+        != fingerprint(args.train_labels)["sha256"]
+        or path_clock.get("source_config") != cfg["source"]
+    ):
+        parser.error("Clock belongs to different training labels/source")
     if formal and (effective_batch != 128 or profile["steps"] != 250000):
         parser.error(
             "Formal budget is 250000 optimizer updates with effective batch 128"
@@ -362,7 +392,7 @@ def main():
             raise ValueError(
                 "Official molecule selection seed differs from dataset seed"
             )
-    if formal and (
+    if scheduled and (
         train_manifest.get("schema_version") != 3
         or val_manifest.get("schema_version") != 3
     ):
@@ -385,8 +415,8 @@ def main():
         cfg["source"],
         args.packed_cache_root,
     )
-    train_metadata = train.records if formal else train
-    val_metadata = val.records if formal else val
+    train_metadata = train.records if scheduled else train
+    val_metadata = val.records if scheduled else val
     if {r["id"] for r in train_metadata} & {r["id"] for r in val_metadata}:
         raise ValueError("Train/validation overlap")
     start_step = 0
@@ -394,7 +424,7 @@ def main():
         # Only trusted local checkpoints produced by this entry point.
         saved = torch.load(args.resume, map_location="cpu", weights_only=False)
         start_step = int(saved["global_step"])
-        if formal and "optimizer_states" not in saved:
+        if scheduled and "optimizer_states" not in saved:
             raise ValueError("Inference snapshots cannot resume training")
         if saved["hyper_parameters"]["method"] != args.method:
             raise ValueError("Resume method differs")
@@ -404,6 +434,7 @@ def main():
         method=args.method,
         seed=seed,
         source_config=cfg["source"],
+        path_clock=path_clock,
         **cfg["model_args"],
     )
     model.gpu_memory = cfg.get("gpu_memory")
@@ -413,6 +444,24 @@ def main():
         "config": cfg,
         "profile": args.profile,
     }
+    if research:
+        model.training_signature.update(
+            training_seed=seed,
+            dataset_seed=cfg["dataset_seed"],
+            effective_batch_size=effective_batch,
+            row_rng_domain=cfg["row_rng_domain"],
+            path_clock=path_clock,
+            research_implementation={
+                name: fingerprint(Path(__file__).with_name(name))["sha256"]
+                for name in (
+                    "training.py",
+                    "model.py",
+                    "targets.py",
+                    "research_paths.py",
+                    "research_clock.py",
+                )
+            },
+        )
     run_provenance = provenance()
     accepted = None
     compatibility = (
@@ -494,11 +543,11 @@ def main():
         "sampling": sampling,
         "train_rows": (
             int(train.offsets[-1])
-            if formal
+            if scheduled
             else sum(len(r["positions"]) for r in train)
         ),
         "val_rows": (
-            int(val.offsets[-1]) if formal else sum(len(r["positions"]) for r in val)
+            int(val.offsets[-1]) if scheduled else sum(len(r["positions"]) for r in val)
         ),
         "train_manifest": fingerprint(args.train_labels),
         "val_manifest": fingerprint(args.val_labels),
@@ -536,7 +585,7 @@ def main():
         )
     ]
     trainer_options = {}
-    if formal:
+    if scheduled:
         from .formal_checkpoints import FormalCheckpoints
 
         recovery = args.checkpoint_dir or (
@@ -577,7 +626,7 @@ def main():
             train_dataloaders=make_loader(
                 train,
                 cfg["batch_size"],
-                profile["steps"] if formal else max_steps - start_step,
+                profile["steps"] if scheduled else max_steps - start_step,
                 seed,
                 start_step,
                 sampling,
@@ -602,7 +651,7 @@ def main():
         report.update(
             status=(
                 "completed"
-                if not formal or trainer.global_step == profile["steps"]
+                if not scheduled or trainer.global_step == profile["steps"]
                 else "stopped"
             ),
             budget_completed=trainer.global_step == profile["steps"],
@@ -615,7 +664,7 @@ def main():
         report.update(status="failed", error=f"{type(exc).__name__}: {exc}")
         raise
     finally:
-        if formal:
+        if scheduled:
             train.close()
             val.close()
         atomic_json(args.output / "manifest.json", report)

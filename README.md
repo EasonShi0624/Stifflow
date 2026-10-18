@@ -1,5 +1,13 @@
 # StifFlow：官方 memmap 接入与正式训练
 
+## 2026-10-18：正式实验后研究交接
+
+P0 诊断、stiffness 负对照、线性耦合及可选 clock 的实现、25k 配置和 SHHPC 命令见
+[研究交接](docs/research-next-stage.md)。相关轻量回归为 **69 passed**；新实验待 SHHPC 验收和执行。
+本次将 core 与 Alternative A 的既有 PDF/LaTeX 分别纳入对应分支，版本和 SHA256 见
+[core formulation 归档](formulation/README.md) 与 Alternative A 分支的 `formulation/README.md`。
+以下各日期段落保留此前交接记录；固定提交版本见 [本次发布记录](docs/shhpc-research-release-20261018.md)。
+
 ## 2026-10-15：SHHPC 正式训练修复交接
 
 修复分支 `torch/shhpc-training-safety` 基于 SHHPC
@@ -907,12 +915,17 @@ export PYTHONDONTWRITEBYTECODE=1
 account `wjg3`、GPU partition `rooster,chem`、CPU partition `parallel,debug,chem,rooster`，
 `ETFLOW_ENV` 默认 `$HOME/anaconda3/envs/etflow`；其它站点必须替换这些资源参数，并按当地规则提交。
 
-数据、checkpoint、缓存、运行结果和原先未跟踪的 formulation PDF/LaTeX **不随本次代码推送**。
+此前接口迁移的推送不包含数据、checkpoint、缓存、运行结果或当时未跟踪的 formulation PDF/LaTeX。
+本次 2026-10-18 交接已将两份 formulation 的 PDF/LaTeX 纳入对应分支，数据与运行产物仍不提交。
 它们需由用户在目标集群提供；README 中 `cache/`、`runs/` 的既有验证记录只在当前工作区，
 不是 GitHub 中的文件。可选官方 checkpoint 缺失时 provenance 记录 `exists=false`；真正使用
 某项数据/权重的任务仍会在读取它时明确失败，不会使用随机权重代替。
 
-全文数学依据的目录与文件名见本 README 顶部；复现实验时另外提供原文件并记录哈希。
+全文数学依据的目录与文件名见本 README 顶部；复现实验时核对 formulation 归档中的正文版本和哈希。
 先运行共享测试，再解决 MMFF94 未达到 stationarity 的样本及完整共同训练清单，最后开展
 Lightning smoke、恢复验收和受控 pilot。过去的 16 项 CPU 测试结果是本次迁移之前的记录，
 不能代替目标集群上的验证。
+
+正式实验后的 P0 诊断、stiffness 负对照、线性耦合与可选 clock 变体见
+[研究工具与 SHHPC 交接](docs/research-next-stage.md)。新方法使用独立 research profile；
+本地轻量检查不代表已完成新一轮训练或生成验证。

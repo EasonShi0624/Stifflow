@@ -7,14 +7,6 @@ from unittest.mock import patch
 import numpy as np
 import pytest
 from rdkit import Chem
-from test_official_data import (
-    cache,
-    synthetic_stiffness,
-)
-from test_official_data import (
-    official as official,  # noqa: PLC0414 -- explicit pytest fixture re-export
-)
-
 from stifflow.cache_io import atomic_json
 from stifflow.formal_cache import build_shard, merge_shards
 from stifflow.freeze_data import VARIANT, freeze
@@ -26,6 +18,13 @@ from stifflow.official_data import (
 from stifflow.packed_data import PackedRecords
 from stifflow.preflight import fingerprint
 from stifflow.training import advance_cursor, load_records, make_loader
+from test_official_data import (
+    cache,
+    synthetic_stiffness,
+)
+from test_official_data import (
+    official as official,  # noqa: PLC0414 -- explicit pytest fixture re-export
+)
 
 SOURCE = {"sigma0": 1.0, "rho": 1.0}
 
@@ -142,6 +141,29 @@ def test_default_part_cache_is_sized_from_the_manifest(frozen):
     store.close()
     # An explicit bound still wins, so callers can cap open descriptors.
     assert PackedRecords(report, "precision", max_open_parts=1).max_open_parts == 1
+
+
+def test_research_paths_reuse_identical_packed_labels(frozen):
+    from stifflow.research_paths import RESEARCH_METHODS, label_method
+
+    pack(frozen, build(frozen))
+    path = frozen[2] / "train-packed/manifest.json"
+    for method in RESEARCH_METHODS:
+        store = load_records(path, "train", "all", method, SOURCE)
+        baseline = load_records(path, "train", "all", label_method(method), SOURCE)
+        _, actual = store.sample(0, 0)
+        _, expected = baseline.sample(0, 0)
+        np.testing.assert_array_equal(actual["x1"], expected["x1"])
+        assert actual["row_id"] == expected["row_id"]
+        if actual["label"] is None:
+            assert expected["label"] is None
+        else:
+            for key in actual["label"]:
+                np.testing.assert_array_equal(
+                    actual["label"][key], expected["label"][key]
+                )
+        store.close()
+        baseline.close()
 
 
 def test_worker_and_packing_resume_protects_completed_results(frozen):
