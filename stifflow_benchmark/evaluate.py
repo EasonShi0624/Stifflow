@@ -11,8 +11,9 @@ import rdkit
 from rdkit import Chem
 from rdkit.Chem import rdMolAlign
 from stifflow.preflight import fingerprint, provenance
+from stifflow.research_paths import METHODS as PATH_METHODS
 
-METHODS = {"precision", "alternative_a", "control", "etflow_pretrained"}
+METHODS = {*PATH_METHODS, "etflow_pretrained"}
 DEFAULT_THRESHOLDS = np.arange(0.05, 3.05, 0.05)
 
 

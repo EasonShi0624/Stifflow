@@ -47,7 +47,8 @@ The run manifest is JSON:
 ```
 
 Each NPZ contains `pos_ref [N_ref,N_atoms,3]`, `pos_gen [N_gen,N_atoms,3]`, and `atomic_numbers [N_atoms]`.
-Allowed controlled methods are `precision`, `alternative_a`, `control`. Official pretrained ET-Flow
+Controlled methods include `precision`, `alternative_a`, `control` and the research variants
+`a_rot_null`, `a_trace_null`, `linear`, `aligned_linear`, `precision_clock`. Official pretrained ET-Flow
 must use `method=etflow_pretrained`, `baseline_kind=external_pretrained`, and state its different
 budget/prior/loss/parity treatment. An external pretrained score is not a budget-matched comparison.
 
@@ -93,3 +94,10 @@ the byte-identical label cache onto node-local storage and rewrote absolute path
 while each run's staged `train`/`val` manifest hashes are recorded as evidence instead of being
 compared. External pretrained ET-Flow remains a separately identified row. Comparing different NFE
 settings is a separate validation sensitivity study, not one matched comparison table.
+
+Post-formal research diagnostics and the validation-only 25k paired screening workflow
+are documented in
+[the core research handoff](https://github.com/EasonShi0624/Stifflow/blob/torch/shhpc-training-safety/docs/research-next-stage.md).
+Use `--allow-disconnected` explicitly to match the formal multi-fragment protocol.
+Research comparisons use `stifflow_benchmark.research_compare`; the original formal
+250k summary remains separate.
