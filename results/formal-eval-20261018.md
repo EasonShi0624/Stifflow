@@ -22,14 +22,14 @@
 
 ### 评估补丁（本集群，已推送，远端已验证）
 
-- `stifflow-v1`：分支 `shhpc-formal-eval` @ `76b92e3`
+- `stifflow-v1`：分支 `shhpc-formal-eval`
   - 评估补丁 `b8989dd`：staged train/val manifest 哈希归一化、`formal generate --resume`、formal summary CLI 与测试；
-  - 结果摘要 `76b92e3`：`results/formal-eval-20261018.json` 与本报告。
+  - 结果摘要 `76b92e3`：`results/formal-eval-20261018.json`；本报告随后加入同一分支。
 - `stifflow-v1-benchmark`：分支 `shhpc-formal-eval-benchmark` @ `1fd8a85`
   - evaluator 多片段支持；
   - generation 增量落盘/恢复；
   - summarize 归一化与测试。
-- 远端核对（2026-10-18）：`origin/shhpc-formal-eval = 76b92e3`，`origin/shhpc-formal-eval-benchmark = 1fd8a85`。
+- 远端核对（2026-10-18）：`origin/shhpc-formal-eval` 包含 `b8989dd`、`76b92e3` 及本报告提交；`origin/shhpc-formal-eval-benchmark = 1fd8a85`。具体 head 以 `git ls-remote` 为准。
 
 这些补丁只影响生成/评测编排与报告，不改变训练目标、Euler50、2×参考数、seed42 或 RMSD 协议；训练 checkpoint 仍对应 `793d502`。
 

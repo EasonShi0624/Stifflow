@@ -10,7 +10,7 @@
   "evaluation_code": {
     "stifflow-v1": "b8989dd",
     "stifflow-v1-benchmark": "1fd8a85",
-    "note": "pushed to origin on 2026-10-18; shhpc-formal-eval @ 76b92e3 (eval patch b8989dd + results) and shhpc-formal-eval-benchmark @ 1fd8a85; verified on remote",
+    "note": "pushed to origin on 2026-10-18; shhpc-formal-eval contains b8989dd (eval patch), 76b92e3 (results) and the report commit; shhpc-formal-eval-benchmark @ 1fd8a85; verify remote head with git ls-remote",
     "results_commit": "76b92e3"
   },
   "config": {
