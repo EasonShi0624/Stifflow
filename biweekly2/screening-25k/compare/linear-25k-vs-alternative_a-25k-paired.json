@@ -1,0 +1,87 @@
+{
+  "candidate": "linear",
+  "baseline": "alternative_a",
+  "verified_label_content": {
+    "train": "91ec252022522cf41c3db775c08c5f955914b5fb7abf185b81cd64ca972e2dc2",
+    "val": "cb4c5596cf6dcaab7bf652dd1b46d2380f5ab8bdf7eb6948feadfd36a1a704f2"
+  },
+  "deltas_candidate_minus_baseline": {
+    "mat_p": {
+      "mean": -0.010007849512478132,
+      "ci95": [
+        -0.01924866716775752,
+        -0.001284324236345948
+      ],
+      "molecules": 512
+    },
+    "mat_r": {
+      "mean": -0.005594086360843617,
+      "ci95": [
+        -0.015401848476336731,
+        0.0050477941382674665
+      ],
+      "molecules": 512
+    },
+    "cov_r": {
+      "mean": 0.017967316377418427,
+      "ci95": [
+        0.0021484335462283407,
+        0.03397836296371453
+      ],
+      "molecules": 512
+    },
+    "chirality_macro": {
+      "mean": 0.039716333095259564,
+      "ci95": [
+        0.023911534914696615,
+        0.05562906847146732
+      ],
+      "molecules": 380
+    }
+  },
+  "means": {
+    "mat_p": {
+      "candidate": 0.508991164277953,
+      "baseline": 0.5189990137904311
+    },
+    "mat_r": {
+      "candidate": 0.26396652301975243,
+      "baseline": 0.26956060938059606
+    },
+    "cov_r": {
+      "candidate": 0.8415462228707618,
+      "baseline": 0.8235789064933433
+    },
+    "chirality_macro": {
+      "candidate": 0.4253079242123765,
+      "baseline": 0.38559159111711705
+    }
+  },
+  "relative_mat_p_change": -0.019282983679270043,
+  "criteria": {
+    "mat_p_reduction_at_least_5_percent": false,
+    "mat_p_difference_ci_excludes_zero": true,
+    "mat_r_increase_at_most_0.005_angstrom": true,
+    "cov_r_drop_at_most_0.01": true,
+    "macro_chirality_drop_at_most_0.01": true
+  },
+  "advance_to_second_seed": false,
+  "bootstrap": {
+    "unit": "molecule",
+    "replicates": 2000,
+    "seed": 42
+  },
+  "caveat": "A preregistered screening rule for one matched training seed. This does not establish across-seed benefit; missing stereo evidence fails the gate.",
+  "inputs": {
+    "candidate": {
+      "path": "/gpfsnyu/scratch/ys6132/stifflow/runs/research-20261018/generated/linear-25k/evaluation.json",
+      "bytes": 1534403,
+      "sha256": "533b3dba1104fb430b4c66e0659b75f6f272312c39fdbd81bf07075fcf016ecf"
+    },
+    "baseline": {
+      "path": "/gpfsnyu/scratch/ys6132/stifflow/runs/research-20261018/generated/alternative_a-25k/evaluation.json",
+      "bytes": 1539773,
+      "sha256": "16f0e76bc3571c33451dd2c6a4c24c98d746dda1f001ac395dabb94c1f4c56bf"
+    }
+  }
+}

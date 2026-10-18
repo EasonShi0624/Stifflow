@@ -1,0 +1,87 @@
+{
+  "candidate": "a_trace_null",
+  "baseline": "alternative_a",
+  "verified_label_content": {
+    "train": "91ec252022522cf41c3db775c08c5f955914b5fb7abf185b81cd64ca972e2dc2",
+    "val": "cb4c5596cf6dcaab7bf652dd1b46d2380f5ab8bdf7eb6948feadfd36a1a704f2"
+  },
+  "deltas_candidate_minus_baseline": {
+    "mat_p": {
+      "mean": 0.01198719669282189,
+      "ci95": [
+        0.003544951837681961,
+        0.019973704467658452
+      ],
+      "molecules": 512
+    },
+    "mat_r": {
+      "mean": 0.01846496912009309,
+      "ci95": [
+        0.00846165264019447,
+        0.029756897748197737
+      ],
+      "molecules": 512
+    },
+    "cov_r": {
+      "mean": -0.004235063314773227,
+      "ci95": [
+        -0.02003328632155036,
+        0.011522452162770978
+      ],
+      "molecules": 512
+    },
+    "chirality_macro": {
+      "mean": -0.0055126066351216625,
+      "ci95": [
+        -0.020307413673027047,
+        0.009562759179274651
+      ],
+      "molecules": 380
+    }
+  },
+  "means": {
+    "mat_p": {
+      "candidate": 0.530986210483253,
+      "baseline": 0.5189990137904311
+    },
+    "mat_r": {
+      "candidate": 0.2880255785006891,
+      "baseline": 0.26956060938059606
+    },
+    "cov_r": {
+      "candidate": 0.81934384317857,
+      "baseline": 0.8235789064933433
+    },
+    "chirality_macro": {
+      "candidate": 0.3800789844819954,
+      "baseline": 0.38559159111711705
+    }
+  },
+  "relative_mat_p_change": 0.023096761986646574,
+  "criteria": {
+    "mat_p_reduction_at_least_5_percent": false,
+    "mat_p_difference_ci_excludes_zero": false,
+    "mat_r_increase_at_most_0.005_angstrom": false,
+    "cov_r_drop_at_most_0.01": true,
+    "macro_chirality_drop_at_most_0.01": true
+  },
+  "advance_to_second_seed": false,
+  "bootstrap": {
+    "unit": "molecule",
+    "replicates": 2000,
+    "seed": 42
+  },
+  "caveat": "A preregistered screening rule for one matched training seed. This does not establish across-seed benefit; missing stereo evidence fails the gate.",
+  "inputs": {
+    "candidate": {
+      "path": "/gpfsnyu/scratch/ys6132/stifflow/runs/research-20261018/generated/a_trace_null-25k/evaluation.json",
+      "bytes": 1539102,
+      "sha256": "7880e476b9f0a98cd60008628937638fa8c3cf8a4855525d851470839a3e7f51"
+    },
+    "baseline": {
+      "path": "/gpfsnyu/scratch/ys6132/stifflow/runs/research-20261018/generated/alternative_a-25k/evaluation.json",
+      "bytes": 1539773,
+      "sha256": "16f0e76bc3571c33451dd2c6a4c24c98d746dda1f001ac395dabb94c1f4c56bf"
+    }
+  }
+}

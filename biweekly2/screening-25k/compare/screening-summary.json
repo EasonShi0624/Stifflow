@@ -1,0 +1,502 @@
+{
+  "schema_version": 1,
+  "gating_comparisons": {
+    "a_rot_null-25k": {
+      "criteria": {
+        "mat_p_reduction_at_least_5_percent": false,
+        "mat_p_difference_ci_excludes_zero": false,
+        "mat_r_increase_at_most_0.005_angstrom": false,
+        "cov_r_drop_at_most_0.01": true,
+        "macro_chirality_drop_at_most_0.01": true
+      },
+      "advance_to_second_seed": false,
+      "relative_mat_p_change": 0.011826749886872424,
+      "deltas": {
+        "mat_p": {
+          "mean": 0.006138071527632881,
+          "ci95": [
+            -0.002007452571139488,
+            0.013706642371032193
+          ],
+          "molecules": 512
+        },
+        "mat_r": {
+          "mean": 0.010632541378761948,
+          "ci95": [
+            0.0037452042559957916,
+            0.017479344109093863
+          ],
+          "molecules": 512
+        },
+        "cov_r": {
+          "mean": 0.005353898385427403,
+          "ci95": [
+            -0.007491131385871901,
+            0.018948003616495512
+          ],
+          "molecules": 512
+        },
+        "chirality_macro": {
+          "mean": 0.01502615308254878,
+          "ci95": [
+            0.0015273336159004336,
+            0.02899206868496517
+          ],
+          "molecules": 380
+        }
+      }
+    },
+    "a_trace_null-25k": {
+      "criteria": {
+        "mat_p_reduction_at_least_5_percent": false,
+        "mat_p_difference_ci_excludes_zero": false,
+        "mat_r_increase_at_most_0.005_angstrom": false,
+        "cov_r_drop_at_most_0.01": true,
+        "macro_chirality_drop_at_most_0.01": true
+      },
+      "advance_to_second_seed": false,
+      "relative_mat_p_change": 0.023096761986646574,
+      "deltas": {
+        "mat_p": {
+          "mean": 0.01198719669282189,
+          "ci95": [
+            0.003544951837681961,
+            0.019973704467658452
+          ],
+          "molecules": 512
+        },
+        "mat_r": {
+          "mean": 0.01846496912009309,
+          "ci95": [
+            0.00846165264019447,
+            0.029756897748197737
+          ],
+          "molecules": 512
+        },
+        "cov_r": {
+          "mean": -0.004235063314773227,
+          "ci95": [
+            -0.02003328632155036,
+            0.011522452162770978
+          ],
+          "molecules": 512
+        },
+        "chirality_macro": {
+          "mean": -0.0055126066351216625,
+          "ci95": [
+            -0.020307413673027047,
+            0.009562759179274651
+          ],
+          "molecules": 380
+        }
+      }
+    },
+    "linear-25k": {
+      "criteria": {
+        "mat_p_reduction_at_least_5_percent": false,
+        "mat_p_difference_ci_excludes_zero": true,
+        "mat_r_increase_at_most_0.005_angstrom": true,
+        "cov_r_drop_at_most_0.01": true,
+        "macro_chirality_drop_at_most_0.01": true
+      },
+      "advance_to_second_seed": false,
+      "relative_mat_p_change": -0.03296354346239658,
+      "deltas": {
+        "mat_p": {
+          "mean": -0.01735007222553426,
+          "ci95": [
+            -0.026886474344320586,
+            -0.008406256945319051
+          ],
+          "molecules": 512
+        },
+        "mat_r": {
+          "mean": -0.01516630248212761,
+          "ci95": [
+            -0.027625266124863036,
+            -0.002801726163531771
+          ],
+          "molecules": 512
+        },
+        "cov_r": {
+          "mean": 0.021056729556861296,
+          "ci95": [
+            0.0033953021552107546,
+            0.039648744938673576
+          ],
+          "molecules": 512
+        },
+        "chirality_macro": {
+          "mean": 0.045237757882265826,
+          "ci95": [
+            0.028320451628964106,
+            0.06342251943946466
+          ],
+          "molecules": 380
+        }
+      }
+    },
+    "aligned_linear-25k": {
+      "criteria": {
+        "mat_p_reduction_at_least_5_percent": true,
+        "mat_p_difference_ci_excludes_zero": true,
+        "mat_r_increase_at_most_0.005_angstrom": true,
+        "cov_r_drop_at_most_0.01": true,
+        "macro_chirality_drop_at_most_0.01": true
+      },
+      "advance_to_second_seed": true,
+      "relative_mat_p_change": -0.18220747904773216,
+      "deltas": {
+        "mat_p": {
+          "mean": -0.0959033098221666,
+          "ci95": [
+            -0.11208293278257546,
+            -0.07963457309742954
+          ],
+          "molecules": 512
+        },
+        "mat_r": {
+          "mean": -0.061479262083412506,
+          "ci95": [
+            -0.0803191977202207,
+            -0.04339717526935564
+          ],
+          "molecules": 512
+        },
+        "cov_r": {
+          "mean": 0.061700121727621904,
+          "ci95": [
+            0.03925281099538583,
+            0.08519963256696735
+          ],
+          "molecules": 512
+        },
+        "chirality_macro": {
+          "mean": 0.18048050501924864,
+          "ci95": [
+            0.15504114518660134,
+            0.20753712346971698
+          ],
+          "molecules": 380
+        }
+      }
+    }
+  },
+  "exploratory_comparisons": {
+    "a_rot_null-25k-vs-control-25k": {
+      "deltas": {
+        "mat_p": {
+          "mean": -0.0012041511854232441,
+          "ci95": [
+            -0.009925429374202521,
+            0.006334833718178975
+          ],
+          "molecules": 512
+        },
+        "mat_r": {
+          "mean": 0.0010603252574779556,
+          "ci95": [
+            -0.008553586278597645,
+            0.010552963620713769
+          ],
+          "molecules": 512
+        },
+        "cov_r": {
+          "mean": 0.00844331156487027,
+          "ci95": [
+            -0.007128402308162607,
+            0.025076120482702968
+          ],
+          "molecules": 512
+        },
+        "chirality_macro": {
+          "mean": 0.020547577869555043,
+          "ci95": [
+            0.0071596771471262675,
+            0.034701030438783455
+          ],
+          "molecules": 380
+        }
+      },
+      "means": {
+        "mat_p": {
+          "candidate": 0.525137085318064,
+          "baseline": 0.5263412365034873
+        },
+        "mat_r": {
+          "candidate": 0.280193150759358,
+          "baseline": 0.27913282550188007
+        },
+        "cov_r": {
+          "candidate": 0.8289328048787706,
+          "baseline": 0.8204894933139004
+        },
+        "chirality_macro": {
+          "candidate": 0.40061774419966584,
+          "baseline": 0.38007016633011076
+        }
+      },
+      "note": "exploratory only; not a gating comparison"
+    },
+    "a_trace_null-25k-vs-control-25k": {
+      "deltas": {
+        "mat_p": {
+          "mean": 0.0046449739797657635,
+          "ci95": [
+            -0.003085319898342812,
+            0.011933645023907315
+          ],
+          "molecules": 512
+        },
+        "mat_r": {
+          "mean": 0.008892752998809095,
+          "ci95": [
+            -0.0013664575470196544,
+            0.019437758304533787
+          ],
+          "molecules": 512
+        },
+        "cov_r": {
+          "mean": -0.0011456501353303604,
+          "ci95": [
+            -0.017931753778663212,
+            0.01488284287989501
+          ],
+          "molecules": 512
+        },
+        "chirality_macro": {
+          "mean": 8.818151884604658e-06,
+          "ci95": [
+            -0.013763992334832506,
+            0.014612121030630277
+          ],
+          "molecules": 380
+        }
+      },
+      "means": {
+        "mat_p": {
+          "candidate": 0.530986210483253,
+          "baseline": 0.5263412365034873
+        },
+        "mat_r": {
+          "candidate": 0.2880255785006891,
+          "baseline": 0.27913282550188007
+        },
+        "cov_r": {
+          "candidate": 0.81934384317857,
+          "baseline": 0.8204894933139004
+        },
+        "chirality_macro": {
+          "candidate": 0.3800789844819954,
+          "baseline": 0.38007016633011076
+        }
+      },
+      "note": "exploratory only; not a gating comparison"
+    },
+    "linear-25k-vs-alternative_a-25k": {
+      "deltas": {
+        "mat_p": {
+          "mean": -0.010007849512478132,
+          "ci95": [
+            -0.01924866716775752,
+            -0.001284324236345948
+          ],
+          "molecules": 512
+        },
+        "mat_r": {
+          "mean": -0.005594086360843617,
+          "ci95": [
+            -0.015401848476336731,
+            0.0050477941382674665
+          ],
+          "molecules": 512
+        },
+        "cov_r": {
+          "mean": 0.017967316377418427,
+          "ci95": [
+            0.0021484335462283407,
+            0.03397836296371453
+          ],
+          "molecules": 512
+        },
+        "chirality_macro": {
+          "mean": 0.039716333095259564,
+          "ci95": [
+            0.023911534914696615,
+            0.05562906847146732
+          ],
+          "molecules": 380
+        }
+      },
+      "means": {
+        "mat_p": {
+          "candidate": 0.508991164277953,
+          "baseline": 0.5189990137904311
+        },
+        "mat_r": {
+          "candidate": 0.26396652301975243,
+          "baseline": 0.26956060938059606
+        },
+        "cov_r": {
+          "candidate": 0.8415462228707618,
+          "baseline": 0.8235789064933433
+        },
+        "chirality_macro": {
+          "candidate": 0.4253079242123765,
+          "baseline": 0.38559159111711705
+        }
+      },
+      "note": "exploratory only; not a gating comparison"
+    },
+    "aligned_linear-25k-vs-alternative_a-25k": {
+      "deltas": {
+        "mat_p": {
+          "mean": -0.0885610871091105,
+          "ci95": [
+            -0.10401549460541769,
+            -0.072099629286045
+          ],
+          "molecules": 512
+        },
+        "mat_r": {
+          "mean": -0.051907045962128515,
+          "ci95": [
+            -0.0692271979534644,
+            -0.03398425206824509
+          ],
+          "molecules": 512
+        },
+        "cov_r": {
+          "mean": 0.05861070854817904,
+          "ci95": [
+            0.03519495978684922,
+            0.08198551013428149
+          ],
+          "molecules": 512
+        },
+        "chirality_macro": {
+          "mean": 0.17495908023224238,
+          "ci95": [
+            0.1501417974109393,
+            0.20144535193151278
+          ],
+          "molecules": 380
+        }
+      },
+      "means": {
+        "mat_p": {
+          "candidate": 0.43043792668132064,
+          "baseline": 0.5189990137904311
+        },
+        "mat_r": {
+          "candidate": 0.21765356341846753,
+          "baseline": 0.26956060938059606
+        },
+        "cov_r": {
+          "candidate": 0.8821896150415223,
+          "baseline": 0.8235789064933433
+        },
+        "chirality_macro": {
+          "candidate": 0.5605506713493594,
+          "baseline": 0.38559159111711705
+        }
+      },
+      "note": "exploratory only; not a gating comparison"
+    }
+  },
+  "chirality_localization_A_vs_control_25k": {
+    "molecules": 380,
+    "A_minus_control_macro_chirality": 0.005521424787006265,
+    "ci95": [
+      -0.007183141653275351,
+      0.017883378648107254
+    ]
+  },
+  "strain_25k": {
+    "a_rot_null-25k": {
+      "summary": {
+        "n_conformers": 5482,
+        "n_ok": 5482,
+        "n_stereo_changed_during_relaxation": 60,
+        "relaxable_strain_kcal_mol": {
+          "mean": 22.45696323074125,
+          "median": 13.863036874606491,
+          "p90": 35.5441474588966
+        },
+        "bond_deviation_angstrom": {
+          "mean": 0.017517616753104544,
+          "median": 0.013432333185909282
+        }
+      },
+      "per_conformer_file": null
+    },
+    "a_trace_null-25k": {
+      "summary": {
+        "n_conformers": 5482,
+        "n_ok": 5482,
+        "n_stereo_changed_during_relaxation": 61,
+        "relaxable_strain_kcal_mol": {
+          "mean": 16.011361732472082,
+          "median": 10.640941081511501,
+          "p90": 27.822913042277413
+        },
+        "bond_deviation_angstrom": {
+          "mean": 0.013254350857886196,
+          "median": 0.010591076251146105
+        }
+      },
+      "per_conformer_file": null
+    },
+    "linear-25k": {
+      "summary": {
+        "n_conformers": 5482,
+        "n_ok": 5482,
+        "n_stereo_changed_during_relaxation": 62,
+        "relaxable_strain_kcal_mol": {
+          "mean": 25.060096047721704,
+          "median": 15.98041066048581,
+          "p90": 47.47580247610122
+        },
+        "bond_deviation_angstrom": {
+          "mean": 0.023848117251572737,
+          "median": 0.019146587202582145
+        }
+      },
+      "per_conformer_file": null
+    },
+    "aligned_linear-25k": {
+      "summary": {
+        "n_conformers": 5482,
+        "n_ok": 5482,
+        "n_stereo_changed_during_relaxation": 58,
+        "relaxable_strain_kcal_mol": {
+          "mean": 18.852589677291128,
+          "median": 13.410746453075186,
+          "p90": 33.541739138720814
+        },
+        "bond_deviation_angstrom": {
+          "mean": 0.020170791932852802,
+          "median": 0.016306897972250815
+        }
+      },
+      "per_conformer_file": null
+    },
+    "alternative_a-25k": {
+      "summary": {
+        "n_conformers": 5482,
+        "n_ok": 5482,
+        "n_stereo_changed_during_relaxation": 59,
+        "relaxable_strain_kcal_mol": {
+          "mean": 14.318243400842153,
+          "median": 9.452049266432985,
+          "p90": 25.720576351034858
+        },
+        "bond_deviation_angstrom": {
+          "mean": 0.013089473280030668,
+          "median": 0.010526447179880487
+        }
+      },
+      "per_conformer_file": null
+    }
+  }
+}

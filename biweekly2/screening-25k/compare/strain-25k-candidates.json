@@ -1,0 +1,91 @@
+{
+  "schema_version": 1,
+  "seed": 42,
+  "methods": {
+    "a_rot_null-25k": {
+      "summary": {
+        "n_conformers": 5482,
+        "n_ok": 5482,
+        "n_stereo_changed_during_relaxation": 60,
+        "relaxable_strain_kcal_mol": {
+          "mean": 22.45696323074125,
+          "median": 13.863036874606491,
+          "p90": 35.5441474588966
+        },
+        "bond_deviation_angstrom": {
+          "mean": 0.017517616753104544,
+          "median": 0.013432333185909282
+        }
+      },
+      "per_conformer_file": null
+    },
+    "a_trace_null-25k": {
+      "summary": {
+        "n_conformers": 5482,
+        "n_ok": 5482,
+        "n_stereo_changed_during_relaxation": 61,
+        "relaxable_strain_kcal_mol": {
+          "mean": 16.011361732472082,
+          "median": 10.640941081511501,
+          "p90": 27.822913042277413
+        },
+        "bond_deviation_angstrom": {
+          "mean": 0.013254350857886196,
+          "median": 0.010591076251146105
+        }
+      },
+      "per_conformer_file": null
+    },
+    "linear-25k": {
+      "summary": {
+        "n_conformers": 5482,
+        "n_ok": 5482,
+        "n_stereo_changed_during_relaxation": 62,
+        "relaxable_strain_kcal_mol": {
+          "mean": 25.060096047721704,
+          "median": 15.98041066048581,
+          "p90": 47.47580247610122
+        },
+        "bond_deviation_angstrom": {
+          "mean": 0.023848117251572737,
+          "median": 0.019146587202582145
+        }
+      },
+      "per_conformer_file": null
+    },
+    "aligned_linear-25k": {
+      "summary": {
+        "n_conformers": 5482,
+        "n_ok": 5482,
+        "n_stereo_changed_during_relaxation": 58,
+        "relaxable_strain_kcal_mol": {
+          "mean": 18.852589677291128,
+          "median": 13.410746453075186,
+          "p90": 33.541739138720814
+        },
+        "bond_deviation_angstrom": {
+          "mean": 0.020170791932852802,
+          "median": 0.016306897972250815
+        }
+      },
+      "per_conformer_file": null
+    },
+    "alternative_a-25k": {
+      "summary": {
+        "n_conformers": 5482,
+        "n_ok": 5482,
+        "n_stereo_changed_during_relaxation": 59,
+        "relaxable_strain_kcal_mol": {
+          "mean": 14.318243400842153,
+          "median": 9.452049266432985,
+          "p90": 25.720576351034858
+        },
+        "bond_deviation_angstrom": {
+          "mean": 0.013089473280030668,
+          "median": 0.010526447179880487
+        }
+      },
+      "per_conformer_file": null
+    }
+  }
+}
