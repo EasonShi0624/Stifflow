@@ -1,0 +1,87 @@
+{
+  "candidate": "linear",
+  "baseline": "control",
+  "verified_label_content": {
+    "train": "91ec252022522cf41c3db775c08c5f955914b5fb7abf185b81cd64ca972e2dc2",
+    "val": "cb4c5596cf6dcaab7bf652dd1b46d2380f5ab8bdf7eb6948feadfd36a1a704f2"
+  },
+  "deltas_candidate_minus_baseline": {
+    "mat_p": {
+      "mean": -0.01735007222553426,
+      "ci95": [
+        -0.026886474344320586,
+        -0.008406256945319051
+      ],
+      "molecules": 512
+    },
+    "mat_r": {
+      "mean": -0.01516630248212761,
+      "ci95": [
+        -0.027625266124863036,
+        -0.002801726163531771
+      ],
+      "molecules": 512
+    },
+    "cov_r": {
+      "mean": 0.021056729556861296,
+      "ci95": [
+        0.0033953021552107546,
+        0.039648744938673576
+      ],
+      "molecules": 512
+    },
+    "chirality_macro": {
+      "mean": 0.045237757882265826,
+      "ci95": [
+        0.028320451628964106,
+        0.06342251943946466
+      ],
+      "molecules": 380
+    }
+  },
+  "means": {
+    "mat_p": {
+      "candidate": 0.508991164277953,
+      "baseline": 0.5263412365034873
+    },
+    "mat_r": {
+      "candidate": 0.26396652301975243,
+      "baseline": 0.27913282550188007
+    },
+    "cov_r": {
+      "candidate": 0.8415462228707618,
+      "baseline": 0.8204894933139004
+    },
+    "chirality_macro": {
+      "candidate": 0.4253079242123765,
+      "baseline": 0.38007016633011076
+    }
+  },
+  "relative_mat_p_change": -0.03296354346239658,
+  "criteria": {
+    "mat_p_reduction_at_least_5_percent": false,
+    "mat_p_difference_ci_excludes_zero": true,
+    "mat_r_increase_at_most_0.005_angstrom": true,
+    "cov_r_drop_at_most_0.01": true,
+    "macro_chirality_drop_at_most_0.01": true
+  },
+  "advance_to_second_seed": false,
+  "bootstrap": {
+    "unit": "molecule",
+    "replicates": 2000,
+    "seed": 42
+  },
+  "caveat": "A preregistered screening rule for one matched training seed. This does not establish across-seed benefit; missing stereo evidence fails the gate.",
+  "inputs": {
+    "candidate": {
+      "path": "/gpfsnyu/scratch/ys6132/stifflow/runs/research-20261018/generated/linear-25k/evaluation.json",
+      "bytes": 1534403,
+      "sha256": "533b3dba1104fb430b4c66e0659b75f6f272312c39fdbd81bf07075fcf016ecf"
+    },
+    "baseline": {
+      "path": "/gpfsnyu/scratch/ys6132/stifflow/runs/formal-eval-20261018/monitor-snapshots/control-seed42-step025000/evaluation.json",
+      "bytes": 881805,
+      "sha256": "9305079b319aa92657d414f590491149eb4f7559b2506a6836267b3dbec438e5"
+    }
+  }
+}

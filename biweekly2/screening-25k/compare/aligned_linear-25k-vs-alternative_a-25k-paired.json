@@ -1,0 +1,87 @@
+{
+  "candidate": "aligned_linear",
+  "baseline": "alternative_a",
+  "verified_label_content": {
+    "train": "91ec252022522cf41c3db775c08c5f955914b5fb7abf185b81cd64ca972e2dc2",
+    "val": "cb4c5596cf6dcaab7bf652dd1b46d2380f5ab8bdf7eb6948feadfd36a1a704f2"
+  },
+  "deltas_candidate_minus_baseline": {
+    "mat_p": {
+      "mean": -0.0885610871091105,
+      "ci95": [
+        -0.10401549460541769,
+        -0.072099629286045
+      ],
+      "molecules": 512
+    },
+    "mat_r": {
+      "mean": -0.051907045962128515,
+      "ci95": [
+        -0.0692271979534644,
+        -0.03398425206824509
+      ],
+      "molecules": 512
+    },
+    "cov_r": {
+      "mean": 0.05861070854817904,
+      "ci95": [
+        0.03519495978684922,
+        0.08198551013428149
+      ],
+      "molecules": 512
+    },
+    "chirality_macro": {
+      "mean": 0.17495908023224238,
+      "ci95": [
+        0.1501417974109393,
+        0.20144535193151278
+      ],
+      "molecules": 380
+    }
+  },
+  "means": {
+    "mat_p": {
+      "candidate": 0.43043792668132064,
+      "baseline": 0.5189990137904311
+    },
+    "mat_r": {
+      "candidate": 0.21765356341846753,
+      "baseline": 0.26956060938059606
+    },
+    "cov_r": {
+      "candidate": 0.8821896150415223,
+      "baseline": 0.8235789064933433
+    },
+    "chirality_macro": {
+      "candidate": 0.5605506713493594,
+      "baseline": 0.38559159111711705
+    }
+  },
+  "relative_mat_p_change": -0.1706382570215653,
+  "criteria": {
+    "mat_p_reduction_at_least_5_percent": true,
+    "mat_p_difference_ci_excludes_zero": true,
+    "mat_r_increase_at_most_0.005_angstrom": true,
+    "cov_r_drop_at_most_0.01": true,
+    "macro_chirality_drop_at_most_0.01": true
+  },
+  "advance_to_second_seed": true,
+  "bootstrap": {
+    "unit": "molecule",
+    "replicates": 2000,
+    "seed": 42
+  },
+  "caveat": "A preregistered screening rule for one matched training seed. This does not establish across-seed benefit; missing stereo evidence fails the gate.",
+  "inputs": {
+    "candidate": {
+      "path": "/gpfsnyu/scratch/ys6132/stifflow/runs/research-20261018/generated/aligned_linear-25k/evaluation.json",
+      "bytes": 1539982,
+      "sha256": "b37caa0429fa4d5a2587d0e7e7ff01bdb2461b1672484ce17901049abfa4fc68"
+    },
+    "baseline": {
+      "path": "/gpfsnyu/scratch/ys6132/stifflow/runs/research-20261018/generated/alternative_a-25k/evaluation.json",
+      "bytes": 1539773,
+      "sha256": "16f0e76bc3571c33451dd2c6a4c24c98d746dda1f001ac395dabb94c1f4c56bf"
+    }
+  }
+}
