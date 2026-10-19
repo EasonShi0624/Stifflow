@@ -1,0 +1,186 @@
+\documentclass[11pt]{article}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage[margin=1in]{geometry}
+\usepackage[hidelinks]{hyperref}
+\newcommand{\E}{\mathbb E}
+\newcommand{\R}{\mathbb R}
+\newcommand{\norm}[1]{\left\lVert#1\right\rVert}
+\newcommand{\tr}{\operatorname{tr}}
+\newcommand{\Cov}{\operatorname{Cov}}
+\newtheorem{proposition}{Proposition}
+\title{StifFlow: delayed curvature with a fixed control prefix}
+\author{Research formulation; original Alternative A remains unchanged}
+\date{19 October 2026}
+\begin{document}
+\maketitle
+
+\paragraph{Question and status.}
+We test whether restricting a local Hessian prior to a later part of a
+noise-to-conformer conditional path improves generated physical quality.
+The path below is an experimentally unvalidated extension of Alternative A.
+It does not infer transition states, basin connectivity, equilibrium weights,
+or a global energy landscape from one Hessian.
+Taylor disagreement away from the reference does not invalidate CFM;
+locality is a proposed inductive bias to be tested, not a condition of the
+CFM marginalization theorem.
+
+\section{Inherited conventions}
+The archived note \texttt{StifFlow\_v1\_Alternative\_A..tex}, body dated
+16 September 2026, supplies configuration space, boundary conditions,
+objective, aligned factor and supervision (labels \texttt{eq:space},
+\texttt{eq:boundary}, \texttt{eq:objective}, \texttt{eq:offlineL},
+\texttt{eq:coding}). This note changes only the conditional path.
+Coordinates are centered, non-mass-weighted Cartesian coordinates in
+$\mathcal X_G$, with orthonormal basis $Q\in\R^{3N\times(3N-3)}$.
+Rotations remain in this linear space, are treated geometrically in the
+physical label, and are never identified with reflections.
+Flow time is dimensionless, not physical time. The acceleration objective
+is a geometric path criterion, not a Newtonian action or a kinetic model.
+
+Let $S=C_0^{1/2}$ be the graph-only symmetric source factor,
+$C_K=\varepsilon_E K^{-1}$ the original regularized energetic covariance,
+and
+\begin{equation}
+ L=T_KS=S^{-1}(SC_KS)^{1/2},\qquad
+ T_K=S^{-1}(SC_KS)^{1/2}S^{-1},\qquad LL^\top=C_K.
+ \label{eq:aligned}
+\end{equation}
+No commutation of $S$ and $C_K$ is assumed. Original target coordinates are
+not replaced by relaxed MMFF94 references. The pair $(x_1,K)$ is sampled
+independently of $z\sim\mathcal N(0,I)$. The same $z$ and the same $K$ are
+used for every time on one conditional path.
+
+\section{A single global intervention time}
+Choose $0\leq\tau<1$ globally from a frozen training-only diagnostic, and set
+\begin{align}
+ \alpha(t)&=t^2(3-2t),\qquad
+ u_\tau(t)=\max\{0,(t-\tau)/(1-\tau)\},\nonumber\\
+ g_\tau(t)&=(1-t)u_\tau(t)^2,\qquad
+ \dot g_\tau(t)=
+ \begin{cases}0,&t\leq\tau,\\2u_\tau-3u_\tau^2,&t>\tau.
+ \end{cases}
+ \label{eq:gate}
+\end{align}
+The factor and sample supervision are
+\begin{align}
+ A_\tau(t)&=(1-t)S+g_\tau(t)(L-S),\label{eq:factor}\\
+ X_t&=\alpha(t)x_1+QA_\tau(t)z,\nonumber\\
+ U_t&=\dot\alpha(t)x_1+
+ Q[-S+\dot g_\tau(t)(L-S)]z.\label{eq:target}
+\end{align}
+At $\tau=0$, $g_0=t^2(1-t)$ and this is exactly the archived $A_E$.
+For $t\leq\tau$, it is exactly the stiffness-free smoothstep control.
+At the two endpoints,
+\begin{equation}
+ X_0=QSz,\quad U_0=-QSz,\quad X_1=x_1,\quad U_1=-QLz.
+ \label{eq:endpoints}
+\end{equation}
+The path is $C^1$ and piecewise cubic, with a finite jump of the second
+derivative at $\tau>0$. It belongs to $H^2$; no impulse in acceleration is
+introduced. Derivative checks at the knot must account for the first-order
+central-difference error there.
+Numerically, for $t>\tau$, evaluate the $S$ coefficient as
+$(1-t)^2(1+u_\tau)/(1-\tau)$ and its derivative as
+$-(1-t)(1+3u_\tau)/(1-\tau)$. These equivalent expressions avoid cancellation
+of source-sized terms in terminal hard modes; no endpoint truncation is used.
+
+\begin{proposition}[Interior density and endpoint calibration]
+For $t<1$, $A_\tau(t)$ is invertible. Its normalized endpoint covariance
+equals the original $C_K$.
+\end{proposition}
+\begin{proof}
+Writing $\chi=u_\tau^2\in[0,1]$ gives
+$A_\tau=(1-t)[(1-\chi)I+\chi T_K]S$.
+The bracket is SPD because $T_K$ is SPD, without commuting any factors.
+As $t\uparrow1$, $\chi\to1$, whence $A_\tau/(1-t)\to L$ and
+\begin{equation}
+ \lim_{t\uparrow1}\frac{A_\tau A_\tau^\top}{(1-t)^2}=C_K.
+ \label{eq:calibration}
+\end{equation}
+Also $(\alpha-1)/(1-t)\to0$.
+\end{proof}
+This is a statement about conditional supervision. It is neither a
+prediction for learned endpoint residual covariance nor evidence that GEOM
+conformer frequencies follow a harmonic Boltzmann distribution.
+
+\section{Constrained acceleration optimum and its price}
+Fix the original source, target, endpoint velocities and aligned terminal
+factor in \eqref{eq:endpoints}. Require every sample path to equal the
+control on $[0,\tau]$. Among $H^2$ continuations on $[\tau,1]$, the unique
+minimum of the squared-acceleration objective is \eqref{eq:target}.
+Indeed, the Euler--Lagrange equation on the free interval is $X^{(4)}=0$.
+The four position/velocity conditions at $\tau$ and $1$ give the cubic
+Hermite continuation in \eqref{eq:factor}. For a competing perturbation $h$
+with $h=\dot h=0$ at both ends, integration by parts gives
+$\int\langle\ddot X,\ddot h\rangle=0$, so the action increment is
+$\int\norm{\ddot h}^2$, strictly positive for nonzero $h$.
+
+With $\ell=1-\tau$, $D=L-S$ and $u=(t-\tau)/\ell$, the noise acceleration
+on the free interval is $Q(2-6u)Dz/\ell$. Independence and $\E z=0$ give
+\begin{equation}
+ J_\tau=\E_z\int_0^1\norm{\ddot X_t}^2dt
+ =12\norm{x_1}^2+\frac4{1-\tau}\norm{L-S}_F^2.
+ \label{eq:action}
+\end{equation}
+Optimizing a terminal covariance factor under $LL^\top=C_K$ still minimizes
+$\norm{L-S}_F^2$; the positive multiplier $4/\ell$ leaves the original
+Gaussian--Bures alignment \eqref{eq:aligned} unchanged. This invokes the
+established alignment result used by Alternative A, not a new OT theorem.
+
+The total squared supervision difference from the control is
+\begin{equation}
+ \int_0^1\E_z\norm{U_t-U_t^{\rm control}}^2dt
+ =\frac2{15}(1-\tau)\norm{L-S}_F^2.
+ \label{eq:signal}
+\end{equation}
+The identities follow from
+$\int_0^1(2-6u)^2du=4$ and
+$\int_0^1(2u-3u^2)^2du=2/15$.
+Relative to $\tau=0$, delaying increases the noise action by $1/\ell$ and
+reduces this signal integral by $\ell$. At $\tau=1/2$ these are $2$ and
+$1/2$. No lower approximation error, faster integration, or stronger
+stiffness supervision follows. Timing and total signal strength are
+confounded in this experiment.
+
+\section{CFM, symmetry and the matched null}
+Use ordinary Euclidean CFM, uniform interior training time, unchanged
+backbone and sampler, and only $(x_t,t,G)$ as neural input. A global proper
+Haar rotation acts jointly on the sample coordinates and velocities after
+constructing the target. Stiffness does not enter inference inputs.
+
+For the null, fix one independent relative proper rotation $R$ along a
+conditional path and let $W=Q^\top(I_N\otimes R)Q$. The graph source is
+spatially isotropic, hence $WS=SW$. Replace $L$ by $WLW^\top$ while retaining
+the target coordinates, then apply the same global Haar augmentation.
+The null factors satisfy $A_\tau^{\rm null}=WA_\tau W^\top$ and likewise
+for $\dot A_\tau$. Thus covariance spectra and expected squared sample-noise
+velocities match at every time. This null disrupts relative spatial
+orientation; it is not arbitrary internal-mode randomization.
+
+\section{Experimental interpretation}
+The frozen protocol compares existing A and A rot-null with at most two
+new seed-42, 25k-update delayed runs. A training-only Taylor diagnostic
+chooses the smallest acceptable time from $\{1/4,1/2,3/4\}$, or stops the
+experiment. Generated-force, geometric, coverage and stereochemical checks
+are paired by validation molecule. Invalid physical computations remain
+visible and cannot create a passing subset. The raw Hessian, not the
+regularized $K$, is used for Taylor diagnostics.
+
+If both delayed runs improve similarly, the observation supports a path
+change but does not establish a benefit from curvature directions.
+Even a directional difference-in-differences does not isolate timing from
+signal strength. A single training seed cannot establish general benefit.
+MMFF94-only improvement is not evidence of accuracy under another PES.
+
+\paragraph{Prior art and implementation.}
+HI-FM already studies Hessian-informed conditional paths
+(\url{https://arxiv.org/abs/2410.11433}); CurvFM studies curvature supervision
+of generated structures (\url{https://arxiv.org/abs/2609.34592}). Source
+alignment is already an ET-Flow mechanism
+(\url{https://arxiv.org/abs/2410.22388}). Novelty and performance remain
+unestablished. Code lives in core \texttt{stifflow/research\_paths.py};
+the original Alternative A label implementation and original archival
+documents are unchanged. Float64 checks cover noncommuting factors,
+endpoints, knot derivatives, symmetry, null spectra and the two integrals.
+\end{document}

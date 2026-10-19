@@ -34,3 +34,7 @@ PYTHONPATH="$PWD/stifflow-v1:$PWD/stifflow-v1-alternative-A" \
 极端谱案例为可精确识别的小型对角实例，不代表任意病态稠密矩阵都可靠。
 协方差相对残差大于 `1e-8` 时明确报错；不会静默裁剪谱。
 仅实现 `A_E`；`A_W`、free-start、近似稠密因子、训练与 GPU 生成不在本模块内。
+
+独立研究文档 [延迟曲率推导](formulation/StifFlow_A_delayed_curvature.tex) 给出 control
+前段约束下的 A 扩展及明确的加速度/监督强度代价。实现位于 core research 接口，
+本模块的原 A 因子和默认方法保留。该变体尚无 SHHPC 性能证据。
