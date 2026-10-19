@@ -7,6 +7,7 @@ from pathlib import Path
 
 import numpy as np
 from stifflow.preflight import fingerprint
+from stifflow.research_paths import DELAYED_METHODS, validate_stiffness_start
 from stifflow.smoke import external_directory
 
 
@@ -24,7 +25,25 @@ def comparison_signature(report):
     cfg = training["config"]
     profile = cfg["profiles"][training["profile"]]
     model = dict(run["config"]["model"])
-    model.pop("method")
+    method = model.pop("method")
+    if method != run["method"]:
+        raise ValueError("Run method and checkpoint method differ")
+    start = model.pop("stiffness_start", None)
+    locality_hash = model.pop("locality_report_sha256", None)
+    validate_stiffness_start(method, start)
+    if method in DELAYED_METHODS:
+        if (
+            not isinstance(locality_hash, str)
+            or len(locality_hash) != 64
+            or any(c not in "0123456789abcdef" for c in locality_hash)
+            or training.get("stiffness_start") != start
+            or training.get("locality_report_sha256") != locality_hash
+        ):
+            raise ValueError(
+                "Delayed checkpoint and training locality provenance differ"
+            )
+    elif locality_hash is not None:
+        raise ValueError("Only delayed paths accept locality provenance")
     model.pop("path_clock", None)
     configuration = dict(run["config"])
     configuration["model"] = model
@@ -63,6 +82,25 @@ def comparison_signature(report):
         "model_args": cfg["model_args"],
         "microbatch": cfg["batch_size"],
         "accumulation": profile["accumulate_grad_batches"],
+    }
+
+
+def bootstrap_delta(values, replicates=2000, seed=42):
+    """Call on the same sorted molecule IDs for paired, shared bootstrap draws."""
+    values = np.asarray(values, dtype=np.float64)
+    if values.ndim != 1 or not len(values) or not np.isfinite(values).all():
+        raise ValueError("Expected finite per-molecule differences")
+    if not isinstance(replicates, int) or not 100 <= replicates <= 10000:
+        raise ValueError("Use 100..10000 molecule bootstrap replicates")
+    rng = np.random.default_rng(seed)
+    draws = [
+        float(values[rng.integers(len(values), size=len(values))].mean())
+        for _ in range(replicates)
+    ]
+    return {
+        "mean": float(values.mean()),
+        "ci95": np.quantile(draws, [0.025, 0.975]).tolist(),
+        "molecules": len(values),
     }
 
 
@@ -111,6 +149,10 @@ def label_identity(path, expected_sha, split):
 
 
 def paired(candidate, baseline, bootstrap=2000, seed=42, label_manifests=None):
+    if any(r["run"]["method"] in DELAYED_METHODS for r in (candidate, baseline)):
+        raise ValueError(
+            "Use stiffness_compare for delayed paths; the legacy geometry gate is not their registered screen"
+        )
     signatures = [comparison_signature(report) for report in (candidate, baseline)]
     equivalence = None
     if label_manifests is not None:

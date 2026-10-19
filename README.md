@@ -101,3 +101,14 @@ are documented in
 Use `--allow-disconnected` explicitly to match the formal multi-fragment protocol.
 Research comparisons use `stifflow_benchmark.research_compare`; the original formal
 250k summary remains separate.
+
+The next bounded experiment uses `stifflow_benchmark.stiffness_diagnostics`
+(`locality` for a frozen train-only gate; `physics` for saved validation ensembles)
+and `stifflow_benchmark.stiffness_compare` for the five-run physical/geometry screen.
+The executable protocol and SHHPC commands are in the core branch
+[`scripts/shhpc/README.md`](https://github.com/EasonShi0624/Stifflow/blob/torch/stiffness-locality-core/scripts/shhpc/README.md#stiffness-locality-screen).
+All real diagnostics require a Slurm allocation. Labels and original generated coordinates
+remain read-only; failed molecules cannot produce a passing physical subset. New delayed
+methods cannot use the old geometry-only `research_compare` advancement gate.
+Optional GFN2-xTB gradients use an existing executable and explicit graph charge/closed-shell
+spin; parsing/unit checks do not substitute for an SHHPC oracle run.
