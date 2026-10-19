@@ -311,7 +311,9 @@ def main():
         default="precision",
     )
     parser.add_argument(
-        "--profile", choices=["smoke", "pilot", "formal", "research"], default="smoke"
+        "--profile",
+        choices=["smoke", "pilot", "formal", "research", "full_budget"],
+        default="smoke",
     )
     parser.add_argument("--seed", type=int)
     parser.add_argument("--checkpoint-dir", type=external_directory)
@@ -339,9 +341,10 @@ def main():
     profile = cfg["profiles"][args.profile]
     formal = args.profile == "formal"
     research = args.profile == "research"
-    scheduled = formal or research
-    if not research and args.method not in BASE_METHODS:
-        parser.error("New paths require the separate research profile")
+    full_budget = args.profile == "full_budget"
+    scheduled = formal or research or full_budget
+    if not (research or full_budget) and args.method not in BASE_METHODS:
+        parser.error("New paths require the research or full_budget profile")
     seed = cfg["seed"] if args.seed is None else args.seed
     accumulation = profile.get("accumulate_grad_batches", 1)
     effective_batch = cfg["batch_size"] * accumulation
@@ -353,6 +356,20 @@ def main():
         parser.error(
             "Research budget is 25000 updates, effective batch 128, original 250000-step LR schedule"
         )
+    if full_budget and (
+        effective_batch != 128
+        or profile["steps"] != 250000
+        or cfg["model_args"]["first_cycle_steps"] != 250000
+    ):
+        parser.error(
+            "Full-budget runs use 250000 updates, effective batch 128, the original 250000-step LR schedule"
+        )
+    if full_budget and (
+        seed not in cfg["training_seeds"]
+        or cfg["dataset_seed"] != 42
+        or cfg["row_rng_domain"] != 2
+    ):
+        parser.error("Full-budget comparisons retain the formal seeds and row sampling")
     if research and (
         seed not in cfg["training_seeds"]
         or cfg["dataset_seed"] != 42
@@ -444,7 +461,7 @@ def main():
         "config": cfg,
         "profile": args.profile,
     }
-    if research:
+    if research or full_budget:
         model.training_signature.update(
             training_seed=seed,
             dataset_seed=cfg["dataset_seed"],
