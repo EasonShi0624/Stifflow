@@ -947,3 +947,11 @@ Lightning smoke、恢复验收和受控 pilot。过去的 16 项 CPU 测试结�
 正式实验后的 P0 诊断、stiffness 负对照、线性耦合与可选 clock 变体见
 [研究工具与 SHHPC 交接](docs/research-next-stage.md)。新方法使用独立 research profile；
 本地轻量检查不代表已完成新一轮训练或生成验证。
+
+2026-10-19 的下一轮入口见 [stiffness locality screen](scripts/shhpc/README.md#stiffness-locality-screen)：
+先做 train-only 原始 Hessian 适用范围诊断，门槛通过后最多训练 `a_delayed` 与匹配旋转
+null 各一组 25k。正式 Alternative A 保留；新增路径使用冻结 `--locality-report`，
+复用现有因子缓存、backbone 和 Euclidean CFM。延迟会提高加速度代价并减少总 stiffness
+信号，因此只作为待验证假设。原 A 标签计算模块与原始 formulation 档案没有改写。
+本轮 [Torch 轻量检查记录](results/torch-stiffness-locality-20261019.json) 包含 78 项通过的
+独立测试、实际环境和实现文件 hash；真实诊断、GPU 恢复及两组训练仍待 SHHPC 执行。

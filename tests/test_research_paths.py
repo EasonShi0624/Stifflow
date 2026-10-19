@@ -10,6 +10,7 @@ from stifflow.geometry import centered
 from stifflow.precision import factor, prepare_label
 from stifflow.research_clock import PathClock, fit_clock, precision_energy
 from stifflow.research_paths import (
+    DELAYED_METHODS,
     RESEARCH_METHODS,
     label_method,
     relative_rotation,
@@ -19,6 +20,10 @@ from stifflow.source import prepare_source
 from stifflow.targets import draw_target, precision_target
 from stifflow_alt_a.path import factor as a_factor
 from stifflow_alt_a.path import prepare_label as a_label
+
+
+def delayed_kwargs(method):
+    return {"stiffness_start": 0.5} if method in DELAYED_METHODS else {}
 
 
 @pytest.fixture
@@ -46,7 +51,9 @@ def test_path_derivative_endpoints_and_centering(example, method):
     R = Rotation.from_rotvec([0.2, -0.7, 1.0]).as_matrix()
 
     def path(t):
-        return sample_target(x1, t, z, source, label, method, R)
+        return sample_target(
+            x1, t, z, source, label, method, R, **delayed_kwargs(method)
+        )
 
     x0, _ = path(0.0)
     assert_allclose(path(1.0)[0], x1, atol=1e-12)
@@ -107,7 +114,7 @@ def test_common_rng_stream_and_replay(example, method):
         else None
     )
     rng, baseline_rng = np.random.default_rng(42), np.random.default_rng(42)
-    first = draw_target(x1, source, label, method, rng, clock)
+    first = draw_target(x1, source, label, method, rng, clock, **delayed_kwargs(method))
     saved = copy.deepcopy(rng.bit_generator.state)
     relative_rotation(rng)
     assert saved == rng.bit_generator.state
@@ -120,8 +127,8 @@ def test_common_rng_stream_and_replay(example, method):
     replay = np.random.default_rng()
     replay.bit_generator.state = saved
     for a, b in zip(
-        draw_target(x1, source, label, method, rng, clock),
-        draw_target(x1, source, label, method, replay, clock),
+        draw_target(x1, source, label, method, rng, clock, **delayed_kwargs(method)),
+        draw_target(x1, source, label, method, replay, clock, **delayed_kwargs(method)),
     ):
         assert_allclose(a, b, atol=0)
 
@@ -192,9 +199,18 @@ def test_new_paths_rotate_and_permute_together(example):
     transformed = Source(source.Q, W @ source.S @ W.T, W @ source.C0 @ W.T)
     other = {"L_K": W @ label["L_K"] @ W.T}
     for method in RESEARCH_METHODS[:-1]:
-        x, u = sample_target(x1, 0.37, z, source, label, method, relative)
+        x, u = sample_target(
+            x1, 0.73, z, source, label, method, relative, **delayed_kwargs(method)
+        )
         xx, uu = sample_target(
-            x1[perm] @ R.T, 0.37, W @ z, transformed, other, method, R @ relative @ R.T
+            x1[perm] @ R.T,
+            0.73,
+            W @ z,
+            transformed,
+            other,
+            method,
+            R @ relative @ R.T,
+            **delayed_kwargs(method),
         )
         assert_allclose(xx, x[perm] @ R.T, atol=1e-12)
         assert_allclose(uu, u[perm] @ R.T, atol=1e-12)
@@ -275,6 +291,8 @@ def test_model_checkpoint_embeds_clock_and_keeps_backbone_identical(method):
     model = StifFlow(
         method=method,
         path_clock=specification if method == "precision_clock" else None,
+        **delayed_kwargs(method),
+        **({"locality_report_sha256": "a" * 64} if method in DELAYED_METHODS else {}),
         **options,
     )
     for key, value in baseline.state_dict().items():
@@ -285,6 +303,11 @@ def test_model_checkpoint_embeds_clock_and_keeps_backbone_identical(method):
         assert reloaded.path_clock.inverse(0.37) == (0.37, 1.0)
     else:
         assert "path_clock" not in model.hparams and reloaded.path_clock is None
+    if method in DELAYED_METHODS:
+        assert reloaded.stiffness_start == 0.5
+        assert reloaded.hparams["locality_report_sha256"] == "a" * 64
+    else:
+        assert "stiffness_start" not in model.hparams
 
 
 def test_solver_probe_toy_field_uses_graph_only_common_noise():

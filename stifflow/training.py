@@ -10,7 +10,7 @@ import numpy as np
 from .cache_io import atomic_json
 from .official_data import KIND, SAMPLING, validate_label_manifest, validate_label_pair
 from .preflight import WORKSPACE, fingerprint, provenance
-from .research_paths import BASE_METHODS, METHODS, label_method
+from .research_paths import BASE_METHODS, DELAYED_METHODS, METHODS, label_method
 from .smoke import external_directory
 
 
@@ -322,6 +322,7 @@ def main():
     parser.add_argument("--resume", type=Path)
     parser.add_argument("--stop-after", type=int)
     parser.add_argument("--clock", type=Path)
+    parser.add_argument("--locality-report", type=Path)
     args = parser.parse_args()
     if not os.getenv("SLURM_JOB_ID"):
         parser.error("Training belongs in an allocated Slurm job")
@@ -368,6 +369,17 @@ def main():
         or path_clock.get("source_config") != cfg["source"]
     ):
         parser.error("Clock belongs to different training labels/source")
+    if (args.method in DELAYED_METHODS) != (args.locality_report is not None):
+        parser.error("Only delayed paths require --locality-report")
+    stiffness_start, locality_hash = None, None
+    if args.locality_report is not None:
+        from .locality import load_locality_report
+
+        if seed != 42:
+            parser.error("This locality screen is limited to the two seed-42 runs")
+        stiffness_start, locality_hash = load_locality_report(
+            args.locality_report, args.train_labels, cfg["source"]
+        )
     if formal and (effective_batch != 128 or profile["steps"] != 250000):
         parser.error(
             "Formal budget is 250000 optimizer updates with effective batch 128"
@@ -435,6 +447,8 @@ def main():
         seed=seed,
         source_config=cfg["source"],
         path_clock=path_clock,
+        stiffness_start=stiffness_start,
+        locality_report_sha256=locality_hash,
         **cfg["model_args"],
     )
     model.gpu_memory = cfg.get("gpu_memory")
@@ -462,6 +476,14 @@ def main():
                 )
             },
         )
+        if args.locality_report is not None:
+            model.training_signature.update(
+                stiffness_start=stiffness_start,
+                locality_report_sha256=locality_hash,
+            )
+            model.training_signature["research_implementation"]["locality.py"] = (
+                fingerprint(Path(__file__).with_name("locality.py"))["sha256"]
+            )
     run_provenance = provenance()
     accepted = None
     compatibility = (

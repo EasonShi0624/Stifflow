@@ -66,7 +66,13 @@ def test_heavy_research_entries_require_allocation(
 
 @pytest.mark.parametrize(
     "profile,method,allowed",
-    [("research", "a_rot_null", True), ("formal", "a_rot_null", False)],
+    [
+        ("research", "a_rot_null", True),
+        ("formal", "a_rot_null", False),
+        ("research", "a_delayed", True),
+        ("research", "a_delayed_rot_null", True),
+        ("formal", "a_delayed", False),
+    ],
 )
 def test_training_entry_keeps_accumulation_and_new_path_boundary(
     tmp_path, monkeypatch, profile, method, allowed
@@ -99,6 +105,43 @@ def test_training_entry_keeps_accumulation_and_new_path_boundary(
         )
         manifests.append(path)
     observed = {}
+    locality_args = []
+    if method in training.DELAYED_METHODS and allowed:
+        from stifflow.locality import LOCALITY_PROTOCOL
+        from stifflow.preflight import fingerprint
+
+        locality = tmp_path / "locality.json"
+        locality.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "kind": "stifflow-locality",
+                    "status": "completed",
+                    "split": "train",
+                    "protocol": LOCALITY_PROTOCOL,
+                    "source_config": {"sigma0": 1.0, "rho": 1.0},
+                    "train_manifest": fingerprint(manifests[0]),
+                    "selected_start": 0.5,
+                    "records": [{"id": str(i), "status": "ok"} for i in range(128)],
+                    "candidates": [
+                        {
+                            "stiffness_start": t,
+                            "valid_signal_fraction": v,
+                            "failed_queries": 0,
+                            "force_prediction_delta": {
+                                "mean": -0.2,
+                                "ci95": [-0.3, -0.1],
+                                "molecules": 128,
+                            },
+                        }
+                        for t, v in zip(
+                            LOCALITY_PROTOCOL["starts"], [0.4, 0.7, 0.9, 0.95]
+                        )
+                    ],
+                }
+            )
+        )
+        locality_args = ["--locality-report", str(locality)]
 
     class FakeModel:
         def __init__(self, **kwargs):
@@ -155,6 +198,7 @@ def test_training_entry_keeps_accumulation_and_new_path_boundary(
             "40",
             "--output",
             str(tmp_path / "run"),
+            *locality_args,
         ],
     )
     if not allowed:
@@ -174,3 +218,41 @@ def test_training_entry_keeps_accumulation_and_new_path_boundary(
     assert report["status"] == "stopped" and not report["budget_completed"]
     assert report["consumed_samples"] == 5120
     assert report["training_signature"]["research_implementation"]
+    if locality_args:
+        assert observed["model"]["stiffness_start"] == 0.5
+        assert (
+            report["training_signature"]["locality_report_sha256"]
+            == fingerprint(locality)["sha256"]
+        )
+        original_argv = list(sys.argv)
+        for key, value in [
+            ("stiffness_start", 0.75),
+            ("locality_report_sha256", "b" * 64),
+        ]:
+            stale = {
+                "global_step": 20,
+                "hyper_parameters": {"method": method},
+                "optimizer_states": [],
+                "training_signature": report["training_signature"] | {key: value},
+                "consumed_samples": 2560,
+            }
+            monkeypatch.setattr(
+                torch, "load", lambda *args, _stale=stale, **kwargs: _stale
+            )
+            monkeypatch.setattr(
+                sys,
+                "argv",
+                original_argv
+                + [
+                    "--resume",
+                    str(tmp_path / "stale.ckpt"),
+                    "--output",
+                    str(tmp_path / key),
+                ],
+            )
+            observed["trainer"] = None
+            with pytest.raises(
+                ValueError, match="Resume dataset, seed or configuration differs"
+            ):
+                training.main()
+            assert observed["trainer"] is None

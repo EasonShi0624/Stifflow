@@ -1,7 +1,8 @@
 #!/bin/bash
 #SBATCH --job-name=stifflow-research
 # Supply SHHPC account/partition/resources explicitly when submitting.
-# CPU: research_clock, diagnostics, compare, evaluate. GPU: training, sampling, generate.
+# CPU: clock, paths, diagnostics, stiffness, stiffness-compare, compare, evaluate.
+# GPU: train, sampling, generate.
 set -euo pipefail
 : "${STIFFLOW_WORKSPACE:?Set the actual SHHPC workspace}"
 source "$STIFFLOW_WORKSPACE/stifflow-v1/scripts/shhpc_env.sh"
@@ -12,6 +13,8 @@ case "$task" in
   clock) module=stifflow.research_clock ;;
   paths) module=stifflow.research_path_statistics ;;
   diagnostics) module=stifflow_benchmark.research_diagnostics ;;
+  stiffness) module=stifflow_benchmark.stiffness_diagnostics ;;
+  stiffness-compare) module=stifflow_benchmark.stiffness_compare ;;
   sampling) module=stifflow_benchmark.research_sampling ;;
   generate) module=stifflow_benchmark.generate ;;
   evaluate) module=stifflow_benchmark.evaluate ;;

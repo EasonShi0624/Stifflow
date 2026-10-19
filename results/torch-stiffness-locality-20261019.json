@@ -1,0 +1,92 @@
+{
+  "schema_version": 1,
+  "kind": "torch-lightweight-locality-checks",
+  "generated_at_utc": "2026-10-19T19:31:32.930845+00:00",
+  "status": "passed",
+  "unique_passing_tests": 78,
+  "suites": [
+    {
+      "junit_path": "/tmp/stifflow-locality-pytest.xml",
+      "tests": 77,
+      "passed": true
+    },
+    {
+      "junit_path": "/tmp/stifflow-locality-binding-pytest.xml",
+      "tests": 14,
+      "passed": true
+    }
+  ],
+  "environment": {
+    "python": "/scratch/ys6132/programs/miniforge3/envs/etflow/bin/python",
+    "python_version": "3.12.14 (main, Sep  2 2026, 23:27:36) [GCC 15.3.0]",
+    "distributions": {
+      "numpy": "1.26.4",
+      "scipy": "1.17.1",
+      "torch": "2.4.1",
+      "rdkit": "2026.3.6",
+      "pytest": "9.1.1",
+      "black": "26.5.1",
+      "ruff": "0.16.7"
+    },
+    "test_threads": {
+      "OMP_NUM_THREADS": 1,
+      "OPENBLAS_NUM_THREADS": 1,
+      "MKL_NUM_THREADS": 1
+    }
+  },
+  "repositories": {
+    "stifflow-v1": {
+      "branch": "torch/stiffness-locality-core",
+      "tested_base_commit": "dc3e07b650447faceeefe7abac5c7b90d82d0cc4"
+    },
+    "stifflow-v1-alternative-A": {
+      "branch": "torch/stiffness-locality-alt-a",
+      "tested_base_commit": "c56d466cdd4c309e7ce87543475a085413ac57a1"
+    },
+    "stifflow-v1-benchmark": {
+      "branch": "torch/stiffness-locality-benchmark",
+      "tested_base_commit": "01b3865f49b6d01ad91de3f79dee5631c944d9bd"
+    }
+  },
+  "implementation_sha256": {
+    "stifflow-v1/stifflow/locality.py": "93994a20099c3b50a2bf84413802b02cdd088671c1bfb6000b13803eb35dfc19",
+    "stifflow-v1/stifflow/research_paths.py": "29d6a9e52e3586cb195183c9e9b8763a81641fe508ad3190040f38920cf5d23c",
+    "stifflow-v1/stifflow/targets.py": "9a231a7d853a23db7611c314cd554814b7183039217a963c092778deee0d4a35",
+    "stifflow-v1/stifflow/model.py": "18d727edfe1ba30b9bfa08de1990861d536938683795baef84a1aff82b43d84c",
+    "stifflow-v1/stifflow/training.py": "b38d5966797160f651bccd69bd27b408cd8e46f84fbc2ae95ba5892c077c1d4a",
+    "stifflow-v1/scripts/shhpc/research_task.sbatch": "4c053cce21fa6281e75baec790fe1ee38652d24d72b590424bf3a910fa4f91b9",
+    "stifflow-v1/scripts/shhpc/stiffness_train.sbatch": "5e542a9a6238c723cd4afa0b4eb01a5665a7f0c69d644928e14ec9019b6880fe",
+    "stifflow-v1-benchmark/stifflow_benchmark/research_compare.py": "3907767b963ed832fd562ae4e55c24064ac13a08c06b4b5abfca002370c5bacb",
+    "stifflow-v1-benchmark/stifflow_benchmark/stiffness_diagnostics.py": "d91f53fa156ff438ad2203191f37db6c222a3ebfa81361a7ac6d2932aab0f35c",
+    "stifflow-v1-benchmark/stifflow_benchmark/stiffness_compare.py": "91707bf840472d95b809f3455fc7869d305f197d6f7ab231ce7a636577ca4acf",
+    "stifflow-v1-alternative-A/formulation/StifFlow_A_delayed_curvature.tex": "68cbb9be27cc712b3b6aa8f2e42248fd5ef19423c2b36440ccc594433320b3b8"
+  },
+  "test_invocation": "OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 MPLCONFIGDIR=/tmp/stifflow-mpl PYTHONPATH=stifflow-v1:stifflow-v1-alternative-A:stifflow-v1-benchmark /scratch/ys6132/programs/miniforge3/envs/etflow/bin/python -B -m pytest -q -o cache_dir=/tmp/stifflow-locality-pytest stifflow-v1/tests/test_delayed_paths.py stifflow-v1/tests/test_research_paths.py stifflow-v1/tests/test_research_training.py stifflow-v1-benchmark/tests/test_research.py stifflow-v1-benchmark/tests/test_stiffness_diagnostics.py stifflow-v1-alternative-A/tests/test_alternative_a.py",
+  "followup": "After adding saved-coordinate SHA binding, reran tests/test_stiffness_diagnostics.py: 14 passed. The combined unique count is 78.",
+  "static_checks": {
+    "ruff": "passed on all changed Python files",
+    "black": "formatted all changed Python files",
+    "bash_n": "passed for both SHHPC scripts",
+    "git_diff_check": "passed in all three worktrees"
+  },
+  "protected_originals": {
+    "alternative_a_label_module": "unchanged",
+    "source_and_stiffness_modules": "unchanged",
+    "original_tex_sha256": "7ca92270d16e992aa4c2162a14628b7398f906a31e2a571339034d006ea148f0",
+    "original_pdf_sha256": "ecbbc2a76e269bd75774642f1e81997c88330f0379c2c1f2621aa9612111ef82"
+  },
+  "scope": "Small CPU mathematical, synthetic data/provenance, fake-Trainer wiring and one-molecule RDKit checks only. No GEOM experiment or model training executed.",
+  "not_run": [
+    "SHHPC real-cache locality diagnostic",
+    "SHHPC saved-ensemble physical audit and full geometry evaluation",
+    "GPU 40 versus 20+20 resume acceptance",
+    "two 25k model trainings and generation",
+    "external GFN2-xTB invocation",
+    "LaTeX compilation: pdflatex/latexmk unavailable on Torch"
+  ],
+  "known_warnings": [
+    "Existing ETFlow-reference invalid escape SyntaxWarning",
+    "Expected ill-conditioned solve warning in the original A extreme-spectrum test"
+  ],
+  "performance_conclusion": null
+}

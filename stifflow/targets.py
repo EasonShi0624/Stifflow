@@ -5,7 +5,7 @@ from scipy.spatial.transform import Rotation
 
 from . import precision
 from .geometry import centered
-from .research_paths import RESEARCH_METHODS, label_method
+from .research_paths import RESEARCH_METHODS, label_method, validate_stiffness_start
 
 
 def path_module(method):
@@ -54,10 +54,11 @@ def precision_target(x1, t, z, source, label):
     return x, u
 
 
-def draw_target(x1, source, label, method, rng, clock=None):
+def draw_target(x1, source, label, method, rng, clock=None, stiffness_start=None):
     """Draw shared z/Haar noise; research methods explicitly change the coupling."""
     if clock is not None and method != "precision_clock":
         raise ValueError("Only precision_clock can use a frozen clock")
+    validate_stiffness_start(method, stiffness_start)
     # Reject machine endpoints after float32 rounding; no fixed epsilon truncation.
     t = float(np.float32(rng.random()))
     while t == 0.0 or t == 1.0:
@@ -81,7 +82,12 @@ def draw_target(x1, source, label, method, rng, clock=None):
                 source,
                 label,
                 method,
-                relative_rotation(rng) if method == "a_rot_null" else None,
+                (
+                    relative_rotation(rng)
+                    if method in ("a_rot_null", "a_delayed_rot_null")
+                    else None
+                ),
+                stiffness_start=stiffness_start,
             )
         return xt @ R.T, ut @ R.T, t
     module = path_module(method)

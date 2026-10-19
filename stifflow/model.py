@@ -49,11 +49,22 @@ class StifFlow(BaseFlow):
         source_config=None,
         target_rng_mode="stream",
         path_clock=None,
+        stiffness_start=None,
+        locality_report_sha256=None,
         **kwargs,
     ):
         path_module(method)
         from .research_clock import PathClock
+        from .research_paths import DELAYED_METHODS, validate_stiffness_start
 
+        self.stiffness_start = validate_stiffness_start(method, stiffness_start)
+        if locality_report_sha256 is not None and (
+            method not in DELAYED_METHODS
+            or not isinstance(locality_report_sha256, str)
+            or len(locality_report_sha256) != 64
+            or any(c not in "0123456789abcdef" for c in locality_report_sha256)
+        ):
+            raise ValueError("Invalid delayed-path locality report hash")
         if (method == "precision_clock") != (path_clock is not None):
             raise ValueError("Only precision_clock requires a frozen path_clock")
         self.path_clock = PathClock(path_clock) if path_clock is not None else None
@@ -90,6 +101,13 @@ class StifFlow(BaseFlow):
         )
         if path_clock is not None:
             self.save_hyperparameters({"path_clock": path_clock})
+        if stiffness_start is not None:
+            self.save_hyperparameters(
+                {
+                    "stiffness_start": self.stiffness_start,
+                    "locality_report_sha256": locality_report_sha256,
+                }
+            )
 
     def forward(self, z, t, pos, bond_index, edge_attr, node_attr, batch):
         pos = pos - scatter(pos, batch, dim=0, reduce="mean")[batch]
@@ -141,6 +159,7 @@ class StifFlow(BaseFlow):
                     self.method,
                     rng,
                     clock=self.path_clock,
+                    stiffness_start=self.stiffness_start,
                 )
                 positions.append(xt)
                 targets.append(ut)
