@@ -26,7 +26,7 @@ for stage in monitor test val; do
     val)     manifest="$REFS/val/manifest.json" ;;
   esac
   out="$ROOT/$stage"
-  mkdir -p "$out/generated"
+  # generate creates the output directory; it refuses to write into an existing one.
   python -m stifflow_benchmark.generate "$manifest" \
     --checkpoint "$CKPT" --steps 50 --seed 42 \
     --output "$out/generated"
