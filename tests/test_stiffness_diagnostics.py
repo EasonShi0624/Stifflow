@@ -288,6 +288,7 @@ def test_physics_binds_coordinates_to_geometry_and_keeps_missing_label_rows(
         val_labels=lp,
         xtb=None,
         output=tmp_path / "output",
+        budget=25000,
     )
     failed = sd.run_physics(args, lambda row: None)
     assert not called and failed["aggregate"]["failed_molecules"] == 64

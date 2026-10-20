@@ -565,7 +565,7 @@ def run_physics(args, emit):
     if (
         manifest["split"] != "val"
         or manifest["baseline_kind"] != "controlled"
-        or manifest["training_budget"]["steps"] != 25000
+        or manifest["training_budget"]["steps"] != args.budget
         or manifest["seed"] != 42
         or manifest["config"]["steps"] != 50
         or evaluation["input_manifest"]["sha256"]
@@ -575,7 +575,8 @@ def run_physics(args, emit):
         or evaluation["protocol"]["force_field_optimization"]
     ):
         raise ValueError(
-            "Need matching raw validation-only 25k/Euler50/seed42 evaluation and ensembles"
+            f"Need matching raw validation-only {args.budget}-update/Euler50/seed42 "
+            "evaluation and ensembles"
         )
     selected = select_records(manifest["records"], PHYSICS_PROTOCOL["molecules"])
     evaluated = {r["id"]: r for r in evaluation["records"]}
@@ -728,6 +729,13 @@ def main():
     physics.add_argument("manifest", type=Path)
     physics.add_argument("--evaluation", type=Path, required=True)
     physics.add_argument("--val-labels", type=Path, required=True)
+    physics.add_argument(
+        "--budget",
+        type=int,
+        default=25000,
+        choices=(25000, 250000),
+        help="Training budget recorded in the ensemble manifest (default 25000)",
+    )
     physics.add_argument(
         "--xtb",
         help="Existing xTB executable; closed-shell single-point gradients only",
