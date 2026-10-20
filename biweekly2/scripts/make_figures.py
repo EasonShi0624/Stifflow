@@ -18,17 +18,13 @@ WS = Path("/gpfsnyu/scratch/ys6132/stifflow")
 BW = WS / "runs/biweekly2-20261019"
 FIG = BW / "figures"
 METHOD_COLORS = {
-    "precision": "#d1495b",
     "alternative_a": "#2e86ab",
     "control": "#7a8b99",
 }
 METHOD_LABELS = {
-    "precision": "StifFlow core (precision bridge)",
-    "alternative_a": "StifFlow Alternative A ($A_E$)",
-    "control": "ET-Flow-backbone control (stiffness-free)",
+    "alternative_a": "StifFlow",
+    "control": "ET-Flow-backbone control",
 }
-A_LABEL = "Alternative A"
-C_LABEL = "ET-Flow-backbone control"
 
 
 def load(name):
@@ -109,17 +105,22 @@ def figure1(data):
     x = np.arange(2)
     w = 0.5
     colors = [METHOD_COLORS[m] for m in methods_plot]
-    bars1 = ax.bar(x - w / 4, rot_max, w / 2, color=colors, label="rotation")
-    bars2 = ax.bar(x + w / 4, perm_max, w / 2, color=colors, alpha=0.5, hatch="//", label="permutation")
+    ax.bar(x - w / 4, rot_max, w / 2, color=colors, label="rotation")
+    ax.bar(
+        x + w / 4,
+        perm_max,
+        w / 2,
+        color=colors,
+        alpha=0.5,
+        hatch="//",
+        label="permutation",
+    )
     ax.set_yscale("log")
     ax.set_xticks(x)
-    ax.set_xticklabels(["Alt. A", "control"], fontsize=8)
+    ax.set_xticklabels(["StifFlow", "control"], fontsize=8)
     ax.set_ylabel("max velocity rel. error", fontsize=8)
     ax.set_title("(b) Equivariance, trained ckpts", fontsize=9)
-    ax.axhline(2e-6, color="k", ls=":", lw=0.8)
-    ax.text(1.42, 2.6e-6, "float32 noise", fontsize=5.5, ha="right", va="bottom")
-    for xi, bar in zip(x, bars1 + bars2):
-        pass
+    ax.axhline(2e-6, color="k", ls=":", lw=0.8, label="float32 noise")
     note = (
         "Euler-50 sampling from transformed noise\n"
         "max endpoint RMSD:  rot "
@@ -157,30 +158,39 @@ def figure1(data):
     )
     ax.set_ylim(0, 0.45)
     ax.set_xlabel("time $t$")
-    ax.set_ylabel(r"$\|u_A-u_c\|/\|u_c\|$, same $z$")
-    ax.set_title("(c) Stiffness signal in A supervision", fontsize=9)
+    ax.set_ylabel(r"$\|u_S-u_c\|/\|u_c\|$, same $z$")
+    ax.set_title("(c) Stiffness signal in StifFlow supervision", fontsize=9)
     ax.legend(fontsize=7, frameon=False, loc="upper left")
     ax.tick_params(labelsize=7)
 
     # (d) target velocity energy along the path (128 train rows, shared z)
     ax = axes[3]
-    for method in ("precision", "alternative_a", "control"):
+    legend_handles = []
+    for method in ("alternative_a", "control"):
         p = paths[method]
-        ax.plot(
+        (line,) = ax.plot(
             p["times"],
             p["target_energy"],
             color=METHOD_COLORS[method],
             lw=1.4,
             label=METHOD_LABELS[method].split(" (")[0],
         )
+        legend_handles.append(line)
     ax.set_xlabel("time $t$")
     ax.set_ylabel(r"mean $\|U_t\|^2$")
     ax.set_yscale("log")
     ax.set_title("(d) Target velocity scale", fontsize=9)
-    ax.legend(fontsize=6, frameon=False, loc="upper left")
     ax.tick_params(labelsize=7)
 
-    fig.tight_layout(w_pad=1.4)
+    fig.tight_layout(w_pad=1.8, rect=(0, 0.075, 1, 1))
+    fig.legend(
+        handles=legend_handles,
+        loc="lower center",
+        ncol=2,
+        frameon=False,
+        fontsize=7,
+        bbox_to_anchor=(0.5, 0.005),
+    )
     fig.savefig(FIG / "figure1-verification-mechanism.pdf")
     fig.savefig(FIG / "figure1-verification-mechanism.png", dpi=300)
     plt.close(fig)
@@ -190,14 +200,13 @@ def figure2(data):
     test = data["test_metrics"]
     curve = data["learning_curve"]
     physical = data["task3_physical_quality"]
-    caliber = data["task1_caliber"]
 
     fig, axes = plt.subplots(1, 4, figsize=(11.0, 2.9))
 
     # (a) frozen test protocol: MAT-R and chirality with seed std
     ax = axes[0]
-    methods = ["precision", "alternative_a", "control"]
-    x = np.arange(3)
+    methods = ["alternative_a", "control"]
+    x = np.arange(2)
     w = 0.38
     matr = [test[m]["mean"]["mat_r"] for m in methods]
     matr_err = [test[m]["seed_std"]["mat_r"] for m in methods]
@@ -208,32 +217,20 @@ def figure2(data):
     ]
     ax.bar(x - w / 2, matr, w, yerr=matr_err, color=[METHOD_COLORS[m] for m in methods])
     ax.set_xticks(x)
-    ax.set_xticklabels(["core", "Alt. A", "control"], fontsize=8)
+    ax.set_xticklabels(["StifFlow", "control"], fontsize=8)
     ax.set_ylabel("MAT-R (Å)", fontsize=8)
-    ax.set_ylim(0, 0.30)
-    ax.set_title("(a) Frozen test protocol (993 mols)", fontsize=9)
+    ax.set_ylim(0, 0.20)
+    ax.set_title("(a) Performance on Test set", fontsize=9)
     ax2 = ax.twinx()
     ax2.bar(x + w / 2, chir, w, yerr=chir_err, color=[METHOD_COLORS[m] for m in methods], alpha=0.45, hatch="//")
     ax2.set_ylabel("chirality fraction", fontsize=8, color="#666")
     ax2.set_ylim(0, 1.15)
     ax.tick_params(labelsize=7)
     ax2.tick_params(labelsize=7)
-    ci = caliber["pooled_paired_comparisons"]["test"]["alternative_a-control"]["mat_r"]["ci95_molecule_bootstrap"]
-    ax.text(
-        0.03,
-        0.97,
-        "A−control MAT-R\nCI "
-        + f"[{ci[0]:+.4f}, {ci[1]:+.4f}]"
-        + " Å\n(solid: MAT-R; hatched:\nchirality, right axis)",
-        transform=ax.transAxes,
-        fontsize=5.5,
-        ha="left",
-        va="top",
-    )
 
     # (b) learning curve on the monitor subset
     ax = axes[1]
-    for method in ("precision", "alternative_a", "control"):
+    for method in ("alternative_a", "control"):
         rows = sorted(curve[method], key=lambda r: r["step"])
         ax.plot(
             [r["step"] for r in rows],
@@ -256,7 +253,7 @@ def figure2(data):
     # (c) MMFF94 relaxable strain energy distributions
     ax = axes[2]
     strains = {}
-    for method in ("precision", "alternative_a", "control"):
+    for method in ("alternative_a", "control"):
         strains[method] = np.array(
             [
                 r["relaxable_strain_kcal_mol"]
@@ -271,10 +268,10 @@ def figure2(data):
             if r.get("status") == "ok"
         ]
     )
-    order = ("references", "control", "alternative_a", "precision")
+    order = ("references", "control", "alternative_a")
     parts = ax.violinplot(
         [np.clip(strains[k], 0, 40) for k in order],
-        positions=range(4),
+        positions=range(3),
         showmedians=True,
         widths=0.8,
     )
@@ -283,25 +280,25 @@ def figure2(data):
         pc.set_facecolor(color)
         pc.set_alpha(0.55)
     parts["cmedians"].set_color("k")
-    ax.set_xticks(range(4))
-    ax.set_xticklabels(["refs", "control", "Alt. A", "core"], fontsize=8)
-    ax.set_ylabel("MMFF94 relaxable strain (kcal/mol)")
-    ax.set_title("(c) Physical quality (512-mol monitor)", fontsize=9)
     med = {k: float(np.median(v)) for k, v in strains.items()}
-    ax.text(
-        0.97,
-        0.97,
-        f"medians:\nrefs {med['references']:.2f} | control {med['control']:.2f}\nAlt. A {med['alternative_a']:.2f} | core {med['precision']:.2f}",
-        transform=ax.transAxes,
-        fontsize=5.5,
-        ha="right",
-        va="top",
+    ax.set_xticks(range(3))
+    ax.set_xticklabels(
+        [
+            f"refs\n{med['references']:.2f}",
+            f"control\n{med['control']:.2f}",
+            f"StifFlow\n{med['alternative_a']:.2f}",
+        ],
+        fontsize=8,
     )
+    ax.set_xlabel("median (kcal/mol)", fontsize=7, labelpad=2)
+    ax.set_ylabel("MMFF94 strain\n(kcal/mol)", fontsize=8)
+    ax.set_title("(c) Physical quality", fontsize=9, pad=6)
+    ax.set_ylim(0, 44)
     ax.tick_params(labelsize=7)
 
     # (d) bond-length deviation vs chirality fraction
     ax = axes[3]
-    for method in ("precision", "alternative_a", "control"):
+    for method in ("alternative_a", "control"):
         bond = np.array(
             [
                 r["bond_deviation_angstrom"]
@@ -325,12 +322,11 @@ def figure2(data):
             capsize=2,
         )
         offset = {
-            "precision": (5, -1),
-            "alternative_a": (6, 3),
-            "control": (-4, -11),
+            "alternative_a": (8, 3),
+            "control": (-5, -12),
         }[method]
         ax.annotate(
-            METHOD_LABELS[method].split(" (")[0],
+            "StifFlow" if method == "alternative_a" else "control",
             (np.mean(bond), chir_m),
             textcoords="offset points",
             xytext=offset,
@@ -340,15 +336,15 @@ def figure2(data):
     ax.set_xlabel("heavy bond-length dev. (Å)")
     ax.set_ylabel("chirality fraction (test)")
     ax.set_xscale("log")
-    ax.set_xlim(2.0e-3, 3.0e-2)
+    ax.set_xlim(3.0e-3, 7.0e-3)
     ax.set_ylim(0.35, 1.0)
-    ax.set_xticks([3e-3, 1e-2])
-    ax.set_xticklabels(["0.003", "0.010"])
+    ax.set_xticks([4e-3, 5e-3, 6e-3])
+    ax.set_xticklabels(["0.004", "0.005", "0.006"])
     ax.minorticks_off()
     ax.set_title("(d) Local geometry vs chirality", fontsize=9)
     ax.tick_params(labelsize=7)
 
-    fig.tight_layout(w_pad=1.6)
+    fig.tight_layout(w_pad=2.0)
     fig.savefig(FIG / "figure2-performance-quality.pdf")
     fig.savefig(FIG / "figure2-performance-quality.png", dpi=300)
     plt.close(fig)

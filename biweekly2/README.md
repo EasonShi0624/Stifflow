@@ -1,10 +1,10 @@
-# Biweekly Report 2 — minimal supplementary experiments and core figures
+# Biweekly Report 2 — minimal supplementary experiments and main figures
 
 SHHPC, 2026-10-19. Goal: verify the evaluation caliber, answer the numerical
 verification request, add physical-quality diagnostics, and explain the
-parity between Alternative A (Euclidean A_E) and the stiffness-free
-ET-Flow-backbone control — using existing checkpoints, generated conformers
-and Hessian labels wherever possible.
+parity between StifFlow and the stiffness-free ET-Flow-backbone control —
+using existing checkpoints, generated conformers and Hessian labels wherever
+possible.
 
 ## Code versions
 
@@ -37,11 +37,11 @@ No source files in any worktree were modified; all new code lives in
 |---|---|---|---|
 | 1 caliber | reference-mapping audit + pooled 3-seed paired bootstrap (test/val) | 4349989 | COMPLETED |
 | 2a | empirical conditional-Gaussian verification (32 mols × 5 t × M ∈ {256,1024,4096}) | 4349990 | COMPLETED |
-| 2b | SE(3)/permutation equivariance + sampling consistency, trained 250k A & control ckpts | 4349993 | COMPLETED |
-| 3 | MMFF94 physical quality on monitor (3 methods + references, 19,187 conformers) | 4349992 | COMPLETED |
+| 2b | SE(3)/permutation equivariance + sampling consistency, trained 250k StifFlow & control ckpts | 4349993 | COMPLETED |
+| 3 | MMFF94 physical quality on monitor (StifFlow, control, references) | 4349992 | COMPLETED |
 | 3b | strain × chirality × coverage pairing | login CPU | done |
-| 4a | A-vs-control supervision difference (128 rows, shared z) + label-audit aggregation (9,423 receipts) | 4350000 | COMPLETED |
-| 4b | monitor learning-curve snapshots: A 25k/50k/100k/175k, control 50k/100k/175k | 4349966_0–6 (gen), 4349967_0–6 (eval) | COMPLETED |
+| 4a | StifFlow-vs-control supervision difference (128 rows, shared z) + label-audit aggregation (9,423 receipts) | 4350000 | COMPLETED |
+| 4b | monitor learning-curve snapshots: StifFlow 25k/50k/100k/175k, control 50k/100k/175k | 4349966_0–6 (gen), 4349967_0–6 (eval) | COMPLETED |
 
 All new generations use the frozen formal protocol: Euler 50 NFE, seed 42,
 2× reference count, no postprocessing; monitor only (test untouched).
@@ -56,17 +56,18 @@ All new generations use the frozen formal protocol: Euler 50 NFE, seed 42,
 - `results/task2b-equivariance.json` — max equivariance errors ~1e-6;
   sampling-consistency endpoint RMSD ≤ 7.5e-4 Å.
 - `results/task3-physical-quality.json`, `results/task3b-strain-chirality.json`
-  — A 5.47 vs control 5.52 vs refs 5.28 kcal/mol median strain; paired A−control
-  +0.03 [−0.23, +0.35]; stereo changes during relaxation recorded (~1%).
-- `results/task4a-stiffness-signal.json` — median A−control supervision
+  — StifFlow 5.47 vs control 5.52 vs refs 5.28 kcal/mol median strain; paired
+  StifFlow−control +0.03 [−0.23, +0.35]; stereo changes during relaxation
+  recorded (~1%).
+- `results/task4a-stiffness-signal.json` — median StifFlow−control supervision
   velocity difference 6–10%; ‖L_K−S‖/‖S‖ median 0.83; alignment-RMSD median
   0.153 Å; floored modes in 14.4% of molecules; calibration ≈ 1.000.
-- `results/task4b-learning-curves.json` — A ≈ control at every 25k–250k
+- `results/task4b-learning-curves.json` — StifFlow ≈ control at every 25k–250k
   snapshot (MAT-R within 0.01 Å).
 - `results/compact-table.json` — report table data.
 - `results/FINDINGS.md` — report-ready conclusions and figure captions.
 - `figures/figure1-verification-mechanism.{pdf,png}`,
-  `figures/figure2-performance-quality.{pdf,png}` — the two core figures.
+  `figures/figure2-performance-quality.{pdf,png}` — the two main figures.
 - `results/figure-data.json` — assembled plotting inputs.
 
 ## Reproduce
@@ -102,10 +103,12 @@ python scripts/make_compact_table.py
   (~4e-7 Å) because `radius_graph` neighbor counts can differ between permuted
   and original atom orderings at float32 precision; still ~3 orders below
   conformer scales.
-- MMFF94 minimization uses forceTol 1e-6; all 19,187 minimizations converged
+- MMFF94 minimization uses forceTol 1e-6; all reported minimizations converged
   (status 0); no missing-parameter failures.
-- The four 25k null/linear ablation trainings (research-20261018) remain
-  unevaluated by choice — listed as next stage, not run this round.
+- The four 25k null/linear ablation trainings (research-20261018) are evaluated
+  in `screening-25k/SCREENING-25k.md`; only `aligned_linear` passed the
+  preregistered gates. The full-budget confirmation is a separate run and is
+  not part of this report's completed results.
 - Git: results committed on the local branch `shhpc-biweekly2-20261019`
   (not pushed, per user decision). Raw NPZs, checkpoints, caches and the
   per-conformer task3 JSON stay outside Git.

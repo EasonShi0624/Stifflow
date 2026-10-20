@@ -12,7 +12,7 @@ import numpy as np
 WS = Path("/gpfsnyu/scratch/ys6132/stifflow")
 EVAL = WS / "runs/formal-eval-20261018"
 BW = WS / "runs/biweekly2-20261019"
-METHODS = ("precision", "alternative_a", "control")
+METHODS = ("alternative_a", "control")
 SEEDS = (42, 43, 44)
 
 
@@ -79,16 +79,6 @@ def learning_curve():
             "n": len(records),
         }
 
-    # precision trajectory (existing)
-    for step in (25000, 50000, 100000, 175000, 250000):
-        if step == 250000:
-            path = EVAL / "monitor/precision-seed42/evaluation.json"
-        else:
-            path = (
-                EVAL
-                / f"monitor-snapshots/precision-seed42-step{step:06d}/evaluation.json"
-            )
-        curve["precision"].append({"step": step, **read(path)})
     # control: existing 25k + 250k + new snapshots
     curve["control"].append(
         {

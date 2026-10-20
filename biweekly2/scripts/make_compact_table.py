@@ -27,13 +27,12 @@ def main():
 
     table = {"test": [], "val": []}
     label = {
-        "precision": "StifFlow core (precision bridge)",
-        "alternative_a": "StifFlow Alt. A (A_E)",
+        "alternative_a": "StifFlow",
         "control": "ET-Flow-backbone control",
     }
     for split in ("test", "val"):
         metrics = data[f"{split}_metrics"]
-        for method in ("precision", "alternative_a", "control"):
+        for method in ("alternative_a", "control"):
             row = {
                 "method": label[method],
                 "mat_r": fmt(metrics[method]["mean"]["mat_r"]),
@@ -46,11 +45,11 @@ def main():
             }
             table[split].append(row)
     for split in ("test", "val"):
-        for pair in ("alternative_a-control", "precision-control"):
+        for pair, pair_label in (("alternative_a-control", "StifFlow − control"),):
             p = caliber["pooled_paired_comparisons"][split][pair]["mat_r"]
             table[split].append(
                 {
-                    "method": f"paired Δ ({pair.replace('-', ' − ')}), pooled 3 seeds",
+                    "method": f"paired Δ ({pair_label}), pooled 3 seeds",
                     "mat_r": f"{p['mean']:+.4f}",
                     "mat_r_seed_std": f"CI [{p['ci95_molecule_bootstrap'][0]:+.4f},"
                     f"{p['ci95_molecule_bootstrap'][1]:+.4f}]",
@@ -61,7 +60,7 @@ def main():
             )
 
     physical = {}
-    for method in ("precision", "alternative_a", "control"):
+    for method in ("alternative_a", "control"):
         s = phys["methods"][method]["summary"]
         physical[label[method]] = {
             "strain_median_kcal_mol": fmt(s["relaxable_strain_kcal_mol"]["median"], 2),
@@ -78,9 +77,9 @@ def main():
         "bond_dev_A": "—",
     }
 
-    t_half = gauss["molecules_data"][
-        sorted(gauss["molecules_data"])[0]
-    ]["times"]["0.5"]["M4096"]
+    t_half = gauss["molecules_data"][min(gauss["molecules_data"])]["times"]["0.5"][
+        "M4096"
+    ]
     verification = {
         "sigma_identity_residual_max": fmt(
             max(

@@ -3,15 +3,7 @@
   "generation": {
     "test": [
       {
-        "method": "StifFlow core (precision bridge)",
-        "mat_r": "0.2285",
-        "mat_r_seed_std": "0.0046",
-        "cov_r": "0.8369",
-        "cov_r_seed_std": "0.0048",
-        "chirality_macro": "0.419"
-      },
-      {
-        "method": "StifFlow Alt. A (A_E)",
+        "method": "StifFlow",
         "mat_r": "0.1270",
         "mat_r_seed_std": "0.0071",
         "cov_r": "0.9302",
@@ -27,33 +19,17 @@
         "chirality_macro": "0.840"
       },
       {
-        "method": "paired \u0394 (alternative_a \u2212 control), pooled 3 seeds",
+        "method": "paired \u0394 (StifFlow \u2212 control), pooled 3 seeds",
         "mat_r": "-0.0022",
         "mat_r_seed_std": "CI [-0.0081,+0.0038]",
         "cov_r": "better for 47.6% mols",
-        "cov_r_seed_std": "",
-        "chirality_macro": ""
-      },
-      {
-        "method": "paired \u0394 (precision \u2212 control), pooled 3 seeds",
-        "mat_r": "+0.0993",
-        "mat_r_seed_std": "CI [+0.0851,+0.1144]",
-        "cov_r": "better for 15.3% mols",
         "cov_r_seed_std": "",
         "chirality_macro": ""
       }
     ],
     "val": [
       {
-        "method": "StifFlow core (precision bridge)",
-        "mat_r": "0.2387",
-        "mat_r_seed_std": "0.0076",
-        "cov_r": "0.8353",
-        "cov_r_seed_std": "0.0111",
-        "chirality_macro": "0.406"
-      },
-      {
-        "method": "StifFlow Alt. A (A_E)",
+        "method": "StifFlow",
         "mat_r": "0.1263",
         "mat_r_seed_std": "0.0033",
         "cov_r": "0.9392",
@@ -69,30 +45,17 @@
         "chirality_macro": "0.837"
       },
       {
-        "method": "paired \u0394 (alternative_a \u2212 control), pooled 3 seeds",
+        "method": "paired \u0394 (StifFlow \u2212 control), pooled 3 seeds",
         "mat_r": "+0.0024",
         "mat_r_seed_std": "CI [+0.0007,+0.0041]",
         "cov_r": "better for 42.9% mols",
-        "cov_r_seed_std": "",
-        "chirality_macro": ""
-      },
-      {
-        "method": "paired \u0394 (precision \u2212 control), pooled 3 seeds",
-        "mat_r": "+0.1148",
-        "mat_r_seed_std": "CI [+0.1102,+0.1193]",
-        "cov_r": "better for 11.7% mols",
         "cov_r_seed_std": "",
         "chirality_macro": ""
       }
     ]
   },
   "physical_quality": {
-    "StifFlow core (precision bridge)": {
-      "strain_median_kcal_mol": "7.90",
-      "strain_mean_kcal_mol": "10.81",
-      "bond_dev_A": "0.0085"
-    },
-    "StifFlow Alt. A (A_E)": {
+    "StifFlow": {
       "strain_median_kcal_mol": "5.47",
       "strain_mean_kcal_mol": "7.77",
       "bond_dev_A": "0.0046"
