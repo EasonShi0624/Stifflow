@@ -1,0 +1,259 @@
+{
+  "schema_version": 1,
+  "kind": "stifflow-physics-250k-including-aligned-linear",
+  "protocol": {
+    "molecules": 64,
+    "selection": "SHA256(id), first 64 of the frozen 512-molecule monitor",
+    "conformers": "min(8, 2*N_ref) generated per molecule",
+    "potential": "MMFF94",
+    "force_units": "kcal/mol/angstrom",
+    "force_statistic": "conformer median then equal molecule mean",
+    "budget": 250000,
+    "generation": "Euler50, seed 42, 2x references, no postprocessing"
+  },
+  "methods": {
+    "precision": {
+      "per_seed": {
+        "42": {
+          "force_mean_molecule_median": 31.71651169728959,
+          "reference_force_mean_molecule_median": 24.763358608786334,
+          "strain_mean_molecule_median": 13.193997195845423
+        },
+        "43": {
+          "force_mean_molecule_median": 30.14107015220343,
+          "reference_force_mean_molecule_median": 24.763358608786334,
+          "strain_mean_molecule_median": 10.225419923161905
+        },
+        "44": {
+          "force_mean_molecule_median": 29.869033438718827,
+          "reference_force_mean_molecule_median": 24.763358608786334,
+          "strain_mean_molecule_median": 10.103632173310354
+        }
+      },
+      "mean": {
+        "force_mean_molecule_median": 30.57553842940395,
+        "reference_force_mean_molecule_median": 24.763358608786334,
+        "strain_mean_molecule_median": 11.174349764105893
+      },
+      "seed_std": {
+        "force_mean_molecule_median": 0.9974296927067621,
+        "reference_force_mean_molecule_median": 0.0,
+        "strain_mean_molecule_median": 1.750125674173867
+      }
+    },
+    "alternative_a": {
+      "per_seed": {
+        "42": {
+          "force_mean_molecule_median": 24.569447245965538,
+          "reference_force_mean_molecule_median": 24.763358608786334,
+          "strain_mean_molecule_median": 7.695695942576004
+        },
+        "43": {
+          "force_mean_molecule_median": 24.71219256815742,
+          "reference_force_mean_molecule_median": 24.763358608786334,
+          "strain_mean_molecule_median": 7.583061814606111
+        },
+        "44": {
+          "force_mean_molecule_median": 24.51447116068984,
+          "reference_force_mean_molecule_median": 24.763358608786334,
+          "strain_mean_molecule_median": 7.812132304085804
+        }
+      },
+      "mean": {
+        "force_mean_molecule_median": 24.59870365827093,
+        "reference_force_mean_molecule_median": 24.763358608786334,
+        "strain_mean_molecule_median": 7.696963353755973
+      },
+      "seed_std": {
+        "force_mean_molecule_median": 0.10205582780261775,
+        "reference_force_mean_molecule_median": 0.0,
+        "strain_mean_molecule_median": 0.11454050390993051
+      }
+    },
+    "control": {
+      "per_seed": {
+        "42": {
+          "force_mean_molecule_median": 24.207989422556036,
+          "reference_force_mean_molecule_median": 24.763358608786334,
+          "strain_mean_molecule_median": 7.615268901388255
+        },
+        "43": {
+          "force_mean_molecule_median": 24.575313889081954,
+          "reference_force_mean_molecule_median": 24.763358608786334,
+          "strain_mean_molecule_median": 7.558172639732781
+        },
+        "44": {
+          "force_mean_molecule_median": 24.566970811119923,
+          "reference_force_mean_molecule_median": 24.763358608786334,
+          "strain_mean_molecule_median": 7.510725617980171
+        }
+      },
+      "mean": {
+        "force_mean_molecule_median": 24.45009137425264,
+        "reference_force_mean_molecule_median": 24.763358608786334,
+        "strain_mean_molecule_median": 7.561389053033736
+      },
+      "seed_std": {
+        "force_mean_molecule_median": 0.20970793499280824,
+        "reference_force_mean_molecule_median": 0.0,
+        "strain_mean_molecule_median": 0.052345807017636754
+      }
+    },
+    "aligned_linear": {
+      "per_seed": {
+        "42": {
+          "force_mean_molecule_median": 25.68152501766331,
+          "reference_force_mean_molecule_median": 24.763358608786334,
+          "strain_mean_molecule_median": 7.7527397396937845
+        },
+        "43": {
+          "force_mean_molecule_median": 25.190158738823342,
+          "reference_force_mean_molecule_median": 24.763358608786334,
+          "strain_mean_molecule_median": 7.757511935567977
+        },
+        "44": {
+          "force_mean_molecule_median": 25.195365072585712,
+          "reference_force_mean_molecule_median": 24.763358608786334,
+          "strain_mean_molecule_median": 7.5969941286230265
+        }
+      },
+      "mean": {
+        "force_mean_molecule_median": 25.35568294302412,
+        "reference_force_mean_molecule_median": 24.763358608786334,
+        "strain_mean_molecule_median": 7.702415267961595
+      },
+      "seed_std": {
+        "force_mean_molecule_median": 0.28219952105148866,
+        "reference_force_mean_molecule_median": 0.0,
+        "strain_mean_molecule_median": 0.09132856030808202
+      }
+    }
+  },
+  "paired_force_deltas": {
+    "aligned_linear-control": {
+      "molecules": 64,
+      "seeds": [
+        42,
+        43,
+        44
+      ],
+      "mean": 0.9055915687714833,
+      "ci95_molecule_bootstrap": [
+        0.6244015236936087,
+        1.1933184053270451
+      ],
+      "per_seed_mean": [
+        1.473535595107272,
+        0.6148448497413878,
+        0.6283942614657898
+      ],
+      "seed_std_of_paired_mean": 0.4919006092976504,
+      "fraction_molecules_lower": 0.203125
+    },
+    "aligned_linear-alternative_a": {
+      "molecules": 64,
+      "seeds": [
+        42,
+        43,
+        44
+      ],
+      "mean": 0.7569792847531907,
+      "ci95_molecule_bootstrap": [
+        0.4018154189067124,
+        1.1147010367497439
+      ],
+      "per_seed_mean": [
+        1.1120777716977703,
+        0.4779661706659263,
+        0.6808939118958751
+      ],
+      "seed_std_of_paired_mean": 0.32383038556151533,
+      "fraction_molecules_lower": 0.296875
+    },
+    "aligned_linear-precision": {
+      "molecules": 64,
+      "seeds": [
+        42,
+        43,
+        44
+      ],
+      "mean": -5.219855486379826,
+      "ci95_molecule_bootstrap": [
+        -7.739068057460628,
+        -3.3625823279510714
+      ],
+      "per_seed_mean": [
+        -6.034986679626283,
+        -4.950911413380089,
+        -4.673668366133109
+      ],
+      "seed_std_of_paired_mean": 0.7194060560380636,
+      "fraction_molecules_lower": 0.828125
+    },
+    "alternative_a-control": {
+      "molecules": 64,
+      "seeds": [
+        42,
+        43,
+        44
+      ],
+      "mean": 0.14861228401829257,
+      "ci95_molecule_bootstrap": [
+        -0.21623405441889554,
+        0.5065097150979859
+      ],
+      "per_seed_mean": [
+        0.36145782340950167,
+        0.13687867907546153,
+        -0.05249965043008542
+      ],
+      "seed_std_of_paired_mean": 0.20722802814925623,
+      "fraction_molecules_lower": 0.421875
+    },
+    "alternative_a-precision": {
+      "molecules": 64,
+      "seeds": [
+        42,
+        43,
+        44
+      ],
+      "mean": -5.976834771133017,
+      "ci95_molecule_bootstrap": [
+        -8.515194163470502,
+        -4.119167458166431
+      ],
+      "per_seed_mean": [
+        -7.147064451324054,
+        -5.428877584046015,
+        -5.354562278028984
+      ],
+      "seed_std_of_paired_mean": 1.014129587122431,
+      "fraction_molecules_lower": 0.921875
+    },
+    "control-precision": {
+      "molecules": 64,
+      "seeds": [
+        42,
+        43,
+        44
+      ],
+      "mean": -6.1254470551513105,
+      "ci95_molecule_bootstrap": [
+        -8.568926336884,
+        -4.272080660205691
+      ],
+      "per_seed_mean": [
+        -7.508522274733555,
+        -5.565756263121477,
+        -5.3020626275988985
+      ],
+      "seed_std_of_paired_mean": 1.2050130209340624,
+      "fraction_molecules_lower": 0.90625
+    }
+  },
+  "caveats": [
+    "MMFF94-only; no GFN2-xTB oracle.",
+    "Raw force is not a thermodynamic/basin-population metric.",
+    "Frozen 512-molecule validation monitor; no test selection."
+  ]
+}
