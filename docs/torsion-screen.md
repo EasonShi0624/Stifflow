@@ -24,6 +24,31 @@ GPU 推理、DRUGS 扩展、新标签生成或结构优化。真实数据清点�
   必须匹配 checkpoint 元数据。使用现有 `label_identity` 比较去路径后的接受行、标签实现、
   图/因子 checksum 等内容。缺少归档证据时拒绝比较，不仅凭数据集相同放宽。
 
+## 推荐：提交单个 CPU 作业
+
+`scripts/torsion_screen.sbatch` 使用 `debug,parallel,chem,rooster`、单线程 CPU，并依次冻结面板、
+核对六组标签 hash、执行两分子验收和完整面板。任何一步失败都会停止；标签 hash 不一致时
+不会跳过身份校验。作业独占新目录 `runs/torsion-screen-$SLURM_JOB_ID`，已有目录不会覆盖。
+
+从 SHHPC 登录节点的工作区根目录提交；如集群要求账户、内存或 walltime，在 `sbatch` 中
+加入你已确认的参数：
+
+```bash
+export STIFFLOW_WORKSPACE=/gpfsnyu/scratch/ys6132/stifflow
+export ETFLOW_ENV=/gpfsnyu/home/ys6132/anaconda3/envs/etflow
+mkdir -p "$STIFFLOW_WORKSPACE/runs/torsion-screen-logs"
+sbatch --partition=debug,parallel,chem,rooster --export=ALL \
+  --output="$STIFFLOW_WORKSPACE/runs/torsion-screen-logs/torsion-%j.out" \
+  "$STIFFLOW_WORKSPACE/stifflow-v1-benchmark/scripts/torsion_screen.sbatch"
+```
+
+日志记录选中分子、六组标签 hash 和各阶段结果。两分子验收仅限制物理面板；它仍会读取
+六组完整 validation 报告并做分组统计。没有额外的 GPU、模型推理或标签生成。
+作业脚本的三个合成流程测试和 shell 语法检查见
+[Torch 检查记录](../results/torch-torsion-job-20261102.json)；尚未在 SHHPC 提交或运行该作业。
+
+## 手动分阶段执行
+
 先在 SHHPC 已确认的 CPU allocation 中设置实际路径，使用已有环境：
 
 ```bash

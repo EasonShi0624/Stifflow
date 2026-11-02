@@ -1,0 +1,34 @@
+{
+  "created_at_utc": "2026-11-02T14:24:15.884835+00:00",
+  "kind": "torch-torsion-slurm-script-checks",
+  "status": "passed",
+  "development_base": "09c8cb1443bc70678bab697f18db812b1a3cd83b",
+  "python": "/scratch/ys6132/programs/miniforge3/envs/etflow/bin/python",
+  "source_sha256": {
+    "scripts/torsion_screen.sbatch": "a34a1f03da0075682154724775e54b4bc13eea4950fcb5152b23c04325ca00e1",
+    "tests/test_torsion_job.py": "d9a7b57407277d44b78ab8337e24b39cc34616b4e1eadaf019149c1c41027aa9",
+    "docs/torsion-screen.md": "dd2548e47da41cdaedc7293f3327544e92ac144878fe7b5056ccbfc9ecd92d40"
+  },
+  "tests": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 /scratch/ys6132/programs/miniforge3/envs/etflow/bin/python -m pytest -q -p no:cacheprovider tests/test_torsion_job.py",
+    "result": "3 passed in 3.65s",
+    "coverage": [
+      "success order",
+      "different label hashes stop before acceptance",
+      "failed acceptance stops before full panel",
+      "existing output is not overwritten"
+    ]
+  },
+  "static_checks": {
+    "bash_n": "passed",
+    "ruff": "passed",
+    "black_check": "passed",
+    "whitespace": "passed"
+  },
+  "not_run": [
+    "SHHPC Slurm submission",
+    "real GEOM data selection",
+    "real validation and MMFF94 evaluation"
+  ],
+  "scope": "Synthetic fixture and stub processes only; no model, GPU or real-data experiment."
+}
