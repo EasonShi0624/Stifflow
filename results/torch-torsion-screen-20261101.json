@@ -1,0 +1,95 @@
+{
+  "created_at_utc": "2026-11-02T02:08:27.078690+00:00",
+  "kind": "torch-torsion-screen-lightweight-checks",
+  "status": "passed",
+  "scope": "Small RDKit fixtures, synthetic saved runs, analytic quadratic local scans and existing single-molecule MMFF tests only; no GEOM/model experiment.",
+  "cwd": "/scratch/ys6132/project/0_stiff_flow_matching/26Fall_DL",
+  "python": "/scratch/ys6132/programs/miniforge3/envs/etflow/bin/python",
+  "python_version": "3.12.14 (main, Sep  2 2026, 23:27:36) [GCC 15.3.0]",
+  "versions": {
+    "numpy": "1.26.4",
+    "scipy": "1.17.1",
+    "rdkit": "2026.3.6",
+    "matplotlib": "3.11.2",
+    "pytest": "9.1.1",
+    "ruff": "0.16.7",
+    "black": "26.5.1"
+  },
+  "imports": {
+    "etflow": "/scratch/ys6132/project/0_stiff_flow_matching/26Fall_DL/ETFlow-reference/etflow/__init__.py",
+    "stifflow": "/scratch/ys6132/project/0_stiff_flow_matching/26Fall_DL/stifflow-v1/stifflow/__init__.py",
+    "stifflow_alt_a": "/scratch/ys6132/project/0_stiff_flow_matching/26Fall_DL/stifflow-v1-alternative-A/stifflow_alt_a/__init__.py",
+    "stifflow_benchmark": "/scratch/ys6132/project/0_stiff_flow_matching/26Fall_DL/stifflow-v1-benchmark/stifflow_benchmark/__init__.py"
+  },
+  "repositories": {
+    "stifflow-v1": {
+      "head": "f7b71e9b3d299ddccbbca47b7cbf75c20acc7490",
+      "branch": "torch/stiffness-locality-core",
+      "status_before_receipt": ""
+    },
+    "stifflow-v1-alternative-A": {
+      "head": "495b9f19072030a2de4126892c34a807b795a4d6",
+      "branch": "torch/stiffness-locality-alt-a",
+      "status_before_receipt": ""
+    },
+    "stifflow-v1-benchmark": {
+      "head": "e4d9603e32cbe2e910788bafcdc557a4ac8b431d",
+      "branch": "torch/stiffness-locality-benchmark",
+      "status_before_receipt": "M README.md\n?? docs/torsion-screen.md\n?? stifflow_benchmark/torsion_screen.py\n?? tests/test_torsion_screen.py"
+    }
+  },
+  "source_sha256": {
+    "stifflow_benchmark/torsion_screen.py": "f5430bd062f5cee1574dfcf1f90eac21c186f0093784c676b5bf02f7b5b5d3fa",
+    "tests/test_torsion_screen.py": "1f6230af8a83c462df1ca8881b66a021ed06c5b732c97c99fdbb68237bb0b9e4",
+    "docs/torsion-screen.md": "67560b4b445bb718c656f4001abf103ce3150d8b7b9c938768f2eb7d771c49c8",
+    "README.md": "62896e61ac0384ee06cb2234d58eed793d8f1aa829cafa77a5a9a2e1201ed713"
+  },
+  "tests": {
+    "tests": 48,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "new_tests": 23,
+    "pytest_reported_seconds": 53.04,
+    "command": "OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 PYTHONDONTWRITEBYTECODE=1 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 MPLCONFIGDIR=/tmp/stifflow-torsion-mpl PYTHONPATH=stifflow-v1:stifflow-v1-alternative-A:stifflow-v1-benchmark /scratch/ys6132/programs/miniforge3/envs/etflow/bin/python -m pytest -q -x -p no:cacheprovider --junitxml=/scratch/ys6132/project/0_stiff_flow_matching/26Fall_DL/runs/torsion-screen-torch-20261101/pytest.xml stifflow-v1-benchmark/tests",
+    "junit": "/scratch/ys6132/project/0_stiff_flow_matching/26Fall_DL/runs/torsion-screen-torch-20261101/pytest.xml",
+    "junit_sha256": "5fe6d013abd68e455485aac630e53de9c794616279b824f37d7e42677dabb69d"
+  },
+  "static_checks": {
+    "ruff": "passed: python -m ruff check --no-cache on new module/tests",
+    "black": "passed: python -m black --check on new module/tests",
+    "git_diff_check": "passed",
+    "all_changed_files_whitespace": "passed: final newline and no trailing whitespace",
+    "cli_select_help": "passed",
+    "cli_analyze_help": "passed"
+  },
+  "test_limits": [
+    "Integration fixtures mock 100 bootstrap draws to bound CPU cost; production uses 2000.",
+    "Local scan calibration uses an analytic quadratic oracle; this is not a real-cache MMFF locality result."
+  ],
+  "known_warnings": [
+    "Existing ETFlow-reference/etflow/networks/torchmd_net/model_dynamics.py invalid docstring escape SyntaxWarning."
+  ],
+  "not_run": [
+    "SHHPC complete GEOM-QM9 validation inventory and real molecule selection",
+    "SHHPC saved 250k A/control ensemble analysis",
+    "SHHPC two-molecule and full-panel MMFF94/archived-Hessian checks",
+    "Model training, checkpoint inference, GPU tasks, new GEOM Hessians and DRUGS expansion"
+  ],
+  "github_sync": {
+    "performed": false,
+    "new_commit": null,
+    "note": "Local uncommitted implementation; no fetch/pull/push or cross-host operation performed."
+  },
+  "handoff": "docs/torsion-screen.md: freeze selection, then acceptance2, then full panel in existing SHHPC CPU allocation",
+  "performance_conclusion": null,
+  "documentation_update": {
+    "time_utc": "2026-11-02T12:56:00.444398+00:00",
+    "path": "docs/torsion-screen.md",
+    "reason": "Document SHHPC 69c38f8 allowing an explicit 250k physics-audit budget while retaining the fixed monitor.",
+    "tested_sha256": "67560b4b445bb718c656f4001abf103ce3150d8b7b9c938768f2eb7d771c49c8",
+    "current_sha256": "6de154540b8622f38719c068ea396ec1d95b30972b1f8526d96c02330f82df9b",
+    "tests_rerun": false,
+    "scope": "Documentation only; prior Python tests and source hashes unchanged."
+  }
+}

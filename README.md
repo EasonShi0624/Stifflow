@@ -1,5 +1,12 @@
 # StifFlow shared benchmark
 
+特定扭转结构的 250k validation 离线筛选见
+[分子面板与 SHHPC 运行说明](docs/torsion-screen.md)：先冻结结构清点和最多十二个分子，
+再复用保存结果做分层配对比较、非环 TFD 和有界 MMFF94/Hessian 检查。
+本轮入口为 `python -m stifflow_benchmark.torsion_screen`；真实数据运行待 SHHPC 验收。
+Torch 轻量回归 **48 passed**，检查范围与版本哈希见
+[检查记录](results/torch-torsion-screen-20261101.json)。
+
 CPU evaluator for saved conformers; no model import or label cache is required. The neural generation
 entry is prepared but unexecuted under the user's request to defer GPU runs. The current environment
 now imports ET-Flow successfully on CPU; this agent did not change installed packages.
